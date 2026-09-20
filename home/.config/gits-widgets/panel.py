@@ -258,7 +258,7 @@ class Popup(Gtk.Window):
             LS.set_monitor(self, monitor)
         self.card = None
         key = Gtk.EventControllerKey()
-        key.connect("key-pressed", lambda _c, kv, *_: (self.close(), True)[1] if kv == Gdk.KEY_Escape else False)
+        key.connect("key-pressed", lambda _c, kv, *_: (self.dismiss(), True)[1] if kv == Gdk.KEY_Escape else False)
         self.add_controller(key)
         click = Gtk.GestureClick()
         click.set_button(0)
@@ -269,23 +269,112 @@ class Popup(Gtk.Window):
                 f"card {self.card.get_width()}x{self.card.get_height()}\n"), False)[1])
 
     def set_child(self, card):
-        """Called by the subclasses with their card: place it in the corner of the fullscreen surface."""
+        """Called by the subclasses with their card: place it in the corner of the fullscreen surface, inside a stack that plays the
+        GitS "power-on" effect: the card opens from a thin line with two glitch flickers while a bright scan line sweeps down it."""
         self.card = card
         card.set_size_request(self.CARD_W, -1)
-        card.set_valign(Gtk.Align.START)
-        card.set_margin_top(self.TOP)
+        scan = Gtk.DrawingArea()
+        scan.set_can_target(False)
+        scan.set_draw_func(self._draw_scan)
+        self.scan = scan
+        slow = 10 if os.environ.get("GITS_PANEL_SLOW") else 1
+        self.rev = Gtk.Revealer()   # opens the card from the top, like a scan line uncovering it
+        self.rev.set_transition_type(Gtk.RevealerTransitionType.SLIDE_UP)
+        self.rev.set_transition_duration(self.OPEN_MS * slow)
+        self.rev.set_child(card)
+        stack = Gtk.Overlay()
+        stack.add_css_class("reveal")
+        if slow > 1:
+            stack.add_css_class("slow")   # 10x slower, for frame-by-frame screenshots
+        stack.set_child(self.rev)
+        stack.add_overlay(scan)
+        self.stack = stack
+        stack.set_valign(Gtk.Align.START)
+        stack.set_margin_top(self.TOP)
         if self.center:
-            card.set_halign(Gtk.Align.CENTER)
-            card.set_margin_top(110)
+            stack.set_halign(Gtk.Align.CENTER)
+            stack.set_margin_top(110)
         elif self.left is None:
-            card.set_halign(Gtk.Align.END)
-            card.set_margin_end(8)
+            stack.set_halign(Gtk.Align.END)
+            stack.set_margin_end(8)
         else:
-            card.set_halign(Gtk.Align.START)
-            card.set_margin_start(self.left)
+            stack.set_halign(Gtk.Align.START)
+            stack.set_margin_start(self.left)
         wrap = Gtk.Box()
-        wrap.append(card)
+        wrap.append(stack)
         super().set_child(wrap)
+        self.scan_t0 = None
+        self.connect("map", self._on_map)
+
+    # -- the reveal and the scan line at its leading edge
+    OPEN_MS, FADE_S = 300, 0.18
+
+    def _on_map(self, *_):
+        GLib.idle_add(lambda: (self.rev.set_reveal_child(True), False)[1])
+        self.scan.add_tick_callback(self._scan_tick)
+
+    def _scan_tick(self, widget, clock):
+        slow = 10 if os.environ.get("GITS_PANEL_SLOW") else 1
+        now = clock.get_frame_time() / 1e6
+        if self.scan_t0 is None:
+            self.scan_t0 = now
+        t = now - self.scan_t0
+        self.scan_t = t
+        widget.queue_draw()
+        if t > self.OPEN_MS / 1000 * slow + self.FADE_S * slow:   # done: nothing redraws while the popup just sits there
+            self.scan_t = None
+            return GLib.SOURCE_REMOVE
+        return GLib.SOURCE_CONTINUE
+
+    def _draw_scan(self, area, cr, w, h):
+        t = getattr(self, "scan_t", None)
+        if t is None:
+            return
+        import random
+        import cairo as _c
+        slow = 10 if os.environ.get("GITS_PANEL_SLOW") else 1
+        open_s = self.OPEN_MS / 1000 * slow
+        fade = 1.0 if t <= open_s else max(0.0, 1 - (t - open_s) / (self.FADE_S * slow))
+        y = h - 1          # the drawing area is exactly as tall as the part of the card that is uncovered so far
+        # trail: a faint cyan glow above the leading edge
+        g = _c.LinearGradient(0, max(y - 46, 0), 0, y)
+        g.add_color_stop_rgba(0, 0.18, 0.83, 0.84, 0.0)
+        g.add_color_stop_rgba(1, 0.18, 0.83, 0.84, 0.24 * fade)
+        cr.set_source(g)
+        cr.rectangle(0, max(y - 46, 0), w, min(46, y))
+        cr.fill()
+        # the line itself: bright white-cyan core with a cyan halo
+        cr.set_source_rgba(0.18, 0.83, 0.84, 0.40 * fade)
+        cr.rectangle(0, y - 2, w, 4)
+        cr.fill()
+        cr.set_source_rgba(0.72, 0.99, 1.0, 0.98 * fade)
+        cr.rectangle(0, y - 1, w, 1.5)
+        cr.fill()
+        # glitch: a few displaced slivers right behind the line (cyan, sometimes red)
+        rnd = random.Random(int(t * 45 / slow))
+        for _ in range(3):
+            gy = y - rnd.uniform(4, 34)
+            if gy < 0:
+                continue
+            gw = rnd.uniform(0.15, 0.55) * w
+            gx = rnd.uniform(0, w - gw)
+            if rnd.random() < 0.4:
+                cr.set_source_rgba(0.9, 0.26, 0.17, 0.20 * fade)
+            else:
+                cr.set_source_rgba(0.18, 0.83, 0.84, 0.24 * fade)
+            cr.rectangle(gx, gy, gw, rnd.choice((1, 1, 2, 3)))
+            cr.fill()
+
+    # -- closing with a collapse instead of vanishing
+    def dismiss(self):
+        if getattr(self, "_dismissing", False) or self.card is None:
+            return
+        self._dismissing = True
+        slow = 10 if os.environ.get("GITS_PANEL_SLOW") else 1
+        self.stack.add_css_class("closing")
+        self.rev.set_transition_duration(140 * slow)
+        self.rev.set_reveal_child(False)          # the card folds back up into a line
+        GLib.timeout_add(160 * slow, lambda: (Gtk.Window.close(self), False)[1])
 
     def _pressed(self, gesture, n, x, y):
         if self.card is None:
@@ -295,7 +384,7 @@ class Popup(Gtk.Window):
             open(os.environ["GITS_PANEL_DEBUG"], "a").write(f"pressed {x:.0f},{y:.0f} card={rect.get_x():.0f},{rect.get_y():.0f} {rect.get_width():.0f}x{rect.get_height():.0f}\n")
         inside = ok and rect.get_x() <= x <= rect.get_x() + rect.get_width() and rect.get_y() <= y <= rect.get_y() + rect.get_height()
         if not inside:
-            self.close()
+            self.dismiss()
 
     def header(self, title):
         head = Gtk.Box(spacing=6)
@@ -482,7 +571,7 @@ class Panel(Popup):
     def _later(self, cmd):
         """Close the panel, then run a shell command a moment later (screenshots must not catch the panel)."""
         fire(["sh", "-c", f"sleep 0.45; {cmd}"])
-        self.close()
+        self.dismiss()
 
     def _set_kbd(self, n):
         fire(["asusctl", "leds", "set", ["off", "low", "med", "high"][n]])
@@ -997,7 +1086,7 @@ class MenuPopup(Popup):
 
     def _finish(self, value):
         self.result = value
-        self.close()
+        self.dismiss()
 
 
 class MixerPopup(Popup):

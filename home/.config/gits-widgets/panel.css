@@ -101,3 +101,22 @@ list { background: transparent; }
 .health.ok { color: #2ED3D7; }
 .health.warn { color: #E8C547; border-color: #E8C547; }
 .health.bad { color: #E5432B; border-color: #E5432B; }
+
+/* GitS power-on: a short double flicker while the card is uncovered from the top (the Revealer + scan line live in panel.py) */
+@keyframes gits-open {
+    0%   { opacity: 0; }
+    18%  { opacity: 1; }
+    34%  { opacity: 0.45; }
+    46%  { opacity: 1; }
+    58%  { opacity: 0.7; }
+    72%  { opacity: 1; }
+    100% { opacity: 1; }
+}
+@keyframes gits-close {
+    0%   { opacity: 1; }
+    100% { opacity: 0.25; }
+}
+.reveal { animation: gits-open 300ms linear both; }
+.reveal.closing { animation: gits-close 140ms ease-in both; }
+.reveal.slow { animation-duration: 3000ms; }
+.reveal.slow.closing { animation-duration: 1400ms; }

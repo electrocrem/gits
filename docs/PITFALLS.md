@@ -167,3 +167,6 @@ aliases (including links to links) to the `scalable` directories too. `kiconfind
   when testing with stubs.
 * **A dashboard picture that needs more rows than the window has simply vanishes.** The Neovim dashboard now crops the art from the bottom to the
   rows that are left (tagline box + keys need ~19), and hides it only below 14.
+* **GTK4 CSS `transform` animations do not run with the cairo renderer** (only `opacity` did): a `scaleY` "open from a line" keyframe left the card at full
+  height. `Gtk.Revealer` with `SLIDE_UP` uncovers a card top-down (`SLIDE_DOWN` slides it in from above, bottom first), and a drawing area laid over it
+  paints the scan line at the revealed edge; nothing redraws once the effect is over. `GITS_PANEL_SLOW=1` slows it 10x for frame-by-frame screenshots.
