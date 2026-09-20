@@ -20,7 +20,7 @@ phosphor palette, square corners, thin frames, kanji tags. One installer, one un
 | OSD | volume / brightness / keyboard backlight / mic on-screen display (`gits-osd`, bottom centre; HyDE's own popups for these are hidden by a dunst rule) |
 | Sounds | short synthesised terminal blips: notification, login, lock/unlock, charger plug/unplug (`gits-sound`, mute with `gits-sound off`) |
 | Icons | `GitS-Icons`: Tela-circle-grey with cyan folders (built at install time) |
-| Terminal | kitty banner + fastfetch (the picture also works inside tmux, via kitty unicode placeholders), **tmux by default** in every kitty window (`GITS_NO_TMUX=1` off), starship prompt, fzf, bat, btop, lazygit, tmux, yazi themes, `GitS-Cursors` (drawn with cairo) |
+| Terminal | kitty banner + fastfetch (the picture also works inside tmux, via kitty unicode placeholders), tmux themed, autostart per kitty window is **opt-in** (`export GITS_TMUX=1`), starship prompt, fzf, bat, btop, lazygit, tmux, yazi themes, `GitS-Cursors` (drawn with cairo) |
 | Editors and apps | Neovim (LazyVim) colourscheme, VS Code / Code-OSS theme, Zen browser chrome, Logseq theme, Qt/KDE (Dolphin) via Kvantum, Telegram theme builder |
 | Ops | `gits-doctor` health report, login-race guards, `gits-doctor --fix` (repairs what updates undo), `gits-sessions` (tmux project switcher, prefix + f), `Super+J` that works in the master layout too, optional btrfs snapshot setup (`home/.local/share/gits-snap/setup.sh`: snapper timeline + GRUB entries), [pitfalls](docs/PITFALLS.md) written down |
 

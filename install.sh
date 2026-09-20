@@ -181,7 +181,7 @@ fi
 printf 'dofile(os.getenv("HOME") .. "/.config/hypr/gits.lua")  -- Ghost in the Shell hooks (remove this line to disable)\n' | add_block "$HL" hyprland "--"
 
 add_block "$HOME/.config/zsh/user.zsh" zsh "#" <<'EOF'
-# Ghost in the Shell: tmux by default (GITS_NO_TMUX=1 disables), banner (GITS_NO_BANNER=1 disables) and fzf colours
+# Ghost in the Shell: tmux autostart (opt-in: GITS_TMUX=1), banner (GITS_NO_BANNER=1 disables) and fzf colours
 [[ -r ${0:A:h}/gits/tmux.zsh ]] && source ${0:A:h}/gits/tmux.zsh
 [[ -r ${0:A:h}/gits/banner.zsh ]] && source ${0:A:h}/gits/banner.zsh
 [[ -r ${0:A:h}/gits/colors.zsh ]] && source ${0:A:h}/gits/colors.zsh

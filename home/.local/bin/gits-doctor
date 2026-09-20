@@ -193,7 +193,7 @@ n=$(grep -c 'gits/banner.zsh' "$H/.config/zsh/user.zsh" 2>/dev/null)
 [[ ${n:-0} -le 1 ]] && ok "terminal banner is hooked once" || warn "banner.zsh is sourced $n times in user.zsh (fastfetch runs several times): keep only the gits-hyde block"
 n=$(cat "$H/.config/hypr/hyprland.lua" "$H/.config/hypr/gits.lua" 2>/dev/null | grep -c 'gits-widgets/run.sh start')
 [[ ${n:-0} -le 1 ]] && ok "Hyprland hooks are not duplicated" || warn "widgets are started $n times (hyprland.lua and gits.lua both hook them): remove the inline copies"
-[[ -r $H/.config/zsh/gits/tmux.zsh ]] && ok "tmux autostart present (GITS_NO_TMUX=1 disables)" || warn "gits/tmux.zsh missing: no tmux by default"
+[[ -r $H/.config/zsh/gits/tmux.zsh ]] && ok "tmux helper present (autostart is opt-in: GITS_TMUX=1)" || warn "gits/tmux.zsh missing"
 grep -q '# >>> gits-idle' "$H/.config/hypr/hypridle.conf" 2>/dev/null && ok "sleep timers managed by gits-idle" || warn "hypridle.conf is not managed by gits-idle (run: gits-idle apply)"
 grep -q 'hyprctl dispatch dpms' "$H/.config/hypr/hypridle.conf" 2>/dev/null && warn "hypridle.conf uses 'hyprctl dispatch dpms', invalid in the Lua config: the screen never turns off (gits-idle apply fixes it)"
 pgrep -f "[g]its-events.sh" >/dev/null && ok "gits-events running (login / plug / lock sounds)" || warn "gits-events.sh is not running (started from gits.lua at login)"

@@ -118,7 +118,8 @@ aliases (including links to links) to the `scalable` directories too. `kiconfind
   (`allow-passthrough on`), the pane only holds text cells. icat prints those rows with absolute positioning
   (`\e7 \e[1;0H ... \e8`) which has to be stripped, and the image id rides in the foreground colour (tmux needs the
   `RGB` terminal feature). fastfetch without a logo aligns values with `\e[7G` (jumps into the picture): rebuild the lines.
-* **`tmux new-session && exit`, not `exec tmux`:** a broken tmux config with `exec` leaves a window that closes at once.
+* **tmux autostart is opt-in (`GITS_TMUX=1`):** one tmux session per kitty window turned out to be more machinery than it is worth for most people.
+* **`tmux new-session && exit`, not `exec tmux`** (when the autostart is on): a broken tmux config with `exec` leaves a window that closes at once.
   One session per kitty window needs `detach-on-destroy on`, otherwise closing one session throws its client into another.
 * **The battery status flaps near full and HyDE's notifier spams.** Around 98% (the ASUS charge limit itself was 100%) the status flips between Full / Not charging / Discharging and it posts a critical
   "Battery Full" plus phantom "Charger Plug Out". A dunst rule with `skip_display` + `history_ignore` hides them
@@ -164,3 +165,5 @@ aliases (including links to links) to the `scalable` directories too. `kiconfind
   Modules that must update fast poll (`interval: 1`) instead of using a signal that other layouts may not define.
 * **A shell-script stand-in for a binary has the interpreter's name in `/proc/PID/comm`:** detect processes through the command line
   when testing with stubs.
+* **A dashboard picture that needs more rows than the window has simply vanishes.** The Neovim dashboard now crops the art from the bottom to the
+  rows that are left (tagline box + keys need ~19), and hides it only below 14.

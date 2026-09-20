@@ -10,8 +10,14 @@ local function art_items()
   if not ok then
     return {}
   end
-  if vim.o.lines < #lines + 16 then -- too short for the picture plus the key list: keys only
+  -- the rest of the dashboard (tagline box, 6 keys with gaps, startup line) needs ~19 rows: give the art what is left, crop it from
+  -- the bottom (the face stays), and drop it only when fewer than 14 rows remain
+  local avail = vim.o.lines - 19
+  if avail < 14 then
     return {}
+  end
+  if avail < #lines then
+    lines = vim.list_slice(lines, 1, avail)
   end
   local width = 0
   for _, l in ipairs(lines) do
