@@ -76,7 +76,8 @@ Afterwards run `gits-doctor` (read-only): it checks the session, units, config, 
 * Copies `home/` into `$HOME` (`@HOME@` becomes your home directory). Anything that already exists and differs is
   moved to `~/.local/share/gits-install/backup/<time>/`.
 * Appends marked blocks (`>>> gits:… >>>`) to **your** `~/.config/zsh/user.zsh` and `~/.config/nvim/lua/config/options.lua`.
-  Nothing else in those files is changed.
+  Nothing else in those files is changed. If your zsh does not read `user.zsh` by itself (the installer asks zsh, it
+  does not guess), one more marked line (`gits:zsh-wire`) is added to the `.zshrc` your shell reads. `uninstall.sh` removes it again.
 * Puts the wallpapers in `~/.local/share/gits/wallpapers/`, the session units in `~/.config/systemd/user/`, builds the cursor, icon and
   sound themes. Login sets the GTK theme (adw-gtk3-dark + our colours), icons and cursor through gsettings.
 * Recolours `~/.config/kdeglobals` accents, registers the VS Code theme, installs Zen styles into the default

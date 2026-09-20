@@ -177,6 +177,35 @@ add_block "$HOME/.config/zsh/user.zsh" zsh "#" <<'EOF'
 [[ -r ${0:A:h}/gits/colors.zsh ]] && source ${0:A:h}/gits/colors.zsh
 EOF
 
+# user.zsh only runs when the shell's own startup files source it, and a plain zsh setup does not. Ask zsh itself
+# (started the way your terminal starts it): if the block above never runs, hook one line into the .zshrc it reads.
+if ! command -v zsh >/dev/null; then
+    warn "zsh is not installed: the banner and fzf colours need it (pacman -S zsh)"
+elif ((DRY)); then
+    echo "   (dry) check that zsh reads ~/.config/zsh/user.zsh; if it does not, source it from .zshrc"
+else
+    zsh_reads_gits() {   # the xtrace of an interactive start mentions gits/colors.zsh only if the block ran
+        local trace rc; trace=$(mktemp)
+        env -u GITS_TMUX GITS_NO_BANNER=1 GITS_NO_TMUX=1 timeout 30 zsh -ixc exit </dev/null >/dev/null 2>"$trace" || true
+        grep -q 'gits/colors.zsh' "$trace"; rc=$?
+        rm -f "$trace"; return $rc
+    }
+    rcdir=$(zsh -c 'print -r -- ${ZDOTDIR:-$HOME}' </dev/null 2>/dev/null | tail -1) || true   # reads ~/.zshenv only
+    [[ $rcdir == /* ]] || rcdir=$HOME
+    have_rc=0   # with no startup file at all some zsh builds run their first-use wizard: then there is nothing to probe
+    for f in .zshenv .zprofile .zshrc .zlogin; do [[ -e $rcdir/$f ]] && have_rc=1; done
+    if ((have_rc)) && zsh_reads_gits; then
+        say "zsh already reads ~/.config/zsh/user.zsh"
+    else
+        add_block "$rcdir/.zshrc" zsh-wire "#" <<'EOF'
+# Ghost in the Shell: this zsh setup does not read ~/.config/zsh/user.zsh (banner, tmux helper, fzf colours) by itself
+[[ -r ${XDG_CONFIG_HOME:-$HOME/.config}/zsh/user.zsh ]] && source ${XDG_CONFIG_HOME:-$HOME/.config}/zsh/user.zsh
+EOF
+        if zsh_reads_gits; then say "hooked ~/.config/zsh/user.zsh into $rcdir/.zshrc"
+        else warn "zsh still does not run ~/.config/zsh/user.zsh: add 'source ~/.config/zsh/user.zsh' to the startup file your shell reads"; fi
+    fi
+fi
+
 if [[ -d $HOME/.config/nvim ]]; then
     place "$REPO/tools/nvim-gits-options.lua" "$HOME/.config/nvim/lua/config/gits-options.lua"
     add_block "$HOME/.config/nvim/lua/config/options.lua" nvim "--" <<'EOF'

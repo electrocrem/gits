@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Undo ./install.sh: restore every file it replaced (from ~/.local/share/gits-install/backup/*, oldest copy wins),
-# delete the files it created, remove the blocks it appended to user.zsh / options.lua.
+# delete the files it created, remove the blocks it appended to user.zsh / .zshrc / options.lua.
 # System-level pieces (SDDM, GRUB, Plymouth) are left alone; the commands to revert them are printed at the end.
 #   ./uninstall.sh [--dry-run]
 set -euo pipefail
@@ -22,6 +22,9 @@ oldest_backup() {
 # paths this installer created itself: deleted on uninstall even if a later run backed up a newer copy of them
 mapfile -t CREATED < <(grep '^new:' "$LIST" | sed 's/^new://' | sort -u)
 is_created() { local x; for x in "${CREATED[@]}"; do [[ $x == "$1" ]] && return 0; done; return 1; }
+# files that carry one of our marker blocks: never deleted outright (you may have added your own lines since), only if the block was all they held
+mapfile -t BLOCKHOSTS < <(grep '^block:' "$LIST" | cut -d: -f4- | sort -u)
+is_blockhost() { local x; for x in "${BLOCKHOSTS[@]}"; do [[ $x == "$1" ]] && return 0; done; return 1; }
 
 sort -u "$LIST" | sed 's/^new://' | sort -u | while IFS= read -r entry; do
     if [[ $entry == block:* ]]; then
@@ -38,6 +41,7 @@ sort -u "$LIST" | sed 's/^new://' | sort -u | while IFS= read -r entry; do
         fi
         continue
     fi
+    is_blockhost "$entry" && is_created "$entry" && continue   # emptied (and removed) by the loop below
     bk=$(oldest_backup "$entry")
     if [[ -n $bk ]] && ! is_created "$entry"; then
         echo "restore  $entry"
@@ -80,7 +84,7 @@ if compgen -G "$HOME/.local/share/gits-sounds/*.wav" >/dev/null; then
 fi
 
 # files that were created by the blocks' host (nothing to restore) and are now empty
-for f in "$HOME/.config/zsh/user.zsh" "$HOME/.config/nvim/lua/config/options.lua" "$HOME/.config/kded6rc"; do
+for f in "${BLOCKHOSTS[@]}" "$HOME/.config/kded6rc"; do
     [[ -f $f && ! -s $f ]] && run rm -f "$f"
 done
 ((DRY)) || [[ -n ${GITS_SKIP_PREFLIGHT:-} ]] || systemctl --user daemon-reload 2>/dev/null || true
