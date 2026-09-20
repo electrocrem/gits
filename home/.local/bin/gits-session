@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# gits-session start|stop|restart|status: the session services (bar, notifications, idle, night light, wallpaper, clipboard, applets) as one
+# systemd target, `gits-session.target`. `start` (called by Hyprland at login) hands the session environment to systemd first, and restarts
+# the target, so units left over from an earlier compositor instance are replaced instead of talking to a dead one.
+vars="WAYLAND_DISPLAY HYPRLAND_INSTANCE_SIGNATURE XDG_CURRENT_DESKTOP XDG_SESSION_TYPE XDG_SESSION_DESKTOP XDG_CONFIG_HOME XDG_DATA_HOME XDG_CACHE_HOME XDG_STATE_HOME QT_QPA_PLATFORMTHEME PATH DISPLAY"
+case ${1:-status} in
+    start|restart)
+        dbus-update-activation-environment --systemd $vars 2>/dev/null
+        systemctl --user import-environment $vars 2>/dev/null
+        systemctl --user reset-failed 'gits-*' 2>/dev/null
+        systemctl --user restart gits-session.target ;;
+    stop) systemctl --user stop gits-session.target ;;
+    status) systemctl --user list-units 'gits-*' --no-legend --plain | awk '{printf "%-38s %s %s\n", $1, $3, $4}' ;;
+    *) echo "usage: gits-session start|stop|restart|status" >&2; exit 2 ;;
+esac

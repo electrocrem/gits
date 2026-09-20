@@ -1,0 +1,12 @@
+[Unit]
+Description=awww wallpaper daemon and the GitS wallpaper
+PartOf=gits-session.target
+
+[Service]
+ExecStart=/usr/bin/awww-daemon
+Restart=on-failure
+RestartSec=1
+ExecStartPost=%h/.local/bin/gits-wall
+
+[Install]
+WantedBy=gits-session.target

@@ -1374,6 +1374,10 @@ class LauncherPopup(Popup):
     in one field. mode "clip" is the clipboard history (cliphist) instead. Enter runs, Up/Down select, Esc / click outside close."""
     CARD_W = 580
     USAGE = os.path.join(STATE, "gits-launcher", "usage.json")
+    # the plain list modes: one source of rows, fuzzy filter, Enter runs the row (everything but "launch")
+    TITLES = {"clip": "CLIPBOARD // 貼付", "windows": "WINDOWS // 窓", "emoji": "EMOJI // 絵文字", "keys": "KEY BINDINGS // 鍵"}
+    PLACEHOLDERS = {"clip": "search the clipboard history_", "windows": "jump to a window_", "emoji": "search by name: smile, fire, arrow..._",
+                    "keys": "search a key or an action_"}
 
     def __init__(self, monitor, mode="launch"):
         super().__init__(monitor, center=True)
@@ -1382,16 +1386,16 @@ class LauncherPopup(Popup):
         root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         root.add_css_class("panel")
         head = Gtk.Box(spacing=6)
-        head.append(label("CLIPBOARD // 貼付" if mode == "clip" else "LAUNCH // 起動", "m-head"))
+        head.append(label(self.TITLES.get(mode, "LAUNCH // 起動"), "m-head"))
         sp = Gtk.Box()
         sp.set_hexpand(True)
         head.append(sp)
-        self.l_hint = label("Enter: run · Esc: close", "m-tag")
+        self.l_hint = label("Enter: copy · Esc: close" if mode == "emoji" else "Esc: close" if mode == "keys" else "Enter: run · Esc: close", "m-tag")
         head.append(self.l_hint)
         root.append(head)
         self.entry = Gtk.Entry()
         self.entry.add_css_class("m-entry")
-        self.entry.set_placeholder_text("search the clipboard history_" if mode == "clip" else "apps, settings, projects, windows, notes... or 2+2_")
+        self.entry.set_placeholder_text(self.PLACEHOLDERS.get(mode, "apps, settings, projects, windows, notes... or 2+2_"))
         self.entry.connect("changed", lambda *_: self._refresh())
         self.entry.connect("activate", lambda *_: self._activate())
         keys = Gtk.EventControllerKey()
@@ -1441,6 +1445,46 @@ class LauncherPopup(Popup):
                                   "image" if binary else f"{len(text)} chars", glyph="󰋩" if binary else "󰅍",
                                   match=text, act=("clip", cid), ident=cid))
             return items
+        if self.mode == "windows":
+            try:
+                cl = [c for c in json.loads(sh(["hyprctl", "clients", "-j"]) or "[]") if c.get("mapped") and c.get("workspace", {}).get("id") is not None]
+            except ValueError:
+                cl = []
+            for c in sorted(cl, key=lambda c: c.get("focusHistoryID", 99)):   # most recently used first; the current window is skipped
+                if c.get("focusHistoryID") == 0 and len(cl) > 1:
+                    continue
+                ws = c["workspace"].get("name", "")
+                ws = "scratchpad" if ws.startswith("special:") else f"workspace {ws}"
+                items.append(Item("win", (c.get("title") or c.get("class") or "?")[:80], f"{c.get('class', '')} · {ws}", glyph="󰖯",
+                                  match=f"{c.get('title', '')} {c.get('class', '')}", act=("win", c["address"]), ident=c["address"]))
+            return items
+        if self.mode == "emoji":
+            import unicodedata
+            for lo, hi in ((0x1F600, 0x1F64F), (0x1F300, 0x1F5FF), (0x1F650, 0x1FAFF), (0x2190, 0x21FF), (0x2600, 0x27BF), (0x2B00, 0x2BFF)):   # faces first
+                for cp in range(lo, hi + 1):
+                    ch = chr(cp)
+                    if unicodedata.category(ch) not in ("So", "Sm"):
+                        continue
+                    name = unicodedata.name(ch, "").lower()
+                    if name:
+                        items.append(Item("emoji", name, f"U+{cp:04X}", glyph=ch, match=name, act=("copy", ch), ident=name))
+            return items
+        if self.mode == "keys":
+            names = {64: "SUPER", 4: "CTRL", 8: "ALT", 1: "SHIFT"}
+            try:
+                binds = json.loads(sh(["hyprctl", "binds", "-j"]) or "[]")
+            except ValueError:
+                binds = []
+            for b in binds:
+                if not b.get("has_description") or b.get("mouse"):
+                    continue
+                mods = [n for bit, n in names.items() if b.get("modmask", 0) & bit]
+                combo = " + ".join(mods + [b.get("key", "")])
+                grp, _, what = b["description"].partition("] ")
+                items.append(Item("key", what or grp, f"{combo}   {grp.lstrip('[')}" if what else combo, glyph="󰌌",
+                                  match=f"{what} {grp} {combo}", act=("none", ""), ident=combo))
+            items.sort(key=lambda it: it.sub.rpartition("   ")[2] + it.title)
+            return items
         for a in Gio.AppInfo.get_all():
             if not a.should_show():
                 continue
@@ -1481,10 +1525,10 @@ class LauncherPopup(Popup):
         return 1.0 + min(math.log1p(u.get("n", 0)), 3.0) * 0.35 + recent
 
     def _search(self, q):
-        if self.mode == "clip":
-            if not q:
+        if self.mode in self.TITLES:
+            if not q.strip():
                 return self.items[:12]
-            scored = [(fuzzy(q, it.match), it) for it in self.items]
+            scored = [(fuzzy(q.strip(), it.match), it) for it in self.items]
             return [it for sc, it in sorted(scored, key=lambda x: -x[0]) if sc > 0][:12]
         q = q.strip()
         if not q:
@@ -1510,7 +1554,7 @@ class LauncherPopup(Popup):
         while (c := self.box.get_first_child()) is not None:
             self.box.remove(c)
         rows = self._search(self.entry.get_text())
-        tags = {"app": "APP", "set": "SETTINGS", "prj": "PROJECT", "win": "WINDOW", "note": "NOTE", "calc": "CALC", "web": "WEB", "clip": ""}
+        tags = {"app": "APP", "set": "SETTINGS", "prj": "PROJECT", "win": "WINDOW", "note": "NOTE", "calc": "CALC", "web": "WEB", "clip": "", "emoji": "", "key": ""}
         for it in rows:
             row = Gtk.ListBoxRow()
             row.add_css_class("lrow")
@@ -1584,7 +1628,7 @@ class LauncherPopup(Popup):
         elif kind == "win":
             cmd = ["hyprctl", "dispatch", f'hl.dsp.focus({{ window = "address:{arg}" }})']
         elif kind == "copy":
-            cmd = ["bash", "-c", f"printf %s {shlex.quote(arg)} | wl-copy && notify-send -a 'HyDE Notify' -t 2500 'Copied' {shlex.quote(arg[:80])}"]
+            cmd = ["bash", "-c", f"printf %s {shlex.quote(arg)} | wl-copy && notify-send -a 'GitS' -t 2500 'Copied' {shlex.quote(arg[:80])}"]
         elif kind == "web":
             import urllib.parse
             cmd = ["xdg-open", "https://duckduckgo.com/?q=" + urllib.parse.quote_plus(arg)]
@@ -1632,7 +1676,7 @@ def main():
         return 0
     if mode == "notify":
         win = NotifyPopup(mon)
-    elif mode in ("launch", "clip"):
+    elif mode in ("launch", "clip", "windows", "emoji", "keys"):
         win = LauncherPopup(mon, mode)
     elif mode == "note":
         win = NotePopup(mon)

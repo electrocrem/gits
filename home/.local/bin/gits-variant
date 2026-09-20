@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# gits-variant layout|workflow|animation  list | current | set NAME | toggle NAME | select
+# The switchable parts of the Hyprland config: tiling layout (dwindle, master, monocle, scrolling, scrolling-down), workflow (default, editing,
+# gaming, powersaver, snappy: effect presets) and window animations (gits, off). The choice lives in ~/.local/state/gits/state and is applied
+# by reloading the config. Wrappers: gits-layout, gits-workflow, gits-anim.
+kind=$1; shift
+state=${XDG_STATE_HOME:-$HOME/.local/state}/gits/state
+dir=${GITS_HYPR_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/hypr/gits}
+case $kind in
+    layout)    sub=layouts;    key=layout;    def=master;     title=$'\U000F0A33  TILING LAYOUT'; tag="// 配置" ;;
+    workflow)  sub=workflows;  key=workflow;  def=01-default; title=$'\U000F0A2D  WORKFLOW';       tag="// 作業" ;;
+    animation) sub=animations; key=animation; def=gits;       title=$'\U000F0A32  ANIMATIONS';     tag="// 動画" ;;
+    *) echo "usage: gits-variant layout|workflow|animation list|current|set NAME|toggle NAME|select" >&2; exit 2 ;;
+esac
+declare -A desc=(
+    [dwindle]="each new window splits the focused one" [master]="one big window, the rest stacked beside it" [monocle]="one window at a time, cycle through them"
+    [scrolling]="windows in a strip you scroll sideways" [scrolling-down]="windows in a strip you scroll downwards"
+    [01-default]="the GitS look: blur, shadows, gaps, animations" [editing]="true colours, no transparency (writing, colour picking)"
+    [gaming]="no blur, shadows, gaps or animations" [powersaver]="no effects, saves battery" [snappy]="no animations, quick"
+    [gits]="lock-in overshoot, scan-line feel" [off]="no animations at all")
+names() { ls "$dir/$sub" | sed -n 's/\.lua$//p'; }
+cur() { sed -n "s/^$key=//p" "$state" 2>/dev/null | head -1 | grep . || echo "$def"; }
+apply() {
+    names | grep -qx "$1" || { echo "unknown $kind '$1'" >&2; return 1; }
+    mkdir -p "$(dirname "$state")"; touch "$state"
+    grep -q "^$key=" "$state" && sed -i "s|^$key=.*|$key=$1|" "$state" || echo "$key=$1" >>"$state"
+    hyprctl reload >/dev/null
+}
+case ${1:-select} in
+    list) names ;;
+    current) cur ;;
+    set) apply "${2:?name}" ;;
+    toggle) [[ $(cur) == "${2:?name}" ]] && apply "$def" || apply "$2" ;;
+    select)
+        mapfile -t all < <(names); now=$(cur); rows=()
+        for n in "${all[@]}"; do m="  "; [[ $n == "$now" ]] && m="● "; rows+=("$(printf '%s%-16s %s' "$m" "$n" "${desc[$n]:-}")"); done
+        idx=$(printf '%s\n' "${rows[@]}" | gits-menu "$title" "$tag" -format i) || exit 0
+        apply "${all[idx]}" ;;
+    *) echo "usage: gits-variant $kind list|current|set NAME|toggle NAME|select" >&2; exit 2 ;;
+esac

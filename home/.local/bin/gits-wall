@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# gits-wall [FILE]: put a wallpaper on every output with awww (default: ~/.local/share/gits/wallpapers/gits_smoke.png). The awww daemon is
+# gits-wallpaper.service; this waits for it. The lock screen and the login screen have their own pictures.
+f=${1:-$HOME/.local/share/gits/wallpapers/gits_smoke.png}
+[[ -r $f ]] || { echo "no wallpaper at $f" >&2; exit 1; }
+for _ in {1..40}; do awww query >/dev/null 2>&1 && break; sleep 0.25; done
+exec awww img "$f" --transition-type none

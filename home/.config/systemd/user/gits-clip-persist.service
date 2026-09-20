@@ -1,0 +1,11 @@
+[Unit]
+Description=keep the clipboard after its owner exits
+PartOf=gits-session.target
+
+[Service]
+ExecStart=/usr/bin/wl-clip-persist --clipboard regular
+Restart=on-failure
+RestartSec=1
+
+[Install]
+WantedBy=gits-session.target

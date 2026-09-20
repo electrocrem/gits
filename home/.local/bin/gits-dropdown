@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# gits-dropdown: a terminal that drops in and out of the special workspace "console" (Super+Alt+T). Started on first use, then only toggled.
+if ! hyprctl clients -j | jq -e '.[] | select(.class == "console-dropdown")' >/dev/null; then
+    kitty --class console-dropdown &
+    sleep 0.5
+fi
+hyprctl dispatch 'hl.dsp.workspace.toggle_special("console")' >/dev/null

@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# gits-workflow list|current|set NAME|toggle NAME|select  (see gits-variant)
+exec gits-variant workflow "$@"

@@ -1,0 +1,11 @@
+[Unit]
+Description=network manager tray applet
+PartOf=gits-session.target
+
+[Service]
+ExecStart=/usr/bin/nm-applet --indicator
+Restart=on-failure
+RestartSec=1
+
+[Install]
+WantedBy=gits-session.target

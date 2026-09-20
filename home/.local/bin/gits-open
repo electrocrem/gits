@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# gits-open browser|editor|explorer|terminal: start the default application of that kind (xdg settings, with sensible fallbacks).
+launch() { local id=${1%.desktop}; [[ -n $id ]] && gtk-launch "$id" 2>/dev/null; }
+case ${1:-} in
+    browser)  launch "$(xdg-settings get default-web-browser 2>/dev/null)" || xdg-open about:blank ;;
+    explorer) launch "$(xdg-mime query default inode/directory 2>/dev/null)" || xdg-open "$HOME" ;;
+    editor)   for id in "$(xdg-mime query default text/plain 2>/dev/null)" code-oss code kate; do launch "$id" && exit 0; done; exec kitty nvim ;;
+    terminal) exec kitty ;;
+    *) echo "usage: gits-open browser|editor|explorer|terminal" >&2; exit 2 ;;
+esac

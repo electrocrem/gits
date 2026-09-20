@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# gits-layout list|current|set NAME|toggle NAME|select  (see gits-variant)
+exec gits-variant layout "$@"
