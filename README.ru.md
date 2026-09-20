@@ -1,4 +1,4 @@
-# gits-hyde — «Призрак в доспехах» для Hyprland
+# gits — «Призрак в доспехах» для Hyprland
 
 Самодостаточный рабочий стол в стиле *Ghost in the Shell* для Hyprland (Lua-конфиг, 0.55+), без dotfiles-фреймворков и переключателей тем:
 тёмно-синяя палитра с циановым «люминофором», квадратные углы, тонкие рамки, иероглифы-метки.
@@ -31,7 +31,7 @@ Logseq, Qt/Dolphin (Kvantum), сборщик темы Telegram, а также `g
 ## Установка
 
 ```bash
-git clone https://github.com/electrocrem/gits-hyde.git && cd gits-hyde
+git clone https://github.com/electrocrem/gits.git && cd gits
 ./install.sh --dry-run          # посмотреть, что будет сделано
 ./install.sh                    # установка на уровне пользователя, без sudo
 ./install.sh --system           # темы SDDM + Plymouth + GRUB (нужен sudo)

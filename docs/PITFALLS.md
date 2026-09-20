@@ -120,7 +120,7 @@ aliases (including links to links) to the `scalable` directories too. `kiconfind
 ## Terminal, tmux, notifications (round 6b)
 
 * **Installer blocks next to hand-made hooks run twice.** The same line lived in `user.zsh` (added by hand earlier) and in
-  the `gits-hyde:zsh` block: `banner.zsh` was sourced twice, fastfetch printed twice. Same story for `hyprland.lua`
+  the `gits:zsh` block: `banner.zsh` was sourced twice, fastfetch printed twice. Same story for `hyprland.lua`
   (inline hooks + the block of a module). `gits-doctor` now counts the hooks.
 * **kitty pictures inside tmux:** `fastfetch --logo-type kitty-direct` does not pass through tmux. The banner uses
   `kitten icat --unicode-placeholder --passthrough=tmux`: the image data goes through tmux's DCS passthrough

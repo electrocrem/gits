@@ -8,13 +8,13 @@
 #   ./install.sh --telegram      ... also build the Telegram theme into ~/Downloads
 #   ./install.sh --dry-run       only print what would happen
 #
-# Every file that already exists and differs is moved to ~/.local/share/gits-hyde/backup/<time>/ first;
+# Every file that already exists and differs is moved to ~/.local/share/gits-install/backup/<time>/ first;
 # ./uninstall.sh puts everything back. Running the installer twice is safe. Log out and in afterwards (or pick the Hyprland session
 # at the login screen): the compositor config is read at login.
 set -euo pipefail
 
 REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-STATE=$HOME/.local/share/gits-hyde
+STATE=$HOME/.local/share/gits-install
 STAMP=$(date +%Y%m%d-%H%M%S)
 BK=$STATE/backup/$STAMP
 LIST=$STATE/installed.list
@@ -120,11 +120,11 @@ link() {
 add_block() {
     local file=$1 id=$2 c=$3 text
     text=$(cat)
-    if [[ -f $file ]] && grep -q ">>> gits-hyde:$id >>>" "$file"; then return 0; fi
-    if ((DRY)); then echo "   (dry) append gits-hyde:$id block to $file"; return 0; fi
+    if [[ -f $file ]] && grep -q ">>> gits:$id >>>" "$file"; then return 0; fi
+    if ((DRY)); then echo "   (dry) append gits:$id block to $file"; return 0; fi
     mkdir -p "$(dirname "$file")"
     [[ -f $file ]] && { mkdir -p "$BK/$(dirname "${file#"$HOME"/}")"; [[ -e $BK/${file#"$HOME"/} ]] || cp -a "$file" "$BK/${file#"$HOME"/}"; } || record "new:$file"
-    printf '\n%s >>> gits-hyde:%s >>>\n%s\n%s <<< gits-hyde:%s <<<\n' "$c" "$id" "$text" "$c" "$id" >>"$file"
+    printf '\n%s >>> gits:%s >>>\n%s\n%s <<< gits:%s <<<\n' "$c" "$id" "$text" "$c" "$id" >>"$file"
     record "block:$id:$c:$file"
 }
 

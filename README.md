@@ -1,4 +1,4 @@
-# gits-hyde — Ghost in the Shell for Hyprland
+# gits — Ghost in the Shell for Hyprland
 
 A complete, self-contained *Ghost in the Shell* desktop for Hyprland (Lua config, 0.55+): navy + cyan phosphor palette, square corners,
 thin frames, kanji tags. Nothing else is needed: no dotfiles framework, no theme switcher. One installer, one uninstaller, every replaced file backed up.
@@ -55,8 +55,8 @@ widgets and popups in their demo modes.
 ## Install
 
 ```bash
-git clone https://github.com/electrocrem/gits-hyde.git
-cd gits-hyde
+git clone https://github.com/electrocrem/gits.git
+cd gits
 ./install.sh --dry-run          # look at what would happen
 ./install.sh                    # user-level install, no sudo
 ./install.sh --system           # SDDM + Plymouth + GRUB themes (sudo)
@@ -74,8 +74,8 @@ Afterwards run `gits-doctor` (read-only): it checks the session, units, config, 
 ### What the installer touches
 
 * Copies `home/` into `$HOME` (`@HOME@` becomes your home directory). Anything that already exists and differs is
-  moved to `~/.local/share/gits-hyde/backup/<time>/`.
-* Appends marked blocks (`>>> gits-hyde:… >>>`) to **your** `~/.config/zsh/user.zsh` and `~/.config/nvim/lua/config/options.lua`.
+  moved to `~/.local/share/gits-install/backup/<time>/`.
+* Appends marked blocks (`>>> gits:… >>>`) to **your** `~/.config/zsh/user.zsh` and `~/.config/nvim/lua/config/options.lua`.
   Nothing else in those files is changed.
 * Puts the wallpapers in `~/.local/share/gits/wallpapers/`, the session units in `~/.config/systemd/user/`, builds the cursor, icon and
   sound themes. Login sets the GTK theme (adw-gtk3-dark + our colours), icons and cursor through gsettings.

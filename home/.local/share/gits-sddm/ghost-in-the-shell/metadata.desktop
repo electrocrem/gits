@@ -1,7 +1,7 @@
 [SddmGreeterTheme]
 Name=Ghost in the Shell
 Description=Section 9 terminal login, palette taken from the wallpaper
-Author=gits-hyde
+Author=gits
 License=MIT
 Type=sddm-theme
 Version=1.0

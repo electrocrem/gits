@@ -7,7 +7,7 @@
 #   - one labelled baseline snapshot of the working GitS setup
 #   - a GRUB menu refresh so the new snapshots are bootable
 # Rolling back: pick "Arch Linux snapshots" in GRUB, boot the snapshot, then `sudo snapper -c root rollback` (or
-# btrfs-assistant). /home is a separate subvolume and is NOT rolled back (the dotfiles live in ~/gits-hyde on GitHub).
+# btrfs-assistant). /home is a separate subvolume and is NOT rolled back (the dotfiles live in ~/gits on GitHub).
 #   ./setup.sh --revert   turns the timeline off again (snapshots stay until snapper's cleanup removes them)
 set -euo pipefail
 [[ $EUID -eq 0 ]] || { echo "run with sudo" >&2; exit 1; }

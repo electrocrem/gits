@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Undo ./install.sh: restore every file it replaced (from ~/.local/share/gits-hyde/backup/*, oldest copy wins),
+# Undo ./install.sh: restore every file it replaced (from ~/.local/share/gits-install/backup/*, oldest copy wins),
 # delete the files it created, remove the blocks it appended to user.zsh / options.lua.
 # System-level pieces (SDDM, GRUB, Plymouth) are left alone; the commands to revert them are printed at the end.
 #   ./uninstall.sh [--dry-run]
 set -euo pipefail
-STATE=$HOME/.local/share/gits-hyde
+STATE=$HOME/.local/share/gits-install
 LIST=$STATE/installed.list
 DRY=0; [[ ${1:-} == --dry-run ]] && DRY=1
 [[ -f $LIST ]] || { echo "nothing to do: $LIST does not exist"; exit 0; }
@@ -27,10 +27,10 @@ sort -u "$LIST" | sed 's/^new://' | sort -u | while IFS= read -r entry; do
     if [[ $entry == block:* ]]; then
         IFS=: read -r _ id c file <<<"$entry"
         [[ -f $file ]] || continue
-        echo "removing block gits-hyde:$id from $file"
+        echo "removing block gits:$id from $file"
         if ((!DRY)); then
             # drop the marker block and the blank line install.sh put in front of it
-            awk -v s=">>> gits-hyde:$id >>>" -v e="<<< gits-hyde:$id <<<" '
+            awk -v s=">>> gits:$id >>>" -v e="<<< gits:$id <<<" '
                 skip { if (index($0, e)) skip = 0; next }
                 index($0, s) { if (have && buf != "") print buf; have = 0; skip = 1; next }
                 { if (have) print buf; buf = $0; have = 1 }

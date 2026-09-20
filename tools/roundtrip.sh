@@ -15,7 +15,7 @@ echo '{"name":"nord-theme","logseq":{"themes":[{"name":"Nord"}]}}' >"$FH/.logseq
 echo "/* nord */" >"$FH/.logseq/plugins/nord-theme/custom.css"
 echo '[]' >"$FH/.vscode-oss/extensions/extensions.json"
 
-snap() { (cd "$FH" && find . -type f -not -path './.local/share/gits-hyde/*' -print0 | sort -z | xargs -0 md5sum); }
+snap() { (cd "$FH" && find . -type f -not -path './.local/share/gits-install/*' -print0 | sort -z | xargs -0 md5sum); }
 snap >"$FH.before"
 
 export HOME=$FH GITS_SKIP_PREFLIGHT=1

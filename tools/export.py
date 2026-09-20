@@ -79,7 +79,7 @@ ZEN_FILES = ["chrome/userChrome.css", "chrome/userContent.css", "user.js"]
 
 SKIP_NAMES = ("*.bak*", "*.pyc", "__pycache__", "*.png", "*.jpg", "*.jpeg", "*.webp", "*.gif", ".DS_Store")
 # personal strings that must not leave the machine: rewritten on export
-SCRUB = [("Author=electrocrem", "Author=gits-hyde")]
+SCRUB = [("Author=electrocrem", "Author=gits")]
 
 changed = []
 
