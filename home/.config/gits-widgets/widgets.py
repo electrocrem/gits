@@ -7,6 +7,8 @@ battery, CPU/RAM/SSD rings, CPU/RAM history graph, network throughput, to-do lis
 
 Env: GITS_WEATHER_LOCATION  city for wttr.in (default: auto-detect by IP; "off" disables the request)
      GITS_WIDGETS_MONITOR   connector name to place the cards on (default: first eDP, else first monitor)
+     GITS_WIDGETS_DEMO      1 = screenshot mode: made-up SSID/IP and to-do items, throw-away state and cache dirs
+                            (your to-do file and weather cache are neither read nor written)
 """
 import calendar
 import collections
@@ -49,6 +51,10 @@ from gi.repository import Gtk4LayerShell as LS  # noqa: E402
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATE_DIR = os.path.join(os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")), "gits-widgets")
 CACHE_DIR = os.path.join(os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache")), "gits-widgets")
+DEMO = os.environ.get("GITS_WIDGETS_DEMO") == "1"
+if DEMO:
+    import tempfile
+    STATE_DIR = CACHE_DIR = tempfile.mkdtemp(prefix="gits-widgets-demo-")
 FONT = "JetBrainsMono Nerd Font"
 
 # palette (= kitty.theme of the "Ghost in the Shell" HyDE theme)
@@ -738,6 +744,10 @@ class NetCard(Card):
         """SSID + signal from NetworkManager, else the busiest interface's IPv4 address."""
         def work():
             info = "NO LINK"
+            if DEMO:
+                GLib.idle_add(lambda: (setattr(self, "info", "SECTION9 · 87% · 10.9.0.5"), setattr(self, "looking", False),
+                                       self.l_meta.set_text("SECTION9 · 87% · 10.9.0.5"), False)[-1])
+                return
             try:
                 out = subprocess.run(["nmcli", "-t", "-f", "ACTIVE,SSID,SIGNAL", "dev", "wifi"],
                                      capture_output=True, text=True, timeout=4).stdout
@@ -835,6 +845,9 @@ class TodoCard(Card):
                 self.items = [{"t": str(i["t"]), "d": bool(i["d"])} for i in json.load(f)]
         except (OSError, ValueError, KeyError, TypeError):
             pass
+        if DEMO:
+            self.items = [{"t": "Trace the Puppet Master", "d": False}, {"t": "Patch the mainframe", "d": True},
+                          {"t": "Water the ferns", "d": False}]
         self.count = label("", "t-count")
         self.body.append(self.count)
         self.rows = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)

@@ -48,6 +48,13 @@ sync with `GitS-Cursors`. `kquitapp6 kded6` makes it segfault (harmless, it rest
 * dunst: `dunstrc` is regenerated; put your changes in `dunstrc.d/` (drop-ins survive) or in `dunst.conf`.
   rofi ignores `display-columns` in a theme file, hence the wrapper script for the action menu.
 
+## Icons
+
+`GitS-Icons` (`home/.local/share/gits-icons/build.py`) inherits Tela-circle-grey and recolours only the `places` icons.
+Qt resolves `inode-directory` (what Dolphin asks for) through an alias that the base theme has in every size; if the
+alias is copied only to the small fixed sizes Qt picks the flat 16 px glyph even for big icons, so the builder copies
+aliases (including links to links) to the `scalable` directories too. `kiconfinder6 <name>` shows which file wins.
+
 ## Boot
 
 * **GRUB theme parser rejects decimals** (`top = 95.5%` → "grub_strtoull: unrecognized number"): integers only.
@@ -73,7 +80,10 @@ sync with `GitS-Cursors`. `kquitapp6 kded6` makes it segfault (harmless, it rest
   starts. Fix: `rm ~/.config/gtk-4.0/settings.ini` and `[Module-gtkconfig] autoload=false` in `~/.config/kded6rc`
   (`install.sh` does both; `gits-doctor` checks). Found by bisecting a copy of the theme dir, then each key.
   `gtk4-layer-shell` must still be LD_PRELOADed before GTK loads (widgets.py re-execs itself).
-* **KDE Connect** mirrors phone notifications (and their raw `<b>`/`<br/>` markup) to dunst; they can cover the
-  widgets and contain private text.
+* **KDE Connect** mirrors phone notifications to dunst with HTML-**escaped** markup (`&lt;b&gt;`, `&lt;br/&gt;`), so
+  `markup = strip` cannot help; they can also cover the widgets and contain private text. `gits-phone-notify.sh`
+  (a dunst rule script) hides the original and shows a cleaned, short copy under the app name "Phone"; the copy has no
+  action buttons. Testing tip: `dunstctl set-paused true` while taking screenshots, and check results through
+  `dunstctl history` with synthetic messages instead of looking at the screen.
 * Never `pkill -f <script name>` from a tool shell: it matches (and kills) the calling shell. Use the `[g]its`
   bracket trick or `pgrep -x`.

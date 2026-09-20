@@ -59,10 +59,17 @@ def kded():
     the theme dir (~/.config/gtk-4.0 is a symlink into it) and KDE's kded6 'gtkconfig' module keeps recreating it."""
     rc = os.path.join(HOME, ".config/kded6rc")
     have = open(rc).read() if os.path.exists(rc) else ""
-    if "[Module-gtkconfig]" not in have:
-        backup(rc)
+    if "[Module-gtkconfig]" not in have and ">>> gits-hyde:kded >>>" not in have:
+        state = os.path.join(HOME, ".local/share/gits-hyde")
+        os.makedirs(state, exist_ok=True)
+        with open(os.path.join(state, "installed.list"), "a") as lst:  # so uninstall.sh can undo it
+            lst.write(f"new:{rc}\n" if not have else "")
+            lst.write(f"block:kded:#:{rc}\n")
+        if have:
+            backup(rc)
         with open(rc, "a") as f:
-            f.write(("\n" if have and not have.endswith("\n") else "") + "[Module-gtkconfig]\nautoload=false\n")
+            f.write(("\n" if have and not have.endswith("\n") else "") +
+                    "# >>> gits-hyde:kded >>>\n[Module-gtkconfig]\nautoload=false\n# <<< gits-hyde:kded <<<\n")
         print("kded: gtkconfig module set to autoload=false (takes effect at the next kded6 start)")
     ini = os.path.join(HOME, ".config/gtk-4.0/settings.ini")
     if os.path.isfile(ini) and re.search(r"gtk-application-prefer-dark-theme\s*=\s*true", open(ini).read()):

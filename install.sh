@@ -216,6 +216,8 @@ if [[ -d $HOME/.local/share/icons/Bibata-Modern-Ice || -d /usr/share/icons/Bibat
 else
     warn "skipped: Bibata-Modern-Ice not found"
 fi
+say "building the icon theme (cyan folders on top of Tela-circle-grey)"
+run python3 "$HOME/.local/share/gits-icons/build.py" || warn "icon theme build failed (needs Tela-circle-grey, shipped with HyDE): the theme falls back to it"
 ((TELEGRAM)) && run python3 "$HOME/.local/share/gits-telegram/build.py"
 
 # ------------------------------------------------------------------ HyDE selection

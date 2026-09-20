@@ -67,7 +67,7 @@ if [[ -d $HOME/.logseq/plugins-backup/nord-theme ]]; then
 fi
 
 # files that were created by the blocks' host (nothing to restore) and are now empty
-for f in "$HOME/.config/hypr/hyprland.lua" "$HOME/.config/zsh/user.zsh" "$HOME/.config/nvim/lua/config/options.lua"; do
+for f in "$HOME/.config/hypr/hyprland.lua" "$HOME/.config/zsh/user.zsh" "$HOME/.config/nvim/lua/config/options.lua" "$HOME/.config/kded6rc"; do
     [[ -f $f && ! -s $f ]] && run rm -f "$f"
 done
 ((DRY)) || mv "$LIST" "$LIST.uninstalled-$(date +%s)"

@@ -1,0 +1,23 @@
+name: check
+on: [push, pull_request]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shell syntax
+        run: |
+          for f in install.sh uninstall.sh tools/roundtrip.sh $(git ls-files 'home/*.sh') home/.local/bin/gits-doctor; do bash -n "$f" || exit 1; done
+      - name: Python syntax
+        run: python3 -m py_compile tools/*.py $(git ls-files 'home/*.py')
+      - name: Lua syntax
+        run: |
+          sudo apt-get install -y lua5.4 >/dev/null
+          for f in $(git ls-files 'home/*.lua' | grep -v ' '); do luac5.4 -p "$f" || exit 1; done
+      - name: No absolute home paths or secrets
+        run: |
+          ! git grep -InE '/home/[a-z][a-z0-9_-]+/' -- . ':!tools/export.py' ':!docs' ':!*.md' \
+            || { echo "absolute home path committed (export.py should have tokenised it)"; exit 1; }
+          ! git grep -InE 'gho_[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}|BEGIN [A-Z ]*PRIVATE KEY' || { echo "secret-looking string committed"; exit 1; }
+      - name: Installer round trip (throw-away HOME)
+        run: tools/roundtrip.sh

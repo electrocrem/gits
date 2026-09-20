@@ -1,7 +1,7 @@
 $HOME/.config/hypr/themes/theme.conf|> $HOME/.config/hypr/themes/colors.conf
 
 $GTK_THEME=Wallbash-Gtk
-$ICON_THEME=Tela-circle-grey
+$ICON_THEME=GitS-Icons
 $CURSOR_THEME=GitS-Cursors
 $COLOR_SCHEME=prefer-dark
 $CURSOR_SIZE=22
