@@ -101,12 +101,13 @@ if [[ -n $cursig ]]; then
 fi
 
 # ---------------------------------------------------------------- hooks
-head_ "login hooks (hyprland.lua)"
-lua=$H/.config/hypr/hyprland.lua
+head_ "login hooks (hyprland.lua / gits.lua)"
+hooks=$(cat "$H/.config/hypr/hyprland.lua" "$H/.config/hypr/gits.lua" 2>/dev/null)   # the gits.lua block is what install.sh adds
 for pair in "gits-watchdog.sh:waybar watchdog" "gits-stale-guard.sh:stale-unit guard" "gits-blind-guard.sh:blind-session guard" \
             "gits-widgets/run.sh:widgets autostart" "gits-workspaces.lua:workspace rules"; do
     f=${pair%%:*}; n=${pair#*:}
-    if ! grep -q "$f" "$lua" 2>/dev/null; then bad "$n is not hooked in hyprland.lua"
+    if ! grep -q "$f" <<<"$hooks"; then
+        if [[ $f == gits-blind-guard.sh ]]; then warn "$n is not hooked (opt-in: install.sh --login-guards)"; else bad "$n is not hooked in hyprland.lua / gits.lua"; fi
     else
         p=$(find "$H/.config" -name "${f##*/}" -type f 2>/dev/null | head -1)
         if [[ -z $p ]]; then bad "$n hooked, but ${f##*/} is missing"
@@ -114,7 +115,7 @@ for pair in "gits-watchdog.sh:waybar watchdog" "gits-stale-guard.sh:stale-unit g
         else ok "$n"; fi
     fi
 done
-grep -q "sleep 10; pgrep -x waybar" "$lua" && ok "waybar login-race guard" || warn "waybar login-race guard missing"
+grep -q "sleep 10; pgrep -x waybar" <<<"$hooks" && ok "waybar login-race guard" || warn "waybar login-race guard missing"
 
 if grep -vE '^\s*#' "$H/.config/zsh/.zprofile" 2>/dev/null | grep -qE 'wait.*sddm|pgrep -u sddm'; then
     bad ".zprofile waits for sddm again: that blocking guard broke login on Sep 20, remove it"
@@ -185,6 +186,11 @@ miss=""; for b in gits-menu gits-wifi gits-bt gits-sound; do command -v "$b" >/d
 nw=$(ls "$H/.local/share/gits-sounds"/*.wav 2>/dev/null | wc -l)
 [[ $nw -ge 7 ]] && ok "UI sounds built ($nw wav files)" || warn "UI sounds missing: python3 ~/.local/share/gits-sounds/build.py"
 [[ -e $H/.local/state/gits-sounds/off ]] && warn "UI sounds are muted (gits-sound on)" || ok "UI sounds on"
+n=$(grep -c 'gits/banner.zsh' "$H/.config/zsh/user.zsh" 2>/dev/null)
+[[ ${n:-0} -le 1 ]] && ok "terminal banner is hooked once" || warn "banner.zsh is sourced $n times in user.zsh (fastfetch runs several times): keep only the gits-hyde block"
+n=$(cat "$H/.config/hypr/hyprland.lua" "$H/.config/hypr/gits.lua" 2>/dev/null | grep -c 'gits-widgets/run.sh start')
+[[ ${n:-0} -le 1 ]] && ok "Hyprland hooks are not duplicated" || warn "widgets are started $n times (hyprland.lua and gits.lua both hook them): remove the inline copies"
+[[ -r $H/.config/zsh/gits/tmux.zsh ]] && ok "tmux autostart present (GITS_NO_TMUX=1 disables)" || warn "gits/tmux.zsh missing: no tmux by default"
 pgrep -f "[g]its-events.sh" >/dev/null && ok "gits-events running (login / plug / lock sounds)" || warn "gits-events.sh is not running (started from gits.lua at login)"
 python3 -c "import numpy" 2>/dev/null && ok "python-numpy present (audio spectrum card)" || warn "python-numpy missing: no audio spectrum card"
 grep -q "gits-events" "$H/.config/hypr/gits.lua" 2>/dev/null && ok "gits.lua hooks the events daemon" || warn "gits.lua does not hook gits-events.sh"
