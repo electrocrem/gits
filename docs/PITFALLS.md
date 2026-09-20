@@ -131,8 +131,14 @@ aliases (including links to links) to the `scalable` directories too. `kiconfind
   outside its own rectangle, and a separate click catcher below it never sees one either (tested with a virtual uinput mouse);
   `notify::is-active` never fires for layer surfaces, so "close on focus loss" was dead code too. The popups are therefore one
   fullscreen transparent exclusive surface that draws the card in the corner: click outside the card = close (a click on the
-  bar button too, i.e. a toggle), Escape = close. Rofi menus (also exclusive) get an invisible catcher from
-  `gits-layer-watch.sh` (Hyprland `openlayer>>rofi` events): unverified for rofi, the standalone catcher does receive clicks.
+  bar button too, i.e. a toggle), Escape = close.
+* **rofi cannot be made to close on a click outside**: it is exclusive too (an invisible catcher below it gets no clicks), and a
+  fullscreen transparent rofi window with `click-to-exit` ignores clicks on its empty area. So this setup's own list menus
+  (`gits-menu`: Wi-Fi, Bluetooth, notification actions, settings) are GTK popups (`panel.py menu`); only HyDE's own rofi menus
+  (launcher, clipboard, keybinding hint) still need Esc.
+* **The keybinding hint went blank with a rewritten rofi theme.** HyDE's `keybinds_hint.sh` passes odd arguments (`-p -theme-str`
+  swallows the next option) and only works with HyDE's own widget tree; `home/.config/rofi/themes/clipboard.rasi` keeps that tree
+  and only restyles it. Widgets that carry `content:` must be named `textbox-...`.
 * **Testing input without a compositor tool:** `/dev/uinput` is writable for the session user. A virtual mouse (EV_REL + BTN_LEFT)
   moves the pointer and clicks; `hyprctl dispatch 'hl.dsp.cursor.move({x=..,y=..})'` warps it first. A virtual keyboard
   injects keys such as KEY_PROG1. Nudge the pointer a little before clicking, or the click lands on the previous surface.

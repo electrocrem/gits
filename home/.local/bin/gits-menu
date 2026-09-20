@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
-# gits-menu TITLE TAG [rofi args...]  <lines on stdin>  ->  chosen line on stdout (exit 1 = cancelled)
-# Ghost in the Shell list menu (style: ~/.config/rofi/themes/gits-menu.rasi). Used by gits-wifi, gits-bt, gits-perf.
-title=${1:?title} tag=${2:-} ; shift 2
-esc() { printf '%s' "$1" | sed 's/[\\"]/\\&/g'; }
-gits-catcher start
-rofi -dmenu -i -no-custom -theme "$HOME/.config/rofi/themes/gits-menu.rasi" -p "//" \
-    -theme-str "textbox-title { content: \"$(esc "$title")\"; }" -theme-str "textbox-tag { content: \"$(esc "$tag")\"; }" "$@"
-rc=$?
-gits-catcher stop
-exit $rc
+# gits-menu TITLE TAG [-format i | --password]   <lines on stdin>  ->  choice on stdout (exit 1 = cancelled)
+# Ghost in the Shell list menu: a GTK popup (panel.py menu), NOT rofi, so it closes on Esc and on a click outside it.
+# Default output is the chosen line; -format i prints its index; --password shows a hidden text entry (no stdin needed).
+# Other rofi-style options are accepted and ignored. Used by gits-wifi, gits-bt, gits-perf and the dunst action menu.
+title=${1:?title} tag=${2:-}; shift 2
+kind=line
+while (($#)); do
+    case $1 in
+        -format) [[ ${2:-} == i ]] && kind=index; shift 2 ;;
+        -password|--password) kind=password; shift ;;
+        -filter|-select|-p|-theme|-theme-str|-display-columns|-display-column-separator) shift 2 ;;
+        *) shift ;;
+    esac
+done
+exec python3 "$HOME/.config/gits-widgets/panel.py" menu "$title" "$tag" "$kind"

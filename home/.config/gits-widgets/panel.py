@@ -231,35 +231,6 @@ class Segments(Gtk.Box):
             (b.add_css_class if v == value else b.remove_css_class)("on")
 
 
-class Catcher(Gtk.Window):
-    """Invisible full-screen click catcher on the TOP layer (under the popups, above windows and the bar).
-    A click anywhere outside the popup lands here and calls `on_click`. Keyboard focus stays with the popup (Escape works)."""
-
-    def __init__(self, monitor, on_click, keyboard=False):
-        super().__init__()
-        self.set_decorated(False)
-        self.add_css_class("catcher")
-        LS.init_for_window(self)
-        LS.set_namespace(self, "gits-catcher")
-        LS.set_layer(self, LS.Layer.TOP)
-        for edge in (LS.Edge.TOP, LS.Edge.BOTTOM, LS.Edge.LEFT, LS.Edge.RIGHT):
-            LS.set_anchor(self, edge, True)
-        LS.set_exclusive_zone(self, -1)  # cover the bar too: a click on the bar button then closes the popup (= toggle)
-        LS.set_keyboard_mode(self, LS.KeyboardMode.EXCLUSIVE if keyboard else LS.KeyboardMode.NONE)
-        if monitor is not None:
-            LS.set_monitor(self, monitor)
-        if keyboard:  # the catcher owns the keyboard: Escape closes the popup above it
-            key = Gtk.EventControllerKey()
-            key.connect("key-pressed", lambda _c, kv, *_: (on_click(), True)[1] if kv == Gdk.KEY_Escape else False)
-            self.add_controller(key)
-        for button in (0,):  # any mouse button
-            g = Gtk.GestureClick()
-            g.set_button(button)
-            g.connect("pressed", lambda *_: (open(os.environ["GITS_PANEL_DEBUG"], "a").write("catcher-click\n") if os.environ.get("GITS_PANEL_DEBUG") else None, on_click()))
-            self.add_controller(g)
-        self.set_child(Gtk.Box())
-
-
 class Popup(Gtk.Window):
     """A popup as ONE fullscreen, transparent, keyboard-exclusive layer surface that holds the visible card.
 
@@ -270,11 +241,12 @@ class Popup(Gtk.Window):
     CARD_W = 300
     TOP = 58  # below the bar (the surface ignores the bar's exclusive zone, so the bar height is part of the margin)
 
-    def __init__(self, monitor, left=None):
+    def __init__(self, monitor, left=None, center=False):
         super().__init__()
         self.set_decorated(False)
         self.add_css_class("panel-win")
         self.left = left
+        self.center = center
         LS.init_for_window(self)
         LS.set_namespace(self, "gits-panel")
         LS.set_layer(self, LS.Layer.OVERLAY)
@@ -302,7 +274,10 @@ class Popup(Gtk.Window):
         card.set_size_request(self.CARD_W, -1)
         card.set_valign(Gtk.Align.START)
         card.set_margin_top(self.TOP)
-        if self.left is None:
+        if self.center:
+            card.set_halign(Gtk.Align.CENTER)
+            card.set_margin_top(110)
+        elif self.left is None:
             card.set_halign(Gtk.Align.END)
             card.set_margin_end(8)
         else:
@@ -381,6 +356,15 @@ class Panel(Popup):
                                 ("󰢮", "ROG", "gits-rog")):
             tools.append(self._action(icon, name, lambda c=cmd: self._later(c)))
         root.append(tools)
+        allset = Gtk.Button()
+        allset.add_css_class("act")
+        allset.add_css_class("wide")
+        ab = Gtk.Box(spacing=8, halign=Gtk.Align.CENTER)
+        ab.append(label("󰒓", "act-icon"))
+        ab.append(label("ALL SETTINGS", "act-name"))
+        allset.set_child(ab)
+        allset.connect("clicked", lambda *_: self._later("gits-settings"))
+        root.append(allset)
         # session: lock / sleep run at once, the destructive three ask twice
         sess = Gtk.Box(spacing=6, homogeneous=True)
         sess.append(self._action("󰌾", "LOCK", lambda: self._later("loginctl lock-session")))
@@ -891,6 +875,97 @@ class NotifyPopup(Popup):
         self._count()
 
 
+class MenuPopup(Popup):
+    """A list menu in the GitS style (replaces rofi for gits-wifi / gits-bt / gits-perf / the notification action menu, because
+    rofi cannot be closed by clicking away). Lines come from stdin; the choice goes to stdout (its index, or the line, or the typed
+    text in password mode). Exit status 1 = cancelled. Type to filter, Up/Down + Enter or click to choose, Esc / click outside cancels."""
+    CARD_W = 460
+
+    def __init__(self, monitor, title, tag, mode, lines):
+        super().__init__(monitor, center=True)
+        self.mode, self.lines, self.result = mode, lines, None
+        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        root.add_css_class("panel")
+        head = Gtk.Box(spacing=6)
+        head.append(label(title, "m-head"))
+        sp = Gtk.Box()
+        sp.set_hexpand(True)
+        head.append(sp)
+        head.append(label(tag, "m-tag"))
+        root.append(head)
+        self.entry = Gtk.Entry()
+        self.entry.add_css_class("m-entry")
+        self.entry.set_placeholder_text("password_" if mode == "password" else "filter_")
+        root.append(self.entry)
+        if mode == "password":
+            self.entry.set_visibility(False)
+            self.entry.connect("activate", lambda *_: self._finish(self.entry.get_text()))
+        else:
+            self.box = Gtk.ListBox()
+            self.box.set_selection_mode(Gtk.SelectionMode.SINGLE)
+            self.box.set_activate_on_single_click(True)
+            self.rows = []
+            for i, ln in enumerate(lines):
+                row = Gtk.ListBoxRow()
+                row.add_css_class("mrow")
+                row.idx, row.text = i, ln
+                lb = label(ln, "mrow-text")
+                lb.set_ellipsize(Pango.EllipsizeMode.END)
+                row.set_child(lb)
+                self.box.append(row)
+                self.rows.append(row)
+            self.box.set_filter_func(lambda row: self.entry.get_text().lower() in row.text.lower())
+            self.box.connect("row-activated", lambda _b, row: self._finish(row.idx))
+            self.entry.connect("changed", self._filtered)
+            self.entry.connect("activate", lambda *_: self._activate_selected())
+            sc = Gtk.ScrolledWindow()
+            sc.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+            sc.set_propagate_natural_height(True)
+            sc.set_max_content_height(440)
+            sc.set_child(self.box)
+            root.append(sc)
+            keys = Gtk.EventControllerKey()
+            keys.connect("key-pressed", self._key)
+            self.entry.add_controller(keys)
+            vis = self._visible()
+            if vis:
+                self.box.select_row(vis[0])
+        self.set_child(root)
+        GLib.idle_add(lambda: (self.entry.grab_focus(), False)[1])
+
+    def _visible(self):
+        q = self.entry.get_text().lower()
+        return [r for r in self.rows if q in r.text.lower()]
+
+    def _filtered(self, *_):
+        self.box.invalidate_filter()
+        vis = self._visible()
+        if vis:
+            self.box.select_row(vis[0])
+
+    def _key(self, _c, kv, *_):
+        if kv in (Gdk.KEY_Down, Gdk.KEY_Up):
+            vis = self._visible()
+            cur = self.box.get_selected_row()
+            if vis:
+                i = vis.index(cur) if cur in vis else -1
+                i = (i + (1 if kv == Gdk.KEY_Down else -1)) % len(vis)
+                self.box.select_row(vis[i])
+                vis[i].grab_focus()   # scrolls it into view
+                self.entry.grab_focus()
+            return True
+        return False
+
+    def _activate_selected(self):
+        row = self.box.get_selected_row()
+        if row is not None:
+            self._finish(row.idx)
+
+    def _finish(self, value):
+        self.result = value
+        self.close()
+
+
 def main():
     if not LS.is_supported():
         print("gits-panel: no layer-shell support", file=sys.stderr)
@@ -910,16 +985,18 @@ def main():
             break
     loop = GLib.MainLoop()
     mode = (sys.argv[1:] or ["control"])[0]
-    if mode == "catcher":
-        # standalone: clicking anywhere kills rofi (gits-menu and friends) and ends; gits-catcher stop ends it too
-        def kill_rofi():
-            subprocess.run(["pkill", "-x", "rofi"])
-            loop.quit()
-        cat = Catcher(mon, kill_rofi)
-        cat.present()
+    if mode == "menu":
+        title, tag, kind = (sys.argv[2:5] + ["", "", "line"])[:3]
+        lines = [] if kind == "password" else [ln.rstrip("\n") for ln in sys.stdin.read().split("\n") if ln.strip()]
+        win = MenuPopup(mon, title, tag, kind, lines)
+        win.connect("close-request", lambda *_: (loop.quit(), False)[1])
+        win.present()
         for sig in (2, 15):
             GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, sig, lambda: (loop.quit(), False)[1])
         loop.run()
+        if win.result is None:
+            return 1
+        print(win.lines[win.result] if kind == "line" else win.result)
         return 0
     if mode == "notify":
         win = NotifyPopup(mon)

@@ -1,25 +1,31 @@
 /**
- * ROFI Layout
+ * ROFI Layout 
  *
- * Ghost in the Shell replacement for HyDE's "clipboard" rofi style (a wallpaper strip next to the search box). Used by the
- * clipboard picker (Super+V) and the keybinding hint (Super+/): both pass -theme clipboard plus their own -theme-str tweaks.
- * ~/.config/rofi/themes wins over ~/.local/share/rofi/themes. Same HUD look as gits-menu.rasi.
+ * Ghost in the Shell version of HyDE's clipboard style (Super+V clipboard, Super+/ keybinding hint): same widget tree as HyDE,
+ * no wallpaper strip, square cyan frame. ~/.config/rofi/themes wins over ~/.local/share/rofi/themes.
+ * 
+ * User: The HyDE Project [ mini dropdown menu ]
+ * Copyright: The HyDE Project
  */
 
+// Config //
 configuration {
     modi:                        "drun";
     show-icons:                  false;
-    font:                        "JetBrainsMono Nerd Font 10";
 }
 
 @theme "~/.config/rofi/theme.rasi"
 
+
+// Main //
 window {
-    enabled:                     true;
-    fullscreen:                  false;
-    width:                       35em;
+    width:                       23em;
+    height:                      30em;
     transparency:                "real";
+    fullscreen:                  false;
+    enabled:                     true;
     cursor:                      "default";
+    spacing:                     0em;
     padding:                     0em;
     border:                      1px;
     border-radius:               0em;
@@ -31,108 +37,97 @@ mainbox {
     spacing:                     0em;
     padding:                     0em;
     orientation:                 vertical;
-    children:                    [ "hud" , "inputbar" , "listview" ];
+    children:                    [ "wallbox" , "listbox" ];
     background-color:            transparent;
 }
-
-// Header //
-hud {
+wallbox {
+    spacing:                     0em;
+    padding:                     0em;
     expand:                      false;
     orientation:                 horizontal;
-    padding:                     0.9em 1.2em;
-    border:                      0px 0px 1px 0px;
-    border-color:                @separatorcolor;
-    background-color:            @main-ex;
-    children:                    [ "textbox-title" , "textbox-tag" ];
+    background-color:            transparent;
+    children:                    [ "textbox-hudtitle" , "inputbar" ];
 }
-textbox-title {
-    expand:                      true;
+textbox-hudtitle {
+    expand:                      false;
+    padding:                     0em 1em 0em 1.2em;
+    vertical-align:              0.5;
     content:                     "󰆍  SELECT";
     font:                        "JetBrainsMono Nerd Font Bold 10";
-    vertical-align:              0.5;
-    background-color:            transparent;
+    background-color:            @main-ex;
     text-color:                  @main-fg;
 }
-textbox-tag {
+hudtitle-unused {
+    width:                       5em;
+    spacing:                     0em;
+    padding:                     0em;
     expand:                      false;
-    content:                     "// 選択";
-    vertical-align:              0.5;
-    background-color:            transparent;
-    text-color:                  #596977;
+    background-color:            @main-bg;
 }
 
-// Filter //
+
+// Inputs //
 inputbar {
     enabled:                     true;
-    expand:                      false;
-    spacing:                     0.6em;
-    padding:                     0.6em 1.2em;
-    border:                      0px 0px 1px 0px;
-    border-color:                @separatorcolor;
-    background-color:            transparent;
-    children:                    [ "prompt" , "entry" ];
-}
-prompt {
-    enabled:                     true;
-    background-color:            transparent;
-    text-color:                  #596977;
+    padding:                     0em;
+    children:                    [ "entry" ];
+    background-color:            @main-bg;
+    expand:                      true;
 }
 entry {
     enabled:                     true;
-    background-color:            transparent;
+    padding:                     1.1em 0.8em;
     text-color:                  @main-fg;
-    cursor:                      text;
-    placeholder:                 "filter_";
-    placeholder-color:           #596977;
+    background-color:            transparent;
 }
 
-// List //
-listview {
-    enabled:                     true;
-    expand:                      false;
+
+// Lists //
+listbox {
     spacing:                     0em;
-    padding:                     0.4em 0em;
-    columns:                     1;
-    lines:                       8;
-    cycle:                       true;
-    dynamic:                     true;
-    scrollbar:                   false;
-    layout:                      vertical;
-    fixed-height:                false;
-    fixed-columns:               true;
-    cursor:                      "default";
+    padding:                     0em;
+    orientation:                 vertical;
+    children:                    [ "dummy" , "listview" , "dummy" ];
     background-color:            transparent;
 }
+listview {
+    enabled:                     true;
+    padding:                     0.5em;
+    columns:                     1;
+    lines:                       11; 
+    cycle:                       true;
+    fixed-height:                true;
+    fixed-columns:               false;
+    expand:                      false;
+    cursor:                      "default";
+    background-color:            transparent;
+    text-color:                  @main-fg;
+}
+dummy {
+    spacing:                     0em;
+    padding:                     0em;
+    background-color:            transparent;
+}
+
+
+// Elements //
 element {
     enabled:                     true;
-    spacing:                     1em;
-    padding:                     0.6em 1.2em;
+    padding:                     0.5em;
     cursor:                      pointer;
     background-color:            transparent;
     text-color:                  @main-fg;
-    border-radius:               0em;
-}
-element normal.normal, element alternate.normal, element selected.normal {
-    border-radius:               0em;
 }
 element selected.normal {
     background-color:            @select-bg;
     text-color:                  @select-fg;
-}
-element-icon {
-    enabled:                     false;
+    border-radius:               0em;
 }
 element-text {
-    vertical-align:              0.5;
+    vertical-align:              0.0;
     horizontal-align:            0.0;
     cursor:                      inherit;
     background-color:            transparent;
     text-color:                  inherit;
-    highlight:                   none;
 }
 
-error-message {
-    text-color:                  @main-fg;
-    background-color:            @main-bg;
-    padding:                     1em;
-}

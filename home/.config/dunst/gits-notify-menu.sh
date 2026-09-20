@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# dunst's action menu (click a popup -> context menu) through rofi, Ghost in the Shell style.
-# dunst feeds lines like "#Reply (Telegram) [226,inline-reply]"; only the readable middle is shown, rofi still
-# returns the whole line. Options given on the command line only: rofi ignores display-columns in the theme file.
-# Style: ~/.config/rofi/themes/notification.rasi. Hooked in by ~/.config/dunst/dunstrc.d/50-gits-menu.conf.
-gits-catcher start
-/usr/bin/rofi -config notification -dmenu -p dunst: \
-    -display-columns 2 -display-column-separator '^#|\s\[[^]]*\]$' "$@"
-rc=$?
-gits-catcher stop
-exit $rc
+# dunst's action menu (click a popup -> context menu) in the Ghost in the Shell style (a GTK popup: gits-menu).
+# dunst feeds lines like "#Reply (Telegram) [226,inline-reply]" and wants the WHOLE chosen line back. The menu shows only the
+# readable part ("Reply (Telegram)") and this script maps the choice back to the original line.
+# Hooked in by ~/.config/dunst/dunstrc.d/50-gits-menu.conf.
+mapfile -t lines
+disp=()
+for l in "${lines[@]}"; do
+    d=${l#\#}
+    disp+=("$(sed -E 's/[[:space:]]*\[[^]]*\]$//' <<<"$d")")
+done
+idx=$(printf '%s\n' "${disp[@]}" | gits-menu "󰂚  NOTIFICATION" "// 通知" -format i) || exit 1
+printf '%s\n' "${lines[idx]}"

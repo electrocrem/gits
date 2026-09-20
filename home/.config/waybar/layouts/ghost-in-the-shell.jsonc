@@ -30,7 +30,6 @@
         "custom/gits-notify",
         "battery#gits",
         "tray",
-        "custom/gits-perf",
         "custom/gits-power"
     ],
 
@@ -102,22 +101,6 @@
         "interval": 3,
         "tooltip": true,
         "on-click": "hyde-shell system.monitor"
-    },
-
-    // Power profile (power-profiles-daemon; asusd switches it on plug/unplug): click = menu, scroll = cycle.
-    // Refreshed by signal 9 (sent by scripts/gits-perf.sh) plus a poll for changes made elsewhere (Fn key, ROG Control Center).
-    "custom/gits-perf": {
-        "min-length": 3,
-        "align": 0.5,
-        "exec": "$XDG_CONFIG_HOME/waybar/scripts/gits-perf.sh",
-        "return-type": "json",
-        "interval": 10,
-        "signal": 9,
-        "tooltip": true,
-        "on-click": "gits-panel control",
-        "on-click-right": "$XDG_CONFIG_HOME/waybar/scripts/gits-perf.sh menu",
-        "on-scroll-up": "$XDG_CONFIG_HOME/waybar/scripts/gits-perf.sh prev",
-        "on-scroll-down": "$XDG_CONFIG_HOME/waybar/scripts/gits-perf.sh next"
     },
 
     "memory#gits": {
@@ -215,7 +198,7 @@
 
     "custom/gits-power": {
         "format": "",
-        "tooltip-format": "control panel · power\nright: logout menu",
+        "tooltip-format": "control panel · power\nright: logout menu · Super+I: all settings",
         "on-click": "gits-panel control",
         "on-click-right": "hyde-shell logoutlaunch 1"
     }

@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# gits-settings: one menu for ALL the settings of this desktop (Super+I, the ALL SETTINGS button of the control panel).
+# System settings apps, HyDE selectors (theme, wallpaper, tiling layout, workflow, animations, bar, lock screen), the ASUS bits.
+# Add your own: append a "label<TAB>command" line to ~/.config/gits/settings.tsv.
+extra=${XDG_CONFIG_HOME:-$HOME/.config}/gits/settings.tsv
+entries=$(cat <<'ROWS'
+󰖩  Network	nm-connection-editor
+󰂯  Bluetooth	blueman-manager
+󰕾  Sound	pavucontrol
+󰍹  Displays	nwg-displays
+󰒓  All system settings (KDE: input, keyboard, apps...)	systemsettings
+󰸉  Wallpaper	hyde-shell wallpaper -GS
+󰏘  Theme	hyde-shell theme.select
+󰆍  Tiling layout (dwindle / master / monocle / scrolling)	hyde-shell layouts --select
+󰓅  Workflow (default / gaming / editing / powersaver)	hyde-shell workflows --select
+󱂬  Window animations	hyde-shell animations --select
+󰖲  Bar layout	hyde-shell waybar.py --select
+󰌾  Lock screen layout	hyde-shell hyprlock.sh --select
+󰌌  Key bindings	hyde-shell keybinds_hint
+󰢮  ROG Control Center	gits-rog
+󰁹  Power profile	$HOME/.config/waybar/scripts/gits-perf.sh menu
+󰍽  Touchpad on / off	gits-touchpad toggle
+󰈙  HyDE config file	xdg-open $HOME/.config/hyde/config.toml
+󰋼  Health check (gits-doctor)	kitty --hold sh -c gits-doctor
+ROWS
+)
+[[ -r $extra ]] && entries+=$'\n'$(cat "$extra")
+mapfile -t rows <<<"$entries"
+labels=(); cmds=()
+for r in "${rows[@]}"; do
+    [[ -z $r ]] && continue
+    labels+=("${r%%$'\t'*}"); cmds+=("${r#*$'\t'}")
+done
+idx=$(printf '%s\n' "${labels[@]}" | gits-menu "󰒓  SETTINGS" "// 設定" -format i) || exit 0
+cmd=${cmds[idx]}
+setsid -f bash -c "$cmd" </dev/null >/dev/null 2>&1

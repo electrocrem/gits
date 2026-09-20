@@ -46,8 +46,7 @@ if [[ $pick == "● "* ]]; then
 elif grep -qxF -- "$ssid" <(nmcli -t -f NAME connection show); then
     if out=$(nmcli --wait 20 connection up id "$ssid" 2>&1); then say "Connected" "$ssid"; else say "Connection failed" "${out##*: }"; fi
 elif [[ -n ${secs[idx]} ]]; then
-    pw=$(rofi -dmenu -password -no-custom false -theme "$HOME/.config/rofi/themes/gits-menu.rasi" -p "//" \
-        -theme-str "textbox-title { content: \"󰌾  PASSWORD\"; }" -theme-str "textbox-tag { content: \"// $ssid\"; }" -theme-str "listview { enabled: false; }" -theme-str "entry { placeholder: \"password_\"; }" </dev/null) || exit 0
+    pw=$(gits-menu "󰌾  PASSWORD" "// $ssid" --password </dev/null) || exit 0
     if out=$(nmcli --wait 30 device wifi connect "$ssid" password "$pw" 2>&1); then say "Connected" "$ssid"; else say "Connection failed" "${out##*: }"; fi
 else
     if out=$(nmcli --wait 30 device wifi connect "$ssid" 2>&1); then say "Connected" "$ssid"; else say "Connection failed" "${out##*: }"; fi

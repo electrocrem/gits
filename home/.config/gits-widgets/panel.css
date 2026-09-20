@@ -81,3 +81,17 @@ scrollbar trough { background: transparent; }
 .act.warn .act-icon, .act.warn .act-name { color: #060A14; }
 
 window.catcher { background: rgba(0, 0, 0, 0.01); }
+
+/* list menu (gits-menu) */
+.m-head { font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #C8F4FF; }
+.m-tag { font-size: 9px; color: #596977; }
+.m-entry { background: transparent; color: #C8F4FF; border: none; border-bottom: 1px solid alpha(#2ED3D7, 0.3); padding: 8px 2px; margin: 6px 0 4px 0; font-size: 12px; min-height: 0; }
+.m-entry:focus { border-bottom-color: #2ED3D7; }
+list { background: transparent; }
+.mrow { padding: 7px 8px; background: transparent; color: #2ED3D7; }
+.mrow:hover { background: alpha(#2ED3D7, 0.12); }
+.mrow:selected { background: #2ED3D7; color: #060A14; }
+.mrow-text { font-size: 12px; }
+
+.act.wide { padding: 8px 0; }
+.act.wide .act-name { font-size: 10px; color: #9FC5D6; }

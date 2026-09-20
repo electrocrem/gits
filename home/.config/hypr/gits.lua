@@ -50,15 +50,14 @@ hl.on("hyprland.start", function()
     hl.exec_cmd("rm -f " .. (os.getenv("XDG_STATE_HOME") or (home .. "/.local/state")) .. "/gits-touchpad/off")
 end)
 
+-- All settings in one menu (gits-settings) and HyDE's tiling-layout selector (dwindle / master / monocle / scrolling)
+hl.bind("SUPER + I", hl.dsp.exec_cmd("gits-settings"), {description = "[GitS] all settings"})
+hl.bind("SUPER + SHIFT + L", hl.dsp.exec_cmd("hyde-shell layouts --select"), {description = "[GitS] select tiling layout"})
+
 -- Popups under the bar (gits-panel): control panel and player
 hl.bind("SUPER + SHIFT + C", hl.dsp.exec_cmd("gits-panel control"), {description = "[GitS] control panel"})
 hl.bind("SUPER + SHIFT + M", hl.dsp.exec_cmd("gits-panel media"), {description = "[GitS] player popup"})
 hl.bind("SUPER + SHIFT + N", hl.dsp.exec_cmd("gits-panel notify"), {description = "[GitS] notification centre"})
-
--- Click away closes any rofi menu: an invisible click catcher is put under every rofi layer (see the script header)
-hl.on("hyprland.start", function()
-    hl.exec_cmd(home .. "/.config/hypr/scripts/gits-layer-watch.sh")
-end)
 
 -- On-screen display for volume / brightness / keyboard backlight (gits-osd; HyDE's popups are turned into it by a dunst rule)
 hl.on("hyprland.start", function()
