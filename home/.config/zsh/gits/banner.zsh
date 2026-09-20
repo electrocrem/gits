@@ -48,6 +48,8 @@ gits_banner() {
     local -a raw info=()
     (( img_h )) || raw=("${(@f)$(<$dir/$art_name.txt)}")
     local artw=50 line k v i
+    # the info column starts right after the widest art line (the old art was 47 columns wide, the braille one 38)
+    if (( ${#raw} )); then artw=0; for line in "${raw[@]}"; do (( ${#line} + 3 > artw )) && artw=$(( ${#line} + 3 )); done; fi
 
     if (( img_h )) && [[ -n $TMUX ]]; then
         # picture cells on the left, fastfetch's info column (no logo) on the right, vertically centred
@@ -72,7 +74,7 @@ gits_banner() {
             --logo-height $img_h --logo-width $(( img_h * 8 / 5 )) --logo-padding-right 3 2>/dev/null
     else
         # system info: "Key: value" lines from fastfetch, key coloured
-        if (( COLUMNS >= 92 )) && (( $+commands[fastfetch] )); then
+        if (( COLUMNS >= artw + 42 )) && (( $+commands[fastfetch] )); then
             for line in "${(@f)$(fastfetch -c $dir/fastfetch.jsonc --logo none 2>/dev/null)}"; do
                 [[ $line == *": "* ]] || continue
                 k=${line%%: *}; v=${line#*: }

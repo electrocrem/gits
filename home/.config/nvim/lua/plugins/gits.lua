@@ -5,21 +5,21 @@ local c = require("gits.palette")
 -- Dashboard art: ~/.config/nvim/lua/gits/lain.txt, coloured the same way as the terminal banner
 -- (hair dim, eyes bright, hairclip red, the rest cyan).
 local function art_items()
-  if vim.o.lines < 36 then -- too short for the picture: keys only
-    return {}
-  end
   local path = vim.fn.stdpath("config") .. "/lua/gits/lain.txt"
   local ok, lines = pcall(vim.fn.readfile, path)
   if not ok then
     return {}
   end
+  if vim.o.lines < #lines + 16 then -- too short for the picture plus the key list: keys only
+    return {}
+  end
   local width = 0
   for _, l in ipairs(lines) do
-    width = math.max(width, #l)
+    width = math.max(width, vim.fn.strdisplaywidth(l)) -- cells, not bytes: the art is braille (3 bytes per cell)
   end
   local items = {}
   for _, line in ipairs(lines) do
-    line = line .. string.rep(" ", width - #line) -- equal widths keep the shape when centred
+    line = line .. string.rep(" ", width - vim.fn.strdisplaywidth(line)) -- equal widths keep the shape when centred
     local segs, i = {}, 1
     while i <= #line do
       local hl, len = "GitsArt", 1
