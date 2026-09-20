@@ -10,6 +10,7 @@ entries=$(cat <<'ROWS'
 󰕾  Sound devices (pavucontrol)	pavucontrol
 󰍹  Displays	nwg-displays
 󰒓  All system settings (KDE: input, keyboard, apps...)	systemsettings
+󰉋  Open a project (git / Godot)	gits-project
 󰸉  Wallpaper	hyde-shell wallpaper -GS
 󰏘  Theme	hyde-shell theme.select
 󰆍  Tiling layout (dwindle / master / monocle / scrolling)	hyde-shell layouts --select

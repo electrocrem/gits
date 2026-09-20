@@ -74,6 +74,7 @@ MANIFEST = [
     (".local/bin/gits-sessions", None),
     (".local/bin/gits-rog", None),
     (".local/bin/gits-settings", None),
+    (".local/bin/gits-project", None),
     (".local/bin/gits-idle", None),
     (".local/bin/gits-update", None),
     (".local/bin/gits-rec", None),

@@ -69,6 +69,9 @@ hl.on("hyprland.start", function()
         .. "[ \"$n\" -gt 0 ] && notify-send -a GitS -u critical \"Health check\" \"$n problem(s): Super+I -> Health check\"; exit 0'")
 end)
 
+-- Open a project (git repos and Godot projects, recent first): terminal in the folder, plus the Godot editor for Godot projects
+hl.bind("SUPER + O", hl.dsp.exec_cmd("gits-project"), {description = "[GitS] open a project"})
+
 -- Popups under the bar (gits-panel): control panel and player
 hl.bind("SUPER + SHIFT + C", hl.dsp.exec_cmd("gits-panel control"), {description = "[GitS] control panel"})
 hl.bind("SUPER + SHIFT + M", hl.dsp.exec_cmd("gits-panel media"), {description = "[GitS] player popup"})
