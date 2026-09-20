@@ -12,8 +12,10 @@ installer then generates original placeholder wallpapers and a generic ASCII ban
 
 ## Third-party files
 
-* `home/.config/hyde/themes/Ghost in the Shell/kvantum/kvantum.theme` is a recoloured copy of the *GraphiteDark*
-  Kvantum theme as shipped with HyDE (`author=Vince Liuice, based on KvAdapta by Tsu Jan`); it stays under its
-  original license (GPL-3.0, like HyDE).
-* Templates and file layouts follow [HyDE](https://github.com/HyDE-Project/HyDE) (GPL-3.0).
+* `home/.config/Kvantum/GitS/GitS.svg` and `GitS.kvconfig` are a recoloured copy of the *GraphiteDark* Kvantum theme as shipped with
+  [HyDE](https://github.com/HyDE-Project/HyDE) (`author=Vince Liuice, based on KvAdapta by Tsu Jan`); they stay under their original license
+  (GPL-3.0).
+* The Hyprland key bindings, window rules and layout / workflow presets in `home/.config/hypr/gits/` started as a port of HyDE's Lua
+  config (GPL-3.0) and were adapted.
+* GTK widgets come from the `adw-gtk-theme` package (only the colour overrides in `home/.config/gtk-*/gtk.css` are ours).
 * Fonts (JetBrains Mono Nerd Font, Noto CJK) are not bundled.

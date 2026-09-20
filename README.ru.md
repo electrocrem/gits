@@ -1,13 +1,14 @@
-# gits-hyde — «Призрак в доспехах» для HyDE
+# gits-hyde — «Призрак в доспехах» для Hyprland
 
-Полноценный рабочий стол в стиле *Ghost in the Shell* для [HyDE](https://github.com/HyDE-Project/HyDE) на Hyprland:
+Самодостаточный рабочий стол в стиле *Ghost in the Shell* для Hyprland (Lua-конфиг, 0.55+), без HyDE и других фреймворков
+(начинался как тема для [HyDE](https://github.com/HyDE-Project/HyDE) и постепенно заменил все его части):
 тёмно-синяя палитра с циановым «люминофором», квадратные углы, тонкие рамки, иероглифы-метки.
 Один установщик, один деинсталлятор, каждый заменённый файл сохраняется в бэкап. [English version](README.md)
 
 ## Что внутри
 
-Тема HyDE, waybar (свой макет, переключатель workflow, watchdog), виджеты рабочего стола (часы, календарь, плеер, погода,
-сеть, батарея, нагрузка, to-do, визуализатор звука, редкие глитчи на обоях), hyprlock, темы SDDM / Plymouth / GRUB, rofi-лаунчер и меню (действия уведомлений, Wi-Fi, Bluetooth, профиль питания), звуки интерфейса, всплывающие панели (управление, плеер, центр уведомлений), OSD громкости/яркости/подсветки, dunst,
+Свой конфиг Hyprland (`~/.config/hypr/gits/*.lua`: бинды, правила, 4 раскладки, 5 workflow, анимации `gits`), сервисы сессии как systemd-юниты, waybar (свой макет, переключатель workflow), виджеты рабочего стола (часы, календарь, плеер, погода,
+сеть, батарея, нагрузка, to-do, визуализатор звука, редкие глитчи на обоях), hyprlock, темы SDDM / Plymouth / GRUB, GTK-лаунчер (Super+A), буфер обмена, переключатель окон, эмодзи и меню (действия уведомлений, Wi-Fi, Bluetooth, профиль питания), звуки интерфейса, всплывающие панели (управление, плеер, центр уведомлений), OSD громкости/яркости/подсветки, dunst,
 wlogout, терминал (баннер с картинкой, в том числе внутри tmux; автозапуск tmux по желанию: `export GITS_TMUX=1`; starship, fzf, bat, btop, lazygit, tmux, yazi), курсор `GitS-Cursors`, Neovim, VS Code, Zen,
 Logseq, Qt/Dolphin (Kvantum), сборщик темы Telegram, а также `gits-doctor` — отчёт о состоянии системы и опциональная настройка снапшотов btrfs.
 
@@ -21,7 +22,7 @@ Logseq, Qt/Dolphin (Kvantum), сборщик темы Telegram, а также `g
 | ![Микшер](docs/img/mixer.jpg) микшер (Super+Alt+V) | ![Уведомления](docs/img/notifications.jpg) центр уведомлений (Super+Shift+N) |
 | ![Настройки](docs/img/settings-menu.jpg) все настройки (Super+I) | ![OSD](docs/img/osd.jpg) OSD громкости, яркости, подсветки, тачпада |
 | ![Терминал](docs/img/terminal.jpg) баннер терминала | ![Заставка Neovim](docs/img/nvim-dashboard.jpg) заставка Neovim |
-| ![Neovim](docs/img/nvim.jpg) Neovim | ![Лаунчер](docs/img/launcher.jpg) rofi-лаунчер |
+| ![Neovim](docs/img/nvim.jpg) Neovim | ![Лаунчер](docs/img/launcher.jpg) лаунчер |
 | ![wlogout](docs/img/wlogout.jpg) меню выключения | ![SDDM](docs/img/sddm.jpg) экран входа SDDM |
 | ![Dolphin](docs/img/dolphin.jpg) Dolphin с циановыми папками | ![Logseq](docs/img/logseq.jpg) Logseq |
 
@@ -34,23 +35,19 @@ Logseq, Qt/Dolphin (Kvantum), сборщик темы Telegram, а также `g
 git clone https://github.com/electrocrem/gits-hyde.git && cd gits-hyde
 ./install.sh --dry-run          # посмотреть, что будет сделано
 ./install.sh                    # установка на уровне пользователя, без sudo
-./install.sh --apply            # ... и сразу переключить HyDE на тему
 ./install.sh --system           # темы SDDM + Plymouth + GRUB (нужен sudo)
 ```
 
 Ключи: `--deps` (поставить пакеты pacman'ом), `--login-guards` (защита от «слепого» входа на ноутбуках с AMD+NVIDIA),
 `--telegram` (собрать тему Telegram в `~/Downloads`), `--fix-grub` (см. ниже), `--dry-run`.
 
-Без `--apply` установщик только выводит три команды переключения:
+Затем **выйдите и войдите заново** (сессия Hyprland): конфиг компоситора читается при входе. Посмотреть его заранее можно прямо в
+текущей сессии: `GITS_NESTED=1 Hyprland -c ~/.config/hypr/hyprland.lua` (окно внутри окна, сервисы не запускаются). Если модуль конфига не
+загрузился, остальные работают, а ошибка попадает в `~/.local/state/gits/config-errors.log` (и в `gits-doctor`).
 
-```bash
-hyde-shell theme.switch.sh -s "Ghost in the Shell"
-hyde-shell waybar.py --set ghost-in-the-shell
-hyde-shell animations --set gits
-```
-
-**Внимание:** при переключении курсор меняется «на лету», и GTK-приложения (waybar, Zen) могут упасть; watchdog поднимает
-waybar за несколько секунд. Лучше закрыть браузер заранее или переключить тему и один раз перезайти в сессию.
+**Переходите с HyDE?** Установщик заменяет `~/.config/hypr/hyprland.lua` и конфиги hyprlock/hypridle/dunst/kitty/GTK/Qt (всё в бэкап).
+Скрипт входа HyDE `~/.local/lib/hyde/shell/activate` (его подключает zsh-конфиг HyDE) экспортирует `HYPRLAND_CONFIG=~/.local/share/hypr/hyde.lua`,
+и Hyprland загрузит конфиг HyDE: переименуйте этот файл до входа. После этого HyDE ничем здесь не используется и его можно удалить.
 
 После установки запустите `gits-doctor`: он ничего не меняет, только проверяет.
 
