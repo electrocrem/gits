@@ -21,10 +21,8 @@
     ],
     "modules-right": [
         "custom/gits-player",
-        "custom/gits-cpu",
-        "custom/gits-gpu",
+        "custom/gits-sys",
         "custom/gits-perf",
-        "memory#gits",
         "network#gits",
         "bluetooth#gits",
         "pulseaudio#gits",
@@ -88,6 +86,15 @@
         "on-click": "hyde-shell system.monitor"
     },
 
+    // CPU + temperature in the text, GPU / RAM / fans / swap in the tooltip (scripts/gits-sys.sh); was three modules
+    "custom/gits-sys": {
+        "exec": "$XDG_CONFIG_HOME/waybar/scripts/gits-sys.sh",
+        "return-type": "json",
+        "interval": 3,
+        "tooltip": true,
+        "on-click": "hyde-shell system.monitor"
+    },
+
     // GPU temperature: iGPU always, dGPU only while it is awake (see scripts/gits-gpu.sh)
     "custom/gits-gpu": {
         "exec": "$XDG_CONFIG_HOME/waybar/scripts/gits-gpu.sh",
@@ -119,9 +126,9 @@
 
     "network#gits": {
         "interval": 5,
-        "format-wifi": " {signalStrength}%",
-        "format-ethernet": "󰈂 LINK",
-        "format-disconnected": "󰦩 OFFLINE",
+        "format-wifi": "",
+        "format-ethernet": "󰈂",
+        "format-disconnected": "󰦩",
         "tooltip-format-wifi": "{essid}  ({signalStrength}%)\nIP    {ipaddr}/{cidr}\nGW    {gwaddr}\nBAND  {frequency} GHz\nDOWN  {bandwidthDownBytes}\nUP    {bandwidthUpBytes}",
         "tooltip-format-ethernet": "{ifname}\nIP    {ipaddr}/{cidr}\nGW    {gwaddr}\nDOWN  {bandwidthDownBytes}\nUP    {bandwidthUpBytes}",
         "tooltip-format-disconnected": "no network link",
@@ -147,8 +154,8 @@
     },
 
     "pulseaudio#gits": {
-        "format": "{icon} {volume}%",
-        "format-muted": " MUTE",
+        "format": "{icon}",
+        "format-muted": "",
         "format-icons": { "default": ["", "", ""] },
         "scroll-step": 5,
         "tooltip-format": "{desc}\nVOLUME {volume}%\nscroll: volume · middle: mute · right: mixer",

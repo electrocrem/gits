@@ -7,13 +7,14 @@ phosphor palette, square corners, thin frames, kanji tags. One installer, one un
 | Area | What you get |
 |---|---|
 | HyDE theme | `Ghost in the Shell`: palette, Hyprland look (sharp corners, cyan borders, blur), kitty, rofi, waybar colours, animation preset `gits` |
-| Waybar | its own layout + style, GPU/CPU modules, language, notification counter, HyDE **workflow switcher**, crash watchdog |
+| Waybar | its own layout + style, one compact CPU/GPU/RAM module (details in the tooltip), power-profile module, language, notification counter, HyDE **workflow switcher**, crash watchdog |
 | Desktop widgets | GTK4 layer-shell cards: clock, calendar, media player, weather, network, battery, CPU/RAM/SSD, history graph, to-do, **audio spectrum** (LED bars from the default sink, no cava), rare wallpaper glitch bursts (on AC only, `GITS_WIDGETS_GLITCH=0` disables) |
 | Lock / login / boot | hyprlock layout, SDDM (Qt6) theme, Plymouth + GRUB themes |
+| Animations | preset `gits`: windows lock in with a hard overshoot and collapse when closed, workspaces jump-cut; optional neon border runner (`touch ~/.local/state/gits-neon-border`, costs battery) |
 | Launchers | rofi launcher (search prompt, square), wlogout, dunst, notification action menu, **Wi-Fi menu** (`gits-wifi`, bar click), **Bluetooth menu** (`gits-bt`), **power-profile menu** (bar module) |
 | Sounds | short synthesised terminal blips: notification, login, lock/unlock, charger plug/unplug (`gits-sound`, mute with `gits-sound off`) |
 | Icons | `GitS-Icons`: Tela-circle-grey with cyan folders (built at install time) |
-| Terminal | kitty banner + fastfetch, starship prompt, fzf, bat, btop, lazygit, tmux, yazi themes, `GitS-Cursors` (drawn with cairo) |
+| Terminal | kitty banner + fastfetch (the picture also works inside tmux, via kitty unicode placeholders), **tmux by default** in every kitty window (`GITS_NO_TMUX=1` off), starship prompt, fzf, bat, btop, lazygit, tmux, yazi themes, `GitS-Cursors` (drawn with cairo) |
 | Editors and apps | Neovim (LazyVim) colourscheme, VS Code / Code-OSS theme, Zen browser chrome, Logseq theme, Qt/KDE (Dolphin) via Kvantum, Telegram theme builder |
 | Ops | `gits-doctor` health report, login-race guards, optional btrfs snapshot setup (`home/.local/share/gits-snap/setup.sh`: snapper timeline + GRUB entries), [pitfalls](docs/PITFALLS.md) written down |
 

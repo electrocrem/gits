@@ -3,5 +3,6 @@
 # Notify"), the hidden original of a KDE Connect message (its cleaned "Phone" copy makes the sound instead) and low urgency
 # chatter from tools that opt out. Critical popups get the error sound. Hooked in by dunstrc.d/55-gits-sound.conf.
 case ${DUNST_APP_NAME:-} in "HyDE Notify"|"KDE Connect") exit 0 ;; esac
+case ${DUNST_SUMMARY:-} in "Battery Full"|"Charger Plug In"|"Charger Plug Out") exit 0 ;; esac   # hidden by 70-gits-battery.conf
 case ${DUNST_URGENCY:-NORMAL} in CRITICAL) exec gits-sound error ;; esac
 exec gits-sound notify

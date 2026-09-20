@@ -107,3 +107,20 @@ aliases (including links to links) to the `scalable` directories too. `kiconfind
   a matching diet elsewhere (the power-profile module is icon-only for that reason).
 * **Audio spectrum without cava:** `parec -d <default sink>.monitor` (mono s16le) + numpy FFT in a thread. The
   card re-checks the default sink every 4 s (headphones on/off) and only animates while sound plays.
+
+## Terminal, tmux, notifications (round 6b)
+
+* **Installer blocks next to hand-made hooks run twice.** The same line lived in `user.zsh` (added by hand earlier) and in
+  the `gits-hyde:zsh` block: `banner.zsh` was sourced twice, fastfetch printed twice. Same story for `hyprland.lua`
+  (inline hooks + the `gits.lua` block). `gits-doctor` now counts the hooks.
+* **kitty pictures inside tmux:** `fastfetch --logo-type kitty-direct` does not pass through tmux. The banner uses
+  `kitten icat --unicode-placeholder --passthrough=tmux`: the image data goes through tmux's DCS passthrough
+  (`allow-passthrough on`), the pane only holds text cells. icat prints those rows with absolute positioning
+  (`\e7 \e[1;0H ... \e8`) which has to be stripped, and the image id rides in the foreground colour (tmux needs the
+  `RGB` terminal feature). fastfetch without a logo aligns values with `\e[7G` (jumps into the picture): rebuild the lines.
+* **`tmux new-session && exit`, not `exec tmux`:** a broken tmux config with `exec` leaves a window that closes at once.
+  One session per kitty window needs `detach-on-destroy on`, otherwise closing one session throws its client into another.
+* **A charge limit makes HyDE's battery notifier spam.** At the limit (98%) the status flaps and it posts a critical
+  "Battery Full" plus phantom "Charger Plug Out". A dunst rule with `skip_display` + `history_ignore` hides them
+  (`dunstrc.d/70-gits-battery.conf`); the real low-battery warnings stay.
+* **Animation presets:** `borderangle` with style `loop` redraws every frame while it runs, hence the neon border is opt-in.

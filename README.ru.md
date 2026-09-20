@@ -8,7 +8,7 @@
 
 Тема HyDE, waybar (свой макет, переключатель workflow, watchdog), виджеты рабочего стола (часы, календарь, плеер, погода,
 сеть, батарея, нагрузка, to-do, визуализатор звука, редкие глитчи на обоях), hyprlock, темы SDDM / Plymouth / GRUB, rofi-лаунчер и меню (действия уведомлений, Wi-Fi, Bluetooth, профиль питания), звуки интерфейса, dunst,
-wlogout, терминал (баннер, starship, fzf, bat, btop, lazygit, tmux, yazi), курсор `GitS-Cursors`, Neovim, VS Code, Zen,
+wlogout, терминал (баннер с картинкой, в том числе внутри tmux; tmux по умолчанию, `GITS_NO_TMUX=1` отключает; starship, fzf, bat, btop, lazygit, tmux, yazi), курсор `GitS-Cursors`, Neovim, VS Code, Zen,
 Logseq, Qt/Dolphin (Kvantum), сборщик темы Telegram, а также `gits-doctor` — отчёт о состоянии системы и опциональная настройка снапшотов btrfs.
 
 ## Галерея
