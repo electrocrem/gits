@@ -1,4 +1,4 @@
--- key bindings: HyDE's key_binds.lua (minus its theme / wallpaper / rofi switchers) + the GitS additions. Press SUPER + / for the list.
+-- key bindings. Press SUPER + / for the list.
 local MOD = "SUPER"
 local function bind(keys, dispatch, desc, flags)
     flags = flags or {}

@@ -15,7 +15,7 @@ hl.on("hyprland.start", function()
     hl.exec_cmd(home .. "/.config/hypr/scripts/gits-events.sh")   -- login chime, plug / lock sounds, battery warnings
     hl.exec_cmd("sh -c 'sleep 6; command -v gits-idle >/dev/null && gits-idle apply'")   -- sleep / lock timers of the current power source
     -- ROG Control Center (ASUS laptops): its autostart entry never runs in a session like this one
-    hl.exec_cmd("sh -c 'command -v rog-control-center >/dev/null || exit 0; sleep 8; pgrep -f \"^/usr/bin/rog-control-center\" >/dev/null || exec setsid -f rog-control-center --autostart --background'")
+    hl.exec_cmd("sh -c 'command -v rog-control-center >/dev/null || exit 0; sleep 8; pgrep -f \"^(/usr/bin/)?rog-control-center\" >/dev/null || exec setsid -f rog-control-center --autostart --background'")
     hl.exec_cmd("rm -f " .. (os.getenv("XDG_STATE_HOME") or (home .. "/.local/state")) .. "/gits-touchpad/off")
     -- health check ~90 s after login: a notification only when gits-doctor finds a FAIL
     hl.exec_cmd("sh -c 'sleep 90; command -v gits-doctor >/dev/null || exit 0; gits-doctor -q >/dev/null 2>&1; n=$?; [ \"$n\" -gt 0 ] && notify-send -a GitS -u critical \"Health check\" \"$n problem(s): Super+I -> Health check\"; exit 0'")

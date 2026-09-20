@@ -1,8 +1,7 @@
 # gits-hyde — Ghost in the Shell for Hyprland
 
 A complete, self-contained *Ghost in the Shell* desktop for Hyprland (Lua config, 0.55+): navy + cyan phosphor palette, square corners,
-thin frames, kanji tags. Nothing else is needed: no dotfiles framework, no theme switcher. It started as a [HyDE](https://github.com/HyDE-Project/HyDE)
-theme and has since replaced every part of it. One installer, one uninstaller, every replaced file backed up.
+thin frames, kanji tags. Nothing else is needed: no dotfiles framework, no theme switcher. One installer, one uninstaller, every replaced file backed up.
 [Русская версия](README.ru.md)
 
 | Area | What you get |
@@ -48,8 +47,8 @@ widgets and popups in their demo modes.
 
 ## Requirements
 
-* Arch-based distro with **Hyprland 0.55+** (the config is Lua). Developed on CachyOS + Hyprland 0.56. Works from a bare Hyprland install; a
-  previous HyDE setup is fine too, its files are backed up and replaced (see below).
+* Arch-based distro with **Hyprland 0.55+** (the config is Lua). Developed on CachyOS + Hyprland 0.56. Works from a bare Hyprland install; every file the installer
+  replaces is backed up (see below).
 * Packages: see [`packages.txt`](packages.txt). `./install.sh --deps` installs them. AUR: `bibata-cursor-theme`
   (the cursor builder reuses its alias links) and `tela-circle-icon-theme-grey` (base of the icon theme).
 
@@ -71,11 +70,6 @@ Then **log out and in** (Hyprland session): the compositor reads its config at l
 load does not stop the others; the error goes to `~/.local/state/gits/config-errors.log` and `gits-doctor` reports it.
 
 Afterwards run `gits-doctor` (read-only): it checks the session, units, config, theme files, the boot chain and Zen.
-
-**Coming from HyDE?** The installer replaces `~/.config/hypr/hyprland.lua`, hyprlock/hypridle/dunst/kitty/GTK/Qt configs (all backed up).
-HyDE's own login hook (`~/.local/lib/hyde/shell/activate`, sourced by its zsh config) exports `HYPRLAND_CONFIG=~/.local/share/hypr/hyde.lua`,
-which would make Hyprland load HyDE's config first: rename that file (`mv activate activate.off`) before logging in. After that HyDE
-(`~/.local/share/hypr`, `~/.local/lib/hyde`, `~/.config/hyde`, `~/.local/share/hyde`, `hyde-shell`) is not used by anything here and can be deleted.
 
 ### What the installer touches
 
@@ -117,7 +111,6 @@ tools/make-assets.py        generates original placeholder artwork when assets/ 
 tools/post.py               idempotent edits: kdeglobals, Logseq, VS Code, Zen
 docs/PITFALLS.md            what broke and why
 docs/PALETTE.md             the colours
-docs/STANDALONE.md          how the HyDE dependency was removed
 ```
 
 ## Updating this repo from a live system

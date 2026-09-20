@@ -1,4 +1,4 @@
--- session environment (what HyDE's variables.lua / env.lua set) + our tools in PATH
+-- session environment + our tools in PATH
 local home = os.getenv("HOME")
 local function env(k, v) hl.env(k, v) end
 -- the XDG base directories, spelled out: waybar's config and some scripts expand $XDG_CONFIG_HOME

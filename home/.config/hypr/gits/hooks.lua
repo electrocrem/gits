@@ -1,1 +1,1 @@
--- event hooks. (HyDE also bounded new floating windows to the monitor and ran `uwsm stop` on shutdown; Hyprland's own placement is enough here.)
+-- event hooks.

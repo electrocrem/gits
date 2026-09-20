@@ -1,7 +1,6 @@
 # gits-hyde — «Призрак в доспехах» для Hyprland
 
-Самодостаточный рабочий стол в стиле *Ghost in the Shell* для Hyprland (Lua-конфиг, 0.55+), без HyDE и других фреймворков
-(начинался как тема для [HyDE](https://github.com/HyDE-Project/HyDE) и постепенно заменил все его части):
+Самодостаточный рабочий стол в стиле *Ghost in the Shell* для Hyprland (Lua-конфиг, 0.55+), без dotfiles-фреймворков и переключателей тем:
 тёмно-синяя палитра с циановым «люминофором», квадратные углы, тонкие рамки, иероглифы-метки.
 Один установщик, один деинсталлятор, каждый заменённый файл сохраняется в бэкап. [English version](README.md)
 
@@ -44,10 +43,6 @@ git clone https://github.com/electrocrem/gits-hyde.git && cd gits-hyde
 Затем **выйдите и войдите заново** (сессия Hyprland): конфиг компоситора читается при входе. Посмотреть его заранее можно прямо в
 текущей сессии: `GITS_NESTED=1 Hyprland -c ~/.config/hypr/hyprland.lua` (окно внутри окна, сервисы не запускаются). Если модуль конфига не
 загрузился, остальные работают, а ошибка попадает в `~/.local/state/gits/config-errors.log` (и в `gits-doctor`).
-
-**Переходите с HyDE?** Установщик заменяет `~/.config/hypr/hyprland.lua` и конфиги hyprlock/hypridle/dunst/kitty/GTK/Qt (всё в бэкап).
-Скрипт входа HyDE `~/.local/lib/hyde/shell/activate` (его подключает zsh-конфиг HyDE) экспортирует `HYPRLAND_CONFIG=~/.local/share/hypr/hyde.lua`,
-и Hyprland загрузит конфиг HyDE: переименуйте этот файл до входа. После этого HyDE ничем здесь не используется и его можно удалить.
 
 После установки запустите `gits-doctor`: он ничего не меняет, только проверяет.
 

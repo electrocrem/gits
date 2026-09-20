@@ -1,4 +1,4 @@
--- window and layer rules (HyDE's window_rules.lua / layer_rules.lua, without the regex helper)
+-- window and layer rules
 local function rx(list) return "^(" .. table.concat(list, "|") .. ")$" end
 
 local floating_class = rx({

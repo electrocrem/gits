@@ -1,4 +1,4 @@
--- compositor options: HyDE's defaults, then the GitS look (was the theme's hypr.theme)
+-- compositor options: defaults, then the GitS look
 hl.config({
     input = {
         kb_layout = "us,ru",

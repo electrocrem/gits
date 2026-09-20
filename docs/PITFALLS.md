@@ -1,6 +1,6 @@
 # Pitfalls found while building this (and how the setup deals with them)
 
-Notes from real breakage on a CachyOS + Hyprland 0.56 (Lua config) + HyDE laptop with an AMD iGPU and an NVIDIA dGPU.
+Notes from real breakage on a CachyOS + Hyprland 0.56 (Lua config) laptop with an AMD iGPU and an NVIDIA dGPU.
 
 ## Login and session
 
@@ -9,19 +9,23 @@ Notes from real breakage on a CachyOS + Hyprland 0.56 (Lua config) + HyDE laptop
   NVIDIA card with no monitor, alive but black. `gits-blind-guard.sh` (opt-in: `--login-guards`) ends the session
   after ~12 s without a monitor so SDDM shows the greeter again. Known false positive: logging in with the lid
   closed and no external monitor.
-* **Leftover session services.** If Hyprland restarts during login, every `hyde-Hyprland-*.service` of the dead first
-  instance keeps running against the old compositor (no bar, no notifications). `gits-stale-guard.sh` restarts the
-  units whose `HYPRLAND_INSTANCE_SIGNATURE` differs from the current one.
+* **Leftover session services.** If Hyprland restarts during login, units of the dead first instance can keep running against
+  the old compositor (no bar, no notifications). `gits-doctor` compares the `HYPRLAND_INSTANCE_SIGNATURE` of every `gits-*` unit
+  with the current one; `gits-session restart` fixes it. Units that were started on demand by the old compositor (KDE's
+  `plasma-kactivitymanagerd`, `plasma-xdg-desktop-portal-kde`) end up as "failed" with "The Wayland connection broke": harmless,
+  clear with `systemctl --user reset-failed`.
+* **The `Health check` alert right after login can be stale.** It is sent ~90 s after login from the state at that moment; a
+  failed unit that was reset later still leaves the notification on screen. Re-run `gits-doctor`.
 * **Do not put blocking waits in `~/.zprofile`.** A "wait until the sddm greeter is gone" guard broke four logins in
   a row. Anything in the login path is untestable without a real logout.
 * **Waybar at login** can fail with "cannot open display" (it starts before the environment is imported); systemd
-  gives up after a few tries. `gits.lua` checks 10 s after start and restarts the unit.
+  gives up after a few tries. `gits-bar.service` has `Restart=on-failure`, so systemd starts it again.
 
 ## Crashes triggered by changing the cursor theme at runtime
 
 Waybar (GTK3) and Zen (GTK3/Wayland) segfault in libgdk-3 when the cursor theme changes while they run
-(`hyprctl setcursor`, `gsettings set ... cursor-theme`, `theme.switch`). `gits-watchdog.sh` revives waybar within
-~5 s. Three or more Zen crashes make its next start show "Open Zen in Troubleshoot Mode?": close Zen
+(`hyprctl setcursor`, `gsettings set ... cursor-theme`, `theme.switch`). systemd restarts the bar (`gits-bar.service`) within
+a second or two. Three or more Zen crashes make its next start show "Open Zen in Troubleshoot Mode?": close Zen
 (`flatpak kill app.zen_browser.zen`) and set `toolkit.startup.recent_crashes` to 0 in the profile's `prefs.js`.
 
 **KDE apps silently undo the cursor theme.** `~/.config/kcminputrc` holds its own `cursorTheme`; whenever a KDE app
@@ -31,21 +35,26 @@ sync with `GitS-Cursors`. `kquitapp6 kded6` makes it segfault (harmless, it rest
 `~/.local/share/gits-cursor/build.py` draws the cursors with cairo. Its `index.theme` must NOT contain
 `Inherits=Bibata-Modern-Ice`, otherwise Hyprland draws Bibata's shapes.
 
-## HyDE specifics
+## Portals, doctor and small shell traps
+
+* **A user-level `~/.local/share/xdg-desktop-portal/hyprland-portals.conf` with `FileChooser=kde;gtk`** (some dotfile sets ship one) makes every file dialog start
+  `plasma-xdg-desktop-portal-kde`, a KDE service inside a non-KDE session; it dies with every compositor restart and shows up in
+  `systemctl --user --failed`. Without the file the system default `hyprland;gtk` applies (GTK dialogs): delete it.
+* **`gits-doctor` cannot read `/proc/PID/environ` of every unit.** The polkit agent is non-dumpable, its `environ` is owned by root:
+  the shell prints "Permission denied" for the `<` redirection itself, not for the command, so `2>/dev/null` inside the pipe does not
+  help. Test `[[ -r ... ]]` first.
+* **Match a process by its real `argv[0]`.** `setsid -f rog-control-center` runs as `rog-control-center`, not `/usr/bin/rog-control-center`;
+  `pgrep -f "^/usr/bin/..."` never matched, so the doctor warned and the autostart could start a second copy. Use `^(/usr/bin/)?name`.
+* **Removing the last file a shell glob expects** (`~/.config/zsh/completions/*.zsh`) turns the loop into an error in zsh: add `(N)`.
+
+## Look, lock screen and menus
 
 * The **workflow** `gaming` silently overrides the whole look (gaps 0, no blur/shadow/animations, opacity 1). Keep
-  `01-default` unless you are gaming (`hyde-shell workflows --set 01-default`).
-* **Hyprlock**: HyDE's boilerplate draws an opaque `background` first, so layout widgets need `zindex >= 1`. Never
+  `01-default` unless you are gaming (`gits-workflow set 01-default`).
+* **Hyprlock**: never
   stop a live hyprlock (`pkill`/`systemctl stop`): ext-session-lock treats that as a crash and locks you out;
   recover with `hyprctl --instance 0 eval 'hl.clear_crashed_lockscreen()'`.
-* **Kvantum**: the theme folder holds static `kvantum/kvconfig.theme` + `kvantum.theme` (no wallbash placeholders).
-  HyDE copies them to `~/.config/Kvantum/wallbash/` on every theme switch, so edit the copies in the theme folder.
-* The **qt6ct palette** is generated by HyDE from its own template (mostly `#FFFFFF`); Kvantum does the painting.
-* Rofi: a file in `~/.config/rofi/themes/` wins over the symlinks HyDE creates in `~/.local/share/rofi/themes/`.
-  `rofilaunch.sh` overrides `element {border-radius: 10px}` via `-theme-str` (even with rounding 0), so a style file
-  cannot beat it for `element`, only for more specific selectors like `element selected.normal`.
-  With 8 list rows + a search bar the launcher overflowed its 33em window and the layout collapsed: keep 7.
-* dunst: `dunstrc` is regenerated; put your changes in `dunstrc.d/` (drop-ins survive) or in `dunst.conf`.
+* dunst: put extra rules in `dunstrc.d/` (drop-ins) instead of editing `dunstrc`.
   rofi ignores `display-columns` in a theme file, hence the wrapper script for the action menu.
 
 ## Icons
@@ -76,7 +85,7 @@ aliases (including links to links) to the `scalable` directories too. `kiconfind
 * **GTK4 apps hang forever at start** (GTK 4.22, generated `Wallbash-Gtk` theme). Cause: `gtk-4.0/settings.ini` inside
   the theme dir (`~/.config/gtk-4.0` is a symlink into it) contains `gtk-application-prefer-dark-theme=true`; GTK reads
   it while loading the theme, switches variant, reloads, and recurses (a deep `libgtk-4` stack in `load_from_file`).
-  HyDE's `theme.switch.sh` deletes that file, but KDE's `kded6` "gtkconfig" module recreates it whenever any KDE app
+  KDE's `kded6` "gtkconfig" module recreates that file whenever any KDE app
   starts. Fix: `rm ~/.config/gtk-4.0/settings.ini` and `[Module-gtkconfig] autoload=false` in `~/.config/kded6rc`
   (`install.sh` does both; `gits-doctor` checks). Found by bisecting a copy of the theme dir, then each key.
   `gtk4-layer-shell` must still be LD_PRELOADed before GTK loads (widgets.py re-execs itself).
@@ -90,8 +99,8 @@ aliases (including links to links) to the `scalable` directories too. `kiconfind
 
 ## Menus, sounds, power (round 6)
 
-* **XDG autostart never runs in a HyDE session.** `xdg-autostart.target` is not started, so `~/.config/autostart/*.desktop`
-  (e.g. ROG Control Center) do nothing. Starting the target would launch every autostart file at once; `gits.lua`
+* **XDG autostart never runs in this session.** `xdg-autostart.target` is not started, so `~/.config/autostart/*.desktop`
+  (e.g. ROG Control Center) do nothing. Starting the target would launch every autostart file at once; `gits/start.lua`
   starts the one wanted app by hand instead.
 * **dunst rule patterns are regular expressions.** `summary = "*"` is invalid ("Invalid preceding regular expression"
   in the journal, one warning per popup); use `".*"`. Scripts of *all* matching rules run, not only the last one.
@@ -112,7 +121,7 @@ aliases (including links to links) to the `scalable` directories too. `kiconfind
 
 * **Installer blocks next to hand-made hooks run twice.** The same line lived in `user.zsh` (added by hand earlier) and in
   the `gits-hyde:zsh` block: `banner.zsh` was sourced twice, fastfetch printed twice. Same story for `hyprland.lua`
-  (inline hooks + the `gits.lua` block). `gits-doctor` now counts the hooks.
+  (inline hooks + the block of a module). `gits-doctor` now counts the hooks.
 * **kitty pictures inside tmux:** `fastfetch --logo-type kitty-direct` does not pass through tmux. The banner uses
   `kitten icat --unicode-placeholder --passthrough=tmux`: the image data goes through tmux's DCS passthrough
   (`allow-passthrough on`), the pane only holds text cells. icat prints those rows with absolute positioning
@@ -121,7 +130,7 @@ aliases (including links to links) to the `scalable` directories too. `kiconfind
 * **tmux autostart is opt-in (`GITS_TMUX=1`):** one tmux session per kitty window turned out to be more machinery than it is worth for most people.
 * **`tmux new-session && exit`, not `exec tmux`** (when the autostart is on): a broken tmux config with `exec` leaves a window that closes at once.
   One session per kitty window needs `detach-on-destroy on`, otherwise closing one session throws its client into another.
-* **The battery status flaps near full and HyDE's notifier spams.** Around 98% (the ASUS charge limit itself was 100%) the status flips between Full / Not charging / Discharging and it posts a critical
+* **The battery status flaps near full and battery notifiers spam.** Around 98% (the ASUS charge limit itself was 100%) the status flips between Full / Not charging / Discharging and it posts a critical
   "Battery Full" plus phantom "Charger Plug Out". A dunst rule with `skip_display` + `history_ignore` hides them
   (`dunstrc.d/70-gits-battery.conf`); the real low-battery warnings stay.
 * **Animation presets:** `borderangle` with style `loop` redraws every frame while it runs, hence the neon border is opt-in.
@@ -135,10 +144,8 @@ aliases (including links to links) to the `scalable` directories too. `kiconfind
   bar button too, i.e. a toggle), Escape = close.
 * **rofi cannot be made to close on a click outside**: it is exclusive too (an invisible catcher below it gets no clicks), and a
   fullscreen transparent rofi window with `click-to-exit` ignores clicks on its empty area. So this setup's own list menus
-  (`gits-menu`: Wi-Fi, Bluetooth, notification actions, settings) are GTK popups (`panel.py menu`); only HyDE's own rofi menus
-  (launcher, clipboard, keybinding hint) still need Esc.
-* **The keybinding hint went blank with a rewritten rofi theme.** HyDE's `keybinds_hint.sh` passes odd arguments (`-p -theme-str`
-  swallows the next option) and only works with HyDE's own widget tree; `home/.config/rofi/themes/clipboard.rasi` keeps that tree
+  (`gits-menu`: Wi-Fi, Bluetooth, notification actions, settings) are GTK popups (`panel.py menu`); a rofi menu, if you add one, still needs Esc.
+* **The keybinding hint went blank with a rewritten rofi theme.** `home/.config/rofi/themes/clipboard.rasi` keeps the original widget tree
   and only restyles it. Widgets that carry `content:` must be named `textbox-...`.
 * **Testing input without a compositor tool:** `/dev/uinput` is writable for the session user. A virtual mouse (EV_REL + BTN_LEFT)
   moves the pointer and clicks; `hyprctl dispatch 'hl.dsp.cursor.move({x=..,y=..})'` warps it first. A virtual keyboard
@@ -152,11 +159,11 @@ aliases (including links to links) to the `scalable` directories too. `kiconfind
   (50 of them). Match the script path instead, and prefer `$!` of the first launch.
 * **`pkill -f pattern` from a tool shell matches the shell's own command line** whenever the pattern text appears in it
   (also in an unrelated sed expression). Use `[x]pattern` and keep the plain text out of the same command.
-* **Super+J = dwindle `togglesplit` in HyDE's global binds, but the master layout answers "Unknown master layoutmsg:
+* **Super+J = dwindle `togglesplit`, but the master layout answers "Unknown master layoutmsg:
   togglesplit".** `gits-layout-toggle` picks the right message for the active layout.
 * **dunst patterns are POSIX regular expressions:** no `(?i)`, no `\\.` escapes in the config (use `[.]`).
-* **Hyprland does not reload a `dofile`d file on its own:** after editing `gits.lua` run `hyprctl reload`.
-* **HyDE's hypridle.conf turned the screen off with `hyprctl dispatch dpms off`, which does not exist in the Lua config** ("')' expected near 'off'"): the
+* **Hyprland does not reload a `dofile`d file on its own:** after editing a `gits/*.lua` module run `hyprctl reload`.
+* **A stock hypridle.conf turns the screen off with `hyprctl dispatch dpms off`, which does not exist in the Lua config** ("')' expected near 'off'"): the
   screen-off stage never worked. The working form is `hyprctl dispatch 'hl.dsp.dpms({ action = "off" })'`; `gits-idle` generates it. Never start a
   second hypridle to test a config: its lock and suspend actions really run.
 * **`pactl` prints "Invalid ASCII character" for non-ASCII stream names but the JSON that follows is fine:** read stdout only and decode
@@ -170,12 +177,11 @@ aliases (including links to links) to the `scalable` directories too. `kiconfind
 * **GTK4 CSS `transform` animations do not run with the cairo renderer** (only `opacity` did): a `scaleY` "open from a line" keyframe left the card at full
   height. `Gtk.Revealer` with `SLIDE_UP` uncovers a card top-down (`SLIDE_DOWN` slides it in from above, bottom first), and a drawing area laid over it
   paints the scan line at the revealed edge; nothing redraws once the effect is over. `GITS_PANEL_SLOW=1` slows it 10x for frame-by-frame screenshots.
-* **HyDE writes `~/.config/gtk-3.0/settings.ini` at theme switch** (`theme.switch.sh`), so an icon theme built after the last switch is missing there
+* **A theme-switch tool writes `~/.config/gtk-3.0/settings.ini`**, so an icon theme built after the last switch is missing there
   (`Tela-circle-grey` instead of `GitS-Icons`). `gits-doctor --fix` edits the key; do not re-run the theme switch for this (it changes the cursor theme at
   runtime, which crashes waybar and Zen).
-* **kitty fonts:** HyDE's `kitty/hyde.conf` sets the font and is HyDE-owned; override it in `kitty.conf` after `include hyde.conf` (the installer's block).
 * **hyprsunset reads its profiles from `~/.config/hypr/hyprsunset.conf` and switches by the clock itself**; only its unit needs a restart after a change.
-  Profile blocks that contain only comments (HyDE's sample) are dropped by `gits-daynight`.
+  Profile blocks that contain only comments (the stock sample) are dropped by `gits-daynight`.
 * **A preloaded library is inherited by every child process.** The GTK4 apps here re-exec themselves with `LD_PRELOAD=libgtk4-layer-shell.so` (it must be loaded
   before libwayland). Every `bash`/`git`/`hyprctl` they spawned inherited it and loaded GTK's libraries too: `gits-project --tsv` took 2.9 s from Python but
   0.07 s from a shell, and the launcher needed 3.6 s to appear. `os.environ.pop("LD_PRELOAD")` right after the imports fixed it (launcher 0.55 s).

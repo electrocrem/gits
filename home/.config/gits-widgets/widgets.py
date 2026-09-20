@@ -69,7 +69,7 @@ if DEMO:
     STATE_DIR = CACHE_DIR = tempfile.mkdtemp(prefix="gits-widgets-demo-")
 FONT = "JetBrainsMono Nerd Font"
 
-# palette (= kitty.theme of the "Ghost in the Shell" HyDE theme)
+# palette (= the kitty colours of the GitS theme)
 BG, CY, CYB, FG = "#060A14", "#2ED3D7", "#5EF1F5", "#C8F4FF"
 MID, DIM, RED, NAVY = "#9FC5D6", "#596977", "#E5432B", "#0C1A33"
 
