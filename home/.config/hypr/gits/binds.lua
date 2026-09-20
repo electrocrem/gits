@@ -36,7 +36,7 @@ bind("CTRL + SHIFT + ESCAPE", run("gits-sysmon"), "[Launcher|Apps] system monito
 bind(MOD .. " + Q", hl.dsp.window.close(), "[Window Management] close focused window")
 bind("ALT + F4", hl.dsp.window.close(), "[Window Management] close focused window")
 bind(MOD .. " + ALT + F4", hl.dsp.window.kill(), "[Window Management] kill focused window")
-bind(MOD .. " + Delete", hl.dsp.exit(), "[Window Management] exit hyprland session")
+bind(MOD .. " + Delete", run("gits-exit"), "[Window Management] exit hyprland session")
 bind(MOD .. " + W", hl.dsp.window.float({ action = "toggle" }), "[Window Management] toggle float")
 bind(MOD .. " + G", hl.dsp.group.toggle(), "[Window Management] toggle group")
 bind("ALT + P", hl.dsp.window.pseudo(), "[Window Management] pseudotiling")

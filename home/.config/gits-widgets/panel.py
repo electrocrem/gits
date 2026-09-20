@@ -471,7 +471,7 @@ class Panel(Popup):
         sess = Gtk.Box(spacing=6, homogeneous=True)
         sess.append(self._action("󰌾", "LOCK", lambda: self._later("loginctl lock-session")))
         sess.append(self._action("󰤄", "SLEEP", lambda: self._later("systemctl suspend")))
-        sess.append(self._action("󰍃", "LOGOUT", lambda: self._later("hyprctl dispatch 'hl.dsp.exit()'"), confirm=True))
+        sess.append(self._action("󰍃", "LOGOUT", lambda: self._later("gits-exit"), confirm=True))
         sess.append(self._action("󰜉", "REBOOT", lambda: self._later("systemctl reboot"), confirm=True))
         sess.append(self._action("󰐥", "OFF", lambda: self._later("systemctl poweroff"), confirm=True))
         root.append(sess)

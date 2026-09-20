@@ -1,20 +1,20 @@
 {
     "label": "lock",
-    "action": "lockscreen.sh",
+    "action": "loginctl lock-session",
     "text": "󰌾  LOCK",
     "keybind": "l"
 }
 
 {
     "label": "logout",
-    "action": "hyprctl dispatch 'hl.dsp.exit()'",
+    "action": "gits-exit",
     "text": "󰍃  LOGOUT",
     "keybind": "e"
 }
 
 {
     "label": "suspend",
-    "action": "lockscreen.sh & disown && systemctl suspend",
+    "action": "loginctl lock-session && sleep 0.5 && systemctl suspend",
     "text": "󰤄  SLEEP",
     "keybind": "u"
 }

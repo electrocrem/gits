@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# gits-exit: end the Hyprland session (wlogout, the control panel and Super+Delete call this).
+# Asks Hyprland to exit; if the session is still alive after 3 s (Hyprland hung, or start-hyprland restarted it after an unclean exit),
+# logind ends the session, and SDDM shows the greeter again.
+hyprctl dispatch 'hl.dsp.exit()' >/dev/null 2>&1
+alive() { hyprctl version >/dev/null 2>&1 || pgrep -u "$UID" -x start-hyprland >/dev/null; }
+for _ in 1 2 3 4 5 6; do sleep 0.5; alive || exit 0; done
+sid=${XDG_SESSION_ID:-$(loginctl show-user "$USER" -p Display --value 2>/dev/null)}
+[[ -n $sid ]] || { notify-send -a GitS -u critical "Logout" "Hyprland did not exit and the session id is unknown" 2>/dev/null; exit 1; }
+exec loginctl terminate-session "$sid"
