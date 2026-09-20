@@ -44,9 +44,27 @@ else
     errs=$(hyprctl configerrors 2>/dev/null | sed '/^$/d')
     if [[ -z $errs ]]; then ok "no Hyprland config errors"; else bad "config errors: $(head -c 200 <<<"$errs")"; fi
 
-    ndirs=$(find "$RUN/hypr" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
-    if [[ $ndirs -le 1 ]]; then ok "single Hyprland instance dir"
-    else warn "$ndirs Hyprland instance dirs in $RUN/hypr (the session restarted at least once)"; fi
+    # instance dirs of dead compositors stay in $RUN/hypr until reboot; the blind-session guard names the
+    # instance it ended in the login log, so a dead dir it accounts for is a recovered race, not a problem
+    dead=() lastguard=
+    for d in "$RUN"/hypr/*/; do
+        [[ -d $d ]] || continue
+        pid=$(head -1 "$d/hyprland.lock" 2>/dev/null)
+        [[ -n $pid && -d /proc/$pid ]] && continue
+        dead+=("${d%/}")
+    done
+    if [[ ${#dead[@]} -eq 0 ]]; then ok "single Hyprland instance dir"; else
+        unexplained=0
+        for d in "${dead[@]}"; do
+            g=$(grep -F "blind-guard: no monitor on ${d##*/} " "$H/.local/state/gits-login.log" 2>/dev/null | tail -1)
+            if [[ -n $g ]]; then lastguard=${g%% *}; else unexplained=$((unexplained+1)); fi
+        done
+        if [[ $unexplained -gt 0 ]]; then
+            warn "$unexplained dead Hyprland instance dir(s) in $RUN/hypr that the blind-session guard did not end (the compositor crashed or was restarted)"
+        else
+            ok "login race hit at $lastguard and was recovered by the blind-session guard (dead instance log stays until reboot)"
+        fi
+    fi
 fi
 
 # ---------------------------------------------------------------- desktop state
