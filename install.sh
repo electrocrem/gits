@@ -47,7 +47,7 @@ say "checking the system"
 if [[ -z ${GITS_SKIP_PREFLIGHT:-} ]]; then
     command -v Hyprland >/dev/null || die "Hyprland is not installed (pacman -S hyprland)"
     hv=$(Hyprland --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1)
-    [[ -z $hv ]] || printf '%s\n0.55\n' "$hv" | sort -CV || die "Hyprland $hv is too old: the config is Lua, which needs 0.55 or newer"
+    [[ -z $hv ]] || printf '0.55\n%s\n' "$hv" | sort -CV || die "Hyprland $hv is too old: the config is Lua, which needs 0.55 or newer"
     command -v pacman >/dev/null || warn "not an Arch-based system: package checks are skipped, everything else should still work"
 fi
 
@@ -213,17 +213,11 @@ run python3 "$HOME/.local/share/gits-sounds/build.py" || warn "UI sounds not bui
 ((TELEGRAM)) && run python3 "$HOME/.local/share/gits-telegram/build.py"
 
 # ------------------------------------------------------------------ activation
-say "session units and toolkit settings"
+say "session units"
 if ((DRY)); then
-    echo "   (dry) systemctl --user daemon-reload; gsettings gtk-theme adw-gtk3-dark, icons GitS-Icons, cursor GitS-Cursors"
+    echo "   (dry) systemctl --user daemon-reload; gits-idle apply"
 else
     [[ -n ${GITS_SKIP_PREFLIGHT:-} ]] || systemctl --user daemon-reload 2>/dev/null || true   # (tests run with a throw-away $HOME: leave the real session alone)
-    if [[ -z ${GITS_SKIP_PREFLIGHT:-} ]] && command -v gsettings >/dev/null; then
-        gsettings set org.gnome.desktop.interface gtk-theme adw-gtk3-dark 2>/dev/null || true
-        gsettings set org.gnome.desktop.interface icon-theme GitS-Icons 2>/dev/null || true
-        gsettings set org.gnome.desktop.interface color-scheme prefer-dark 2>/dev/null || true
-        gsettings set org.gnome.desktop.interface cursor-theme GitS-Cursors 2>/dev/null || true
-    fi
     GITS_IDLE_NO_RESTART=1 "$HOME/.local/bin/gits-idle" apply >/dev/null 2>&1 || true   # write the sleep timers into hypridle.conf
 fi
 

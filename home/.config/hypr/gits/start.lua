@@ -5,6 +5,9 @@ local home = gits.home
 local function exists(p) local f = io.open(p, "r"); if f then f:close(); return true end; return false end
 
 hl.on("hyprland.start", function()
+    -- toolkit settings, before the bar and the popups start (GTK apps read them from gsettings; Qt gets them from qt6ct / Kvantum files)
+    hl.exec_cmd("sh -c 'g=org.gnome.desktop.interface; gsettings set $g gtk-theme adw-gtk3-dark; gsettings set $g icon-theme GitS-Icons; "
+        .. "gsettings set $g color-scheme prefer-dark; gsettings set $g cursor-theme GitS-Cursors'")
     hl.exec_cmd("gits-session start")                       -- import the session environment, (re)start gits-session.target
     hl.exec_cmd("hyprctl setcursor GitS-Cursors 22")
     hl.exec_cmd(home .. "/.config/gits-widgets/run.sh start")   -- desktop widgets
