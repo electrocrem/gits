@@ -97,6 +97,9 @@ def transform(data, path):
     text = text.replace(HOME, "@HOME@")
     for a, b in SCRUB:
         text = text.replace(a, b)
+    if path.endswith("/.config/hypr/gits.lua"):  # install.sh --login-guards fills this in: keep the repo copy a template
+        tpl = open(os.path.join(REPO, "tools", "blind-guard.lua.in")).read().rstrip("\n")
+        text = text.replace(tpl, "-- @BLIND_GUARD@")
     return text.encode("utf-8")
 
 
