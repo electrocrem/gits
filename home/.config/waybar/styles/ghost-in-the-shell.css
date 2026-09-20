@@ -38,6 +38,7 @@ tooltip label { color: @main-fg; padding: 2px 4px; }
 #bluetooth,
 #pulseaudio,
 #custom-gits-lang,
+#custom-gits-rec,
 #custom-gits-mode,
 #custom-gits-notify,
 #battery,
@@ -58,6 +59,7 @@ tooltip label { color: @main-fg; padding: 2px 4px; }
 #bluetooth,
 #pulseaudio,
 #custom-gits-lang,
+#custom-gits-rec,
 #custom-gits-mode,
 #custom-gits-notify,
 #battery,
@@ -137,3 +139,7 @@ tooltip label { color: @main-fg; padding: 2px 4px; }
 
 #tray > .passive { opacity: 0.5; }
 #tray image { -gtk-icon-style: symbolic; }
+
+/* screen recording: red block, blinking, only present while recording */
+#custom-gits-rec.rec { background: #E5432B; color: #060A14; animation: gits-blink 1s steps(2, start) infinite; }
+#custom-gits-rec.idle { padding: 0; }

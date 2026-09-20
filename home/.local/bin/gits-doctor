@@ -184,7 +184,7 @@ command -v tmux >/dev/null && ok "tmux installed" || warn "tmux not installed"
 
 # ---------------------------------------------------------------- extras
 head_ "menus, sounds, widgets extras"
-miss=""; for b in gits-menu gits-wifi gits-bt gits-sound gits-panel gits-osd gits-rog gits-touchpad; do command -v "$b" >/dev/null || miss+=" $b"; done
+miss=""; for b in gits-menu gits-wifi gits-bt gits-sound gits-panel gits-osd gits-rog gits-touchpad gits-idle gits-update gits-rec; do command -v "$b" >/dev/null || miss+=" $b"; done
 [[ -z $miss ]] && ok "menus and sound player in PATH (gits-wifi, gits-bt, gits-menu, gits-sound)" || warn "missing from PATH:$miss"
 nw=$(ls "$H/.local/share/gits-sounds"/*.wav 2>/dev/null | wc -l)
 [[ $nw -ge 7 ]] && ok "UI sounds built ($nw wav files)" || warn "UI sounds missing: python3 ~/.local/share/gits-sounds/build.py"

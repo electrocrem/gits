@@ -158,3 +158,9 @@ aliases (including links to links) to the `scalable` directories too. `kiconfind
 * **HyDE's hypridle.conf turned the screen off with `hyprctl dispatch dpms off`, which does not exist in the Lua config** ("')' expected near 'off'"): the
   screen-off stage never worked. The working form is `hyprctl dispatch 'hl.dsp.dpms({ action = "off" })'`; `gits-idle` generates it. Never start a
   second hypridle to test a config: its lock and suspend actions really run.
+* **`pactl` prints "Invalid ASCII character" for non-ASCII stream names but the JSON that follows is fine:** read stdout only and decode
+  with `errors="replace"` (a Cyrillic track title otherwise breaks the mixer). Group streams by application: Spotify opens two.
+* **Never signal waybar with a real-time number that no module registered:** the default action of `SIGRTMIN+n` is to terminate it.
+  Modules that must update fast poll (`interval: 1`) instead of using a signal that other layouts may not define.
+* **A shell-script stand-in for a binary has the interpreter's name in `/proc/PID/comm`:** detect processes through the command line
+  when testing with stubs.

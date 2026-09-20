@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# gits-rec: screen recording with wf-recorder (sudo pacman -S wf-recorder).
+#   gits-rec toggle [area|screen]   start (area = pick with slurp, screen = the focused monitor) or, when recording, stop
+#   gits-rec stop | status | bar    status prints on/off; bar prints the waybar JSON (empty text = hidden when idle)
+# Files go to ~/Videos/GitS_<date>_<time>.mp4. GITS_REC_AUDIO=1 adds the default audio output; GITS_REC_ARGS="..." extra wf-recorder
+# arguments (e.g. "-c h264_vaapi -d /dev/dri/renderD128" to encode on the GPU). Software x264 is the default: it works everywhere.
+run=${XDG_RUNTIME_DIR:-/tmp}; pidfile=$run/gits-rec.pid; info=$run/gits-rec.info
+recording() { local p; p=$(cat "$pidfile" 2>/dev/null) && [[ $p =~ ^[0-9]+$ ]] && tr '\0' ' ' <"/proc/$p/cmdline" 2>/dev/null | grep -q "wf-recorder"; }
+say() { notify-send -a "GitS" -t "${2:-3000}" -i "${3:-media-record}" "Screen recording" "$1"; }
+stop() {
+    recording || return 0
+    local p out; p=$(cat "$pidfile"); out=$(sed -n 1p "$info" 2>/dev/null)
+    kill -INT "$p"                                   # SIGINT lets wf-recorder finish the file properly
+    for _ in {1..50}; do kill -0 "$p" 2>/dev/null || break; sleep 0.1; done
+    rm -f "$pidfile"
+    [[ -s $out ]] && say "saved: ${out/#$HOME/~}" 6000 video-x-generic || say "stopped (no file was written)"
+}
+start() {
+    command -v wf-recorder >/dev/null || { say "wf-recorder is not installed: sudo pacman -S wf-recorder" 6000 dialog-warning; exit 1; }
+    local mode=${1:-area} args=() out geom
+    mkdir -p "$HOME/Videos"; out=$HOME/Videos/GitS_$(date +%F_%H-%M-%S).mp4
+    if [[ $mode == area ]]; then
+        geom=$(slurp -b '#060A14aa' -c '#2ED3D7' -s '#2ED3D722' -w 1) || exit 0    # Esc in slurp = cancel
+        args+=(-g "$geom")
+    else
+        args+=(-o "$(hyprctl monitors -j | jq -r '[.[] | select(.focused)][0].name // .[0].name')")
+    fi
+    [[ -n ${GITS_REC_AUDIO:-} ]] && args+=(--audio)
+    # shellcheck disable=SC2086
+    setsid -f wf-recorder "${args[@]}" ${GITS_REC_ARGS:-} -f "$out" </dev/null >"$run/gits-rec.log" 2>&1
+    sleep 0.5; pgrep -nf "wf-recorder .*-f $out" >"$pidfile"; printf '%s\n%s\n' "$out" "$(date +%s)" >"$info"
+    recording || { say "could not start (see $run/gits-rec.log)" 6000 dialog-error; rm -f "$pidfile"; exit 1; }
+    say "started: press Super+Alt+R to stop" 2500
+}
+case ${1:-toggle} in
+    toggle) if recording; then stop; else start "${2:-area}"; fi ;;
+    stop) stop ;;
+    status) recording && echo on || echo off ;;
+    bar)
+        if recording; then
+            t0=$(sed -n 2p "$info" 2>/dev/null); s=$(( $(date +%s) - ${t0:-$(date +%s)} ))
+            printf '{"text":"󰑋 REC %02d:%02d","class":"rec","tooltip":"%s\\nclick: stop"}\n' $((s / 60)) $((s % 60)) "$(sed -n 1p "$info" | sed "s|$HOME|~|")"
+        else echo '{"text":"","class":"idle"}'; fi ;;
+    *) echo "usage: gits-rec [toggle [area|screen]|stop|status|bar]" >&2; exit 2 ;;
+esac

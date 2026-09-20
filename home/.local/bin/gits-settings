@@ -6,7 +6,8 @@ extra=${XDG_CONFIG_HOME:-$HOME/.config}/gits/settings.tsv
 entries=$(cat <<'ROWS'
 󰖩  Network	nm-connection-editor
 󰂯  Bluetooth	blueman-manager
-󰕾  Sound	pavucontrol
+󰕾  Sound mixer (per application)	gits-panel mixer
+󰕾  Sound devices (pavucontrol)	pavucontrol
 󰍹  Displays	nwg-displays
 󰒓  All system settings (KDE: input, keyboard, apps...)	systemsettings
 󰸉  Wallpaper	hyde-shell wallpaper -GS
@@ -22,6 +23,9 @@ entries=$(cat <<'ROWS'
 󰁹  Power profile	$HOME/.config/waybar/scripts/gits-perf.sh menu
 󰍽  Touchpad on / off	gits-touchpad toggle
 󰈙  HyDE config file	xdg-open $HOME/.config/hyde/config.toml
+󰑋  Screen recording: area (again = stop)	gits-rec toggle area
+󰑋  Screen recording: whole screen	gits-rec toggle screen
+󰚰  Update the system (snapshot, then repairs)	gits-update
 󰋼  Health check (gits-doctor)	kitty --hold sh -c gits-doctor
 ROWS
 )

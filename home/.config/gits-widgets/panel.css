@@ -95,3 +95,9 @@ list { background: transparent; }
 
 .act.wide { padding: 8px 0; }
 .act.wide .act-name { font-size: 10px; color: #9FC5D6; }
+
+/* health chip in the footer */
+.health { font-size: 9px; font-weight: 700; letter-spacing: 1px; padding: 2px 6px; border: 1px solid alpha(#2ED3D7, 0.3); background: transparent; }
+.health.ok { color: #2ED3D7; }
+.health.warn { color: #E8C547; border-color: #E8C547; }
+.health.bad { color: #E5432B; border-color: #E5432B; }

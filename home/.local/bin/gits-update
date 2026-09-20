@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# gits-update: a safe system update for this setup.
+#   gits-update             open a terminal window and run the whole thing (Super+I -> Update system)
+#   gits-update --check     only count pending updates (repo + AUR), change nothing
+#   gits-update --post      only the after-update repairs (gits-doctor --fix, timers, dunst)
+# What it does: list what is pending -> ask -> `paru -Syu` (snap-pac takes a snapshot before and after the pacman transaction,
+# so a bad update can be rolled back from the GRUB snapshot menu) -> repair what HyDE / KDE updates typically undo
+# (gits-doctor --fix) -> tell you whether a reboot is advisable (new kernel or NVIDIA driver).
+run_here() { [[ -t 0 && -t 1 ]]; }
+count_updates() {
+    repo=$(checkupdates 2>/dev/null); aur=$(paru -Qua 2>/dev/null)
+    nrepo=$([[ -n $repo ]] && wc -l <<<"$repo" || echo 0); naur=$([[ -n $aur ]] && wc -l <<<"$aur" || echo 0)
+}
+post() {
+    echo; echo "── after the update ──"
+    command -v gits-idle >/dev/null && gits-idle apply
+    gits-doctor --fix -q | sed -n '/repairs/,$p'
+    hyprctl configerrors 2>/dev/null | sed '/^$/d' | head -3
+    running=$(uname -r); kpkg=$(pacman -Qq 2>/dev/null | grep -E '^linux(-cachyos)?(-lts)?$' | head -1)
+    inst=$([[ -n $kpkg ]] && pacman -Q "$kpkg" | awk '{print $2}')
+    if [[ -n $inst && $running != *"$inst"* ]]; then echo "! the kernel changed ($running running, $inst installed): reboot advisable"; fi
+    [[ -e /run/reboot-required ]] && echo "! reboot required (a package asked for it)"
+}
+case ${1:-} in
+    --check) count_updates; echo "repo: $nrepo   aur: $naur"; exit 0 ;;
+    --post) post; exit 0 ;;
+    "") ;;
+    *) echo "usage: gits-update [--check|--post]" >&2; exit 2 ;;
+esac
+if ! run_here; then
+    exec kitty --class gits-update --title "GitS // system update" bash -c 'gits-update; echo; read -rp "press Enter to close "'
+fi
+echo "GitS // system update"; echo "checking..."
+count_updates
+echo "repo: $nrepo   aur: $naur"
+if (( nrepo + naur == 0 )); then echo "already up to date"; post; exit 0; fi
+[[ -n $repo ]] && echo "$repo" | head -25; ((nrepo > 25)) && echo "... and $((nrepo - 25)) more"
+[[ -n $aur ]] && { echo "-- AUR"; echo "$aur" | head -10; }
+echo; echo "snap-pac takes a snapshot before and after; roll back from the GRUB snapshot menu if something breaks."
+read -rp "update now? [y/N] " a
+[[ $a == [yYдД]* ]] || { echo "cancelled"; exit 0; }
+paru -Syu || { echo "the update failed or was cancelled; nothing was repaired"; exit 1; }
+post

@@ -48,3 +48,7 @@ brightnessctl             # brightness slider and OSD
 playerctl                 # media popup, bar player module
 satty                     # screenshot annotation (HyDE opens it; config in home/.config/satty)
 hyprpicker                # colour picker button in the control panel
+
+# screen recording (optional): gits-rec, Super+Alt+R
+wf-recorder
+slurp

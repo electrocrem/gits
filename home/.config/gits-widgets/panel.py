@@ -42,7 +42,7 @@ def sh(cmd, timeout=4):
     if DEMO:
         return ""
     try:
-        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout).stdout.strip()
+        return subprocess.run(cmd, capture_output=True, text=True, errors="replace", timeout=timeout).stdout.strip()
     except (OSError, subprocess.SubprocessError):
         return ""
 
@@ -332,7 +332,8 @@ class Panel(Popup):
         self.tiles = [wifi, bt, dnd, night, snd, wid, awake, plane, game]
         pad = Tile("󰍽", "TOUCHPAD", get_touchpad, lambda: fire(["gits-touchpad", "toggle"]))
         glitch = Tile("󰘨", "GLITCH", get_glitch, set_glitch)
-        self.tiles += [pad, glitch]
+        rec = Tile("󰑋", "REC", lambda: sh(["gits-rec", "status"]) == "on", lambda: self._later("gits-rec toggle area"))
+        self.tiles += [pad, glitch, rec]
         for row in (self.tiles[:3], self.tiles[3:6], self.tiles[6:9], self.tiles[9:]):
             r = Gtk.Box(spacing=6, homogeneous=True)
             for t in row:
@@ -377,9 +378,18 @@ class Panel(Popup):
         sess.append(self._action("󰐥", "OFF", lambda: self._later("systemctl poweroff"), confirm=True))
         root.append(sess)
 
+        footer = Gtk.Box(spacing=8)
         self.foot = label("", "foot")
-        root.append(self.foot)
+        self.foot.set_hexpand(True)
+        footer.append(self.foot)
+        self.health = Gtk.Button(label="● health…")
+        self.health.add_css_class("health")
+        self.health.connect("clicked", lambda *_: self._later(
+            "kitty --hold sh -c 'gits-doctor; echo; read -rp \"repair what can be repaired (gits-doctor --fix)? [y/N] \" a; [ \"$a\" = y ] && gits-doctor --fix'"))
+        footer.append(self.health)
+        root.append(footer)
         self.set_child(root)
+        threading.Thread(target=self._health, daemon=True).start()
 
         threading.Thread(target=self._load, daemon=True).start()
 
@@ -414,6 +424,27 @@ class Panel(Popup):
         if name in self.timers:
             GLib.source_remove(self.timers[name])
         self.timers[name] = GLib.timeout_add(80, lambda: (self.timers.pop(name, None), cb(v), False)[2])  # debounce
+
+    def _health(self):
+        """gits-doctor -q takes ~1 s: run it off the UI thread and show the totals as a coloured chip."""
+        if DEMO:
+            out = "\x1b[0m50 ok, 1 warn, 0 fail"
+        else:
+            out = sh(["gits-doctor", "-q"], timeout=20)
+        import re
+        m = re.search(r"(\d+) ok\D+(\d+) warn\D+(\d+) fail", re.sub(r"\x1b\[[0-9;]*m", "", out))
+        GLib.idle_add(self._show_health, tuple(int(x) for x in m.groups()) if m else None)
+
+    def _show_health(self, t):
+        for c in ("ok", "warn", "bad"):
+            self.health.remove_css_class(c)
+        if t is None:
+            self.health.set_label("● health ?")
+            return
+        ok, warn, bad = t
+        cls = "bad" if bad else ("warn" if warn else "ok")
+        self.health.add_css_class(cls)
+        self.health.set_label(f"● {bad} fail · {warn} warn" if (bad or warn) else f"● all {ok} checks ok")
 
     # -- actions
     def _action(self, icon, name, cb, confirm=False):
@@ -478,7 +509,7 @@ class Panel(Popup):
         if DEMO:
             st = {"WI-FI": True, "BLUETOOTH": True, "SILENT": False, "NIGHT": False, "SOUNDS": True, "WIDGETS": True}
             vol, bri, prof, lim, kbd = (46, False), 82, "balanced", 80, (2, 3)
-            st.update({"AWAKE": False, "AIRPLANE": False, "GAME": False, "TOUCHPAD": True, "GLITCH": True})
+            st.update({"AWAKE": False, "AIRPLANE": False, "GAME": False, "TOUCHPAD": True, "GLITCH": True, "REC": False})
         else:
             vol, bri, prof, lim, kbd = get_volume(), get_brightness(), get_profile(), get_charge_limit(), get_kbd()
         GLib.idle_add(self._apply, st, vol, bri, prof, lim, kbd, battery_line() or ("󰁹 98%  full  0.0 W" if DEMO else ""))
@@ -969,6 +1000,150 @@ class MenuPopup(Popup):
         self.close()
 
 
+class MixerPopup(Popup):
+    """Sound mixer: master volume + mute of the default output, a button per output device, and one slider per application that
+    is playing (streams of one app are grouped). Refreshes every 1.5 s while open (apps come and go)."""
+    CARD_W = 340
+
+    def __init__(self, monitor, left):
+        super().__init__(monitor, left)
+        self.CARD_W = 340
+        self.apps = {}        # app name -> dict(ids, slider, val label, mute button, touched)
+        self.sig = None       # what the app list looked like last time (rebuild only on a change)
+        self.quiet = False
+        self.timers = {}
+        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        root.add_css_class("panel")
+        root.append(self.header("MIXER // 音量"))
+        self.out_row = Gtk.Box(spacing=6, homogeneous=True)
+        root.append(self.out_row)
+        mrow = Gtk.Box(spacing=8)
+        mrow.append(label("MASTER", "row-name"))
+        self.master = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, 100, 1)
+        self.master.set_draw_value(False)
+        self.master.set_hexpand(True)
+        self.master.connect("value-changed", lambda sc: self._moved("master", sc, self.l_master, lambda v: self._run(["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{v}%"])))
+        mrow.append(self.master)
+        self.l_master = label("", "row-val", 1.0)
+        self.l_master.set_width_chars(5)
+        mrow.append(self.l_master)
+        self.b_mute = Gtk.Button(label="󰕾")
+        self.b_mute.add_css_class("ctl")
+        self.b_mute.connect("clicked", lambda *_: (self._run(["pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle"]), GLib.timeout_add(250, lambda: (self.refresh(), False)[1])))
+        mrow.append(self.b_mute)
+        root.append(mrow)
+        root.append(label("APPLICATIONS", "tile-state"))
+        self.app_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        root.append(self.app_box)
+        self.empty = label("nothing is playing", "nosig dim", 0.5)
+        root.append(self.empty)
+        self.set_child(root)
+        self.refresh()
+        GLib.timeout_add(1500, lambda: (self.refresh(), True)[1])
+
+    @staticmethod
+    def _run(cmd):
+        fire(cmd)
+
+    def _moved(self, key, sc, val, cb):
+        v = int(sc.get_value())
+        val.set_text(f"{v}%")
+        if self.quiet:
+            return
+        if key in self.timers:
+            GLib.source_remove(self.timers[key])
+        self.timers[key] = GLib.timeout_add(80, lambda: (self.timers.pop(key, None), cb(v), False)[2])
+
+    def refresh(self):
+        threading.Thread(target=self._fetch, daemon=True).start()
+
+    def _fetch(self):
+        import json
+        if DEMO:
+            data = {"sinks": [("speakers", "SPEAKERS", False), ("bt", "WH-1000XM5", True)], "master": (46, False),
+                    "apps": [("SPOTIFY", [1], 72, False), ("ZEN", [2], 40, False), ("TELEGRAM", [3], 100, True)]}
+            GLib.idle_add(self._show, data)
+            return
+        def jl(*args):
+            try:
+                return json.loads(sh(["pactl", "--format=json", *args]) or "[]")
+            except ValueError:
+                return []
+        default = sh(["pactl", "get-default-sink"])
+        sinks = [(x["name"], x.get("description", x["name"]), x["name"] == default) for x in jl("list", "sinks")]
+        grouped = {}
+        for st in jl("list", "sink-inputs"):
+            pr = st.get("properties", {})
+            name = (pr.get("application.name") or pr.get("application.process.binary") or pr.get("media.name") or "app").upper()
+            vols = list((st.get("volume") or {}).values())
+            pct = int(vols[0]["value_percent"].rstrip("%")) if vols else 100
+            g = grouped.setdefault(name, [[], pct, bool(st.get("mute"))])
+            g[0].append(st["index"])
+        m = get_volume()
+        GLib.idle_add(self._show, {"sinks": sinks, "master": m, "apps": [(n, g[0], g[1], g[2]) for n, g in sorted(grouped.items())]})
+
+    def _short(self, desc):
+        d = desc.upper()
+        return "BLUETOOTH" if "BLUE" in d or "WH-" in d else ("SPEAKERS" if "ANALOG" in d or "SPEAKER" in d or "HD AUDIO" in d else d[:14])
+
+    def _show(self, d):
+        self.quiet = True
+        while (c := self.out_row.get_first_child()) is not None:
+            self.out_row.remove(c)
+        for name, desc, is_def in d["sinks"]:
+            b = Gtk.Button(label=self._short(desc))
+            b.add_css_class("seg")
+            if is_def:
+                b.add_css_class("on")
+            b.connect("clicked", lambda _b, n=name: self._set_sink(n))
+            self.out_row.append(b)
+        vol, muted = d["master"]
+        self.master.set_value(vol)
+        self.l_master.set_text("MUTE" if muted else f"{vol}%")
+        self.b_mute.set_label("󰝟" if muted else "󰕾")
+        sig = [(n, tuple(ids)) for n, ids, _v, _m in d["apps"]]
+        if sig != self.sig:
+            self.sig = sig
+            while (c := self.app_box.get_first_child()) is not None:
+                self.app_box.remove(c)
+            self.apps = {}
+            for name, ids, pct, mute in d["apps"]:
+                row = Gtk.Box(spacing=8)
+                nm = label(name[:12], "row-name")
+                nm.set_size_request(74, -1)
+                row.append(nm)
+                sc = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, 100, 1)
+                sc.set_draw_value(False)
+                sc.set_hexpand(True)
+                vl = label("", "row-val", 1.0)
+                vl.set_width_chars(5)
+                sc.connect("value-changed", lambda w, ids=ids, vl=vl, n=name: self._moved("app" + n, w, vl, lambda v: [self._run(["pactl", "set-sink-input-volume", str(i), f"{v}%"]) for i in ids]))
+                mb = Gtk.Button(label="󰕾")
+                mb.add_css_class("ctl")
+                mb.connect("clicked", lambda _b, ids=ids: ([self._run(["pactl", "set-sink-input-mute", str(i), "toggle"]) for i in ids], GLib.timeout_add(250, lambda: (self.refresh(), False)[1])))
+                for w in (sc, vl, mb):
+                    row.append(w)
+                self.app_box.append(row)
+                self.apps[name] = (sc, vl, mb)
+        for name, ids, pct, mute in d["apps"]:
+            sc, vl, mb = self.apps[name]
+            if name not in self.timers and "app" + name not in self.timers:
+                sc.set_value(pct)
+            vl.set_text("MUTE" if mute else f"{pct}%")
+            mb.set_label("󰝟" if mute else "󰕾")
+        self.empty.set_visible(not d["apps"])
+        self.quiet = False
+
+    def _set_sink(self, name):
+        def work():
+            subprocess.run(["pactl", "set-default-sink", name])
+            for line in sh(["pactl", "list", "short", "sink-inputs"]).splitlines():
+                subprocess.run(["pactl", "move-sink-input", line.split()[0], name])   # streams follow the new output
+            GLib.idle_add(self.refresh)
+        if not DEMO:
+            threading.Thread(target=work, daemon=True).start()
+
+
 def main():
     if not LS.is_supported():
         print("gits-panel: no layer-shell support", file=sys.stderr)
@@ -1003,6 +1178,10 @@ def main():
         return 0
     if mode == "notify":
         win = NotifyPopup(mon)
+    elif mode == "mixer":
+        cx = int(sh(["hyprctl", "cursorpos"]).split(",")[0] or 640) if not DEMO else 700
+        width = mon.get_geometry().width if mon else 1280
+        win = MixerPopup(mon, max(8, min(cx - 170, width - 348)))
     elif mode == "media":
         cx = int(sh(["hyprctl", "cursorpos"]).split(",")[0] or 640) if not DEMO else 700  # logical px: under the clicked bar module
         width = mon.get_geometry().width if mon else 1280

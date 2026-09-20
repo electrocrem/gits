@@ -59,9 +59,20 @@ hl.on("hyprland.start", function()
     hl.exec_cmd("sh -c 'sleep 6; command -v gits-idle >/dev/null && gits-idle apply'")
 end)
 
+-- Screen recording (gits-rec, needs wf-recorder): Super+Alt+R = area (again = stop), Super+Ctrl+R = whole monitor
+hl.bind("SUPER + ALT + R", hl.dsp.exec_cmd("gits-rec toggle area"), {description = "[GitS] record area / stop"})
+hl.bind("SUPER + CTRL + R", hl.dsp.exec_cmd("gits-rec toggle screen"), {description = "[GitS] record screen / stop"})
+
+-- Health check ~90 s after login: a notification only when gits-doctor finds a FAIL (the panel footer always shows the totals)
+hl.on("hyprland.start", function()
+    hl.exec_cmd("sh -c 'sleep 90; command -v gits-doctor >/dev/null || exit 0; gits-doctor -q >/dev/null 2>&1; n=$?; "
+        .. "[ \"$n\" -gt 0 ] && notify-send -a GitS -u critical \"Health check\" \"$n problem(s): Super+I -> Health check\"; exit 0'")
+end)
+
 -- Popups under the bar (gits-panel): control panel and player
 hl.bind("SUPER + SHIFT + C", hl.dsp.exec_cmd("gits-panel control"), {description = "[GitS] control panel"})
 hl.bind("SUPER + SHIFT + M", hl.dsp.exec_cmd("gits-panel media"), {description = "[GitS] player popup"})
+hl.bind("SUPER + ALT + V", hl.dsp.exec_cmd("gits-panel mixer"), {description = "[GitS] sound mixer"})
 hl.bind("SUPER + SHIFT + N", hl.dsp.exec_cmd("gits-panel notify"), {description = "[GitS] notification centre"})
 
 -- On-screen display for volume / brightness / keyboard backlight (gits-osd; HyDE's popups are turned into it by a dunst rule)
