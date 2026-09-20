@@ -62,6 +62,8 @@ else warn "workflow is '$wf': it overrides parts of the GitS look (gaps/blur/ani
 [[ $(getst WAYBAR_LAYOUT_NAME) == ghost-in-the-shell ]] && ok "waybar layout: ghost-in-the-shell" || warn "waybar layout is '$(getst WAYBAR_LAYOUT_NAME)'"
 cur=$(gsettings get org.gnome.desktop.interface cursor-theme 2>/dev/null | tr -d "'")
 [[ $cur == GitS-Cursors ]] && ok "cursor theme: GitS-Cursors" || warn "cursor theme is '$cur' (a KDE app's kded6 syncs kcminputrc into GTK; do not flip it live, waybar/Zen can crash)"
+gi=$(grep -m1 '^gtk-icon-theme-name' "$H/.config/gtk-3.0/settings.ini" 2>/dev/null | cut -d= -f2)
+[[ -z $gi || $gi == GitS-Icons ]] && ok "GTK3 icon theme: ${gi:-unset}" || warn "gtk-3.0/settings.ini icon theme is '$gi' (GitS-Icons expected; gits-doctor --fix)"
 kc=$(grep -m1 '^cursorTheme=' "$H/.config/kcminputrc" 2>/dev/null | cut -d= -f2)
 [[ -z $kc || $kc == GitS-Cursors ]] && ok "kcminputrc cursorTheme: ${kc:-unset}" || warn "kcminputrc cursorTheme=$kc: any KDE app (KDE Connect, Dolphin) will push it into GTK settings"
 
@@ -184,7 +186,7 @@ command -v tmux >/dev/null && ok "tmux installed" || warn "tmux not installed"
 
 # ---------------------------------------------------------------- extras
 head_ "menus, sounds, widgets extras"
-miss=""; for b in gits-menu gits-wifi gits-bt gits-sound gits-panel gits-osd gits-rog gits-touchpad gits-idle gits-update gits-rec; do command -v "$b" >/dev/null || miss+=" $b"; done
+miss=""; for b in gits-menu gits-wifi gits-bt gits-sound gits-panel gits-osd gits-rog gits-touchpad gits-idle gits-update gits-rec gits-focus gits-project gits-note gits-daynight; do command -v "$b" >/dev/null || miss+=" $b"; done
 [[ -z $miss ]] && ok "menus and sound player in PATH (gits-wifi, gits-bt, gits-menu, gits-sound)" || warn "missing from PATH:$miss"
 nw=$(ls "$H/.local/share/gits-sounds"/*.wav 2>/dev/null | wc -l)
 [[ $nw -ge 7 ]] && ok "UI sounds built ($nw wav files)" || warn "UI sounds missing: python3 ~/.local/share/gits-sounds/build.py"
@@ -237,6 +239,8 @@ if [[ $FIX == 1 ]]; then
     if ! grep -A1 '^\[Module-gtkconfig\]' "$H/.config/kded6rc" 2>/dev/null | grep -q 'autoload=false'; then
         printf '\n[Module-gtkconfig]\nautoload=false\n' >>"$H/.config/kded6rc" && fixed "kded6 gtkconfig module switched off (restart kded6 or re-login to apply)"
     fi
+    gi=$(grep -m1 '^gtk-icon-theme-name' "$H/.config/gtk-3.0/settings.ini" 2>/dev/null | cut -d= -f2)
+    if [[ -n $gi && $gi != GitS-Icons ]]; then sed -i 's/^gtk-icon-theme-name=.*/gtk-icon-theme-name=GitS-Icons/' "$H/.config/gtk-3.0/settings.ini" && fixed "GTK3 icon theme $gi -> GitS-Icons"; fi
     kc=$(grep -m1 '^cursorTheme=' "$H/.config/kcminputrc" 2>/dev/null | cut -d= -f2)
     if [[ -n $kc && $kc != GitS-Cursors ]]; then sed -i 's/^cursorTheme=.*/cursorTheme=GitS-Cursors/' "$H/.config/kcminputrc" && fixed "kcminputrc cursorTheme $kc -> GitS-Cursors"; fi
     pgrep -f '[g]its-widgets/widgets.py' >/dev/null || { "$H/.config/gits-widgets/run.sh" start </dev/null >/dev/null 2>&1 && fixed "desktop widgets started"; }

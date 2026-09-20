@@ -170,3 +170,9 @@ aliases (including links to links) to the `scalable` directories too. `kiconfind
 * **GTK4 CSS `transform` animations do not run with the cairo renderer** (only `opacity` did): a `scaleY` "open from a line" keyframe left the card at full
   height. `Gtk.Revealer` with `SLIDE_UP` uncovers a card top-down (`SLIDE_DOWN` slides it in from above, bottom first), and a drawing area laid over it
   paints the scan line at the revealed edge; nothing redraws once the effect is over. `GITS_PANEL_SLOW=1` slows it 10x for frame-by-frame screenshots.
+* **HyDE writes `~/.config/gtk-3.0/settings.ini` at theme switch** (`theme.switch.sh`), so an icon theme built after the last switch is missing there
+  (`Tela-circle-grey` instead of `GitS-Icons`). `gits-doctor --fix` edits the key; do not re-run the theme switch for this (it changes the cursor theme at
+  runtime, which crashes waybar and Zen).
+* **kitty fonts:** HyDE's `kitty/hyde.conf` sets the font and is HyDE-owned; override it in `kitty.conf` after `include hyde.conf` (the installer's block).
+* **hyprsunset reads its profiles from `~/.config/hypr/hyprsunset.conf` and switches by the clock itself**; only its unit needs a restart after a change.
+  Profile blocks that contain only comments (HyDE's sample) are dropped by `gits-daynight`.

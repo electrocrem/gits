@@ -39,6 +39,7 @@ tooltip label { color: @main-fg; padding: 2px 4px; }
 #pulseaudio,
 #custom-gits-lang,
 #custom-gits-rec,
+#custom-gits-focus,
 #custom-gits-mode,
 #custom-gits-notify,
 #battery,
@@ -60,6 +61,7 @@ tooltip label { color: @main-fg; padding: 2px 4px; }
 #pulseaudio,
 #custom-gits-lang,
 #custom-gits-rec,
+#custom-gits-focus,
 #custom-gits-mode,
 #custom-gits-notify,
 #battery,
@@ -143,3 +145,8 @@ tooltip label { color: @main-fg; padding: 2px 4px; }
 /* screen recording: red block, blinking, only present while recording */
 #custom-gits-rec.rec { background: #E5432B; color: #060A14; animation: gits-blink 1s steps(2, start) infinite; }
 #custom-gits-rec.idle { padding: 0; }
+
+/* focus timer: solid block while working, dim while on a break, absent when idle */
+#custom-gits-focus.work { background: @main-fg; color: @main-bg; }
+#custom-gits-focus.break { color: alpha(@main-fg, 0.7); }
+#custom-gits-focus.idle { padding: 0; }

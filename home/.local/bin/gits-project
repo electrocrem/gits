@@ -16,12 +16,28 @@ list() {
     done | sort -rn
 }
 fmt_age() { local s=$(( $(date +%s) - $1 )); if ((s < 3600)); then echo "$((s / 60))m"; elif ((s < 86400)); then echo "$((s / 3600))h"; elif ((s < 2592000)); then echo "$((s / 86400))d"; else echo "$((s / 2592000))mo"; fi; }
+# working-tree state of a git repo in one glance: ●N changed files, ↑N unpushed commits, ↓N behind the remote, ✓ clean
+status_of() {
+    local d=$1 out head rest dirty ahead behind s=""
+    [[ -e $d/.git ]] || return 0
+    out=$(timeout 3 git -C "$d" status --porcelain=v1 -b 2>/dev/null) || return 0
+    head=${out%%$'\n'*}; dirty=0; [[ $out == *$'\n'* ]] && dirty=$(grep -c . <<<"${out#*$'\n'}")
+    ahead=$(sed -n 's/.*ahead \([0-9]*\).*/\1/p' <<<"$head"); behind=$(sed -n 's/.*behind \([0-9]*\).*/\1/p' <<<"$head")
+    ((dirty)) && s+="●$dirty "; [[ -n $ahead ]] && s+="↑$ahead "; [[ -n $behind ]] && s+="↓$behind "
+    printf '%s' "${s:-✓}"
+}
 mapfile -t rows < <(list)
-labels=(); dirs=()
-for r in "${rows[@]}"; do
-    IFS=$'\t' read -r ts icon name dir <<<"$r"
-    labels+=("$(printf '%s  %-28.28s %-34.34s %s' "$icon" "$name" "${dir/#$HOME/\~}" "$(fmt_age "$ts")")"); dirs+=("$dir")
+labels=(); dirs=(); tmp=$(mktemp -d)
+for i in "${!rows[@]}"; do
+    IFS=$'\t' read -r _ _ _ d <<<"${rows[i]}"; dirs+=("$d")
+    ( status_of "$d" >"$tmp/$i" ) &       # all repos at once: the menu waits for the slowest, not the sum
 done
+wait
+for i in "${!rows[@]}"; do
+    IFS=$'\t' read -r ts icon name dir <<<"${rows[i]}"
+    labels+=("$(printf '%s  %-28.28s %-34.34s %-5s %s' "$icon" "$name" "${dir/#$HOME/\~}" "$(fmt_age "$ts")" "$(cat "$tmp/$i" 2>/dev/null)")")
+done
+rm -rf "$tmp"
 if [[ ${1:-} == --list ]]; then printf '%s\n' "${labels[@]}"; exit 0; fi
 ((${#labels[@]})) || { notify-send -a GitS "No projects found" "no git repo or Godot project below $HOME"; exit 1; }
 idx=$(printf '%s\n' "${labels[@]}" | gits-menu $'\U000F024B  PROJECTS' "// 案件" -format i) || exit 0

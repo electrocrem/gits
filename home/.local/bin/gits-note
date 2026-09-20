@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# gits-note [add | list]   quick notes into ~/notes/inbox.md (GITS_NOTES to change the file)
+#   add (default)  a one-line input popup: type, Enter saves it with a timestamp (Super+N)
+#   list           the latest notes in a menu; Enter copies the chosen note's text to the clipboard
+file=${GITS_NOTES:-$HOME/notes/inbox.md}
+case ${1:-add} in
+    add) exec gits-panel note ;;
+    list)
+        [[ -s $file ]] || { notify-send -a GitS "Notes" "no notes yet: Super+N adds one"; exit 0; }
+        mapfile -t lines < <(grep -v '^\s*$' "$file" | tail -40 | tac)
+        idx=$(printf '%s\n' "${lines[@]#- }" | gits-menu $'\U000F09D1  NOTES' "// 記録" -format i) || exit 0
+        text=$(sed -E 's/^- //; s/^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} +//' <<<"${lines[idx]}")   # drop "- YYYY-MM-DD HH:MM  "
+        printf '%s' "$text" | wl-copy && notify-send -a "HyDE Notify" -t 2500 "Note copied" "$text" ;;
+    *) echo "usage: gits-note [add|list]" >&2; exit 2 ;;
+esac

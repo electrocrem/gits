@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# gits-focus: a pomodoro-style focus timer (Super+F opens its menu, FOCUS tile in the control panel, a counter in the bar while it runs).
+#   gits-focus menu | start [WORK [BREAK]] | stop | skip | toggle | status | bar
+# Work phase: notifications are paused (do not disturb), the bar shows the time left. Break phase: notifications are back. Every
+# 4th break is three times as long. Sounds: `focus` when work starts, `done` when it ends. GITS_FOCUS_UNIT=1 counts seconds instead of
+# minutes (tests). State: ~/.local/state/gits-focus/state.
+dir=${XDG_STATE_HOME:-$HOME/.local/state}/gits-focus; state=$dir/state; pidfile=${XDG_RUNTIME_DIR:-/tmp}/gits-focus.pid
+unit=${GITS_FOCUS_UNIT:-60}
+mkdir -p "$dir"
+get() { sed -n "s/^$1=//p" "$state" 2>/dev/null | head -1; }
+put() { local k=$1 v=$2; touch "$state"; grep -q "^$k=" "$state" && sed -i "s|^$k=.*|$k=$v|" "$state" || echo "$k=$v" >>"$state"; }
+running() { local p; p=$(cat "$pidfile" 2>/dev/null) && [[ $p =~ ^[0-9]+$ ]] && kill -0 "$p" 2>/dev/null && [[ -s $state ]]; }
+say() { notify-send -a "HyDE Notify" -t 4000 -i "${2:-appointment-soon}" "Focus" "$1"; }   # "HyDE Notify" has no automatic blip: the sounds are explicit
+dnd() { dunstctl set-paused "$1" 2>/dev/null; }
+fmt() { printf '%02d:%02d' $(($1 / 60)) $(($1 % 60)); }
+
+phase_start() {  # phase start: set the phase, its end time and do-not-disturb
+    local phase=$1 mins=$2
+    put phase "$phase"; put end $(( $(date +%s) + mins * unit ))
+    if [[ $phase == work ]]; then say "work: $mins min, notifications are paused"; dnd true; gits-sound focus
+    else dnd "$(get dnd_before)"; say "break: $mins min (round $(get round) done)" appointment-missed; gits-sound done; fi
+}
+run() {  # the runner: sleeps until the phase ends, then switches phase, until `stop`
+    while [[ -s $state ]]; do
+        local left=$(( $(get end) - $(date +%s) ))
+        (( left > 0 )) && { sleep "$left"; continue; }
+        if [[ $(get phase) == work ]]; then
+            put round $(( $(get round) + 1 ))
+            local b=$(get brk); (( $(get round) % 4 == 0 )) && b=$(( b * 3 ))   # every 4th break is long (round counts finished works)
+            phase_start break "$b"
+        else phase_start work "$(get work)"; fi
+    done
+}
+start() {
+    running && stop quiet
+    local w=${1:-$(get work)} b=${2:-$(get brk)}; w=${w:-25}; b=${b:-5}
+    rm -f "$state"; put work "$w"; put brk "$b"; put round 0; put dnd_before "$(dunstctl is-paused 2>/dev/null || echo false)"
+    phase_start work "$w"
+    setsid -f "$0" _run </dev/null >/dev/null 2>&1
+    sleep 0.2; pgrep -nf "gits-focus _run" >"$pidfile"
+}
+stop() {
+    running || { rm -f "$state"; return 0; }
+    kill "$(cat "$pidfile")" 2>/dev/null; dnd "$(get dnd_before)"
+    local r=$(get round); rm -f "$state" "$pidfile"
+    [[ ${1:-} == quiet ]] || say "stopped after $r finished work round(s)"
+}
+case ${1:-menu} in
+    _run) run ;;
+    start) start "${2:-}" "${3:-}" ;;
+    stop) stop ;;
+    toggle) if running; then stop; else start; fi ;;
+    skip) running && put end "$(date +%s)" && kill -CONT "$(cat "$pidfile")" && kill "$(cat "$pidfile")" && setsid -f "$0" _run </dev/null >/dev/null 2>&1 && sleep 0.2 && pgrep -nf "gits-focus _run" >"$pidfile" ;;
+    status) running && echo on || echo off ;;
+    bar)
+        if running; then
+            left=$(( $(get end) - $(date +%s) )); (( left < 0 )) && left=0
+            if [[ $(get phase) == work ]]; then icon=$'\U000F13AB'; cls=work; tip="focus: work, round $(( $(get round) + 1 ))"
+            else icon=$'\U000F04B2'; cls=break; tip="break, round $(get round) done"; fi
+            printf '{"text":"%s %s","class":"%s","tooltip":"%s\\nclick: menu"}\n' "$icon" "$(fmt "$left")" "$cls" "$tip"
+        else echo '{"text":"","class":"idle"}'; fi ;;
+    menu)
+        rows=("25 min work · 5 min break (classic)" "50 min · 10 min" "15 min · 3 min (short)" "90 min · 15 min (deep work)")
+        vals=("25 5" "50 10" "15 3" "90 15")
+        if running; then rows=("󰓛  Stop the timer" "󰒭  Skip to the next phase" "${rows[@]}"); vals=(stop skip "${vals[@]}"); fi
+        idx=$(printf '%s\n' "${rows[@]}" | gits-menu $'\U000F13AB  FOCUS' "// 集中" -format i) || exit 0
+        case ${vals[idx]} in stop) stop ;; skip) "$0" skip ;; *) start ${vals[idx]} ;; esac ;;
+    *) echo "usage: gits-focus [menu|start [WORK [BREAK]]|stop|skip|toggle|status|bar]" >&2; exit 2 ;;
+esac

@@ -425,7 +425,8 @@ class Panel(Popup):
         pad = Tile("󰍽", "TOUCHPAD", get_touchpad, lambda: fire(["gits-touchpad", "toggle"]))
         glitch = Tile("󰘨", "GLITCH", get_glitch, set_glitch)
         rec = Tile("󰑋", "REC", lambda: sh(["gits-rec", "status"]) == "on", lambda: self._later("gits-rec toggle area"))
-        self.tiles += [pad, glitch, rec]
+        focus = Tile("󱎫", "FOCUS", lambda: sh(["gits-focus", "status"]) == "on", lambda: fire(["gits-focus", "toggle"]))
+        self.tiles += [pad, glitch, rec, focus]
         for row in (self.tiles[:3], self.tiles[3:6], self.tiles[6:9], self.tiles[9:]):
             r = Gtk.Box(spacing=6, homogeneous=True)
             for t in row:
@@ -601,7 +602,7 @@ class Panel(Popup):
         if DEMO:
             st = {"WI-FI": True, "BLUETOOTH": True, "SILENT": False, "NIGHT": False, "SOUNDS": True, "WIDGETS": True}
             vol, bri, prof, lim, kbd = (46, False), 82, "balanced", 80, (2, 3)
-            st.update({"AWAKE": False, "AIRPLANE": False, "GAME": False, "TOUCHPAD": True, "GLITCH": True, "REC": False})
+            st.update({"AWAKE": False, "AIRPLANE": False, "GAME": False, "TOUCHPAD": True, "GLITCH": True, "REC": False, "FOCUS": False})
         else:
             vol, bri, prof, lim, kbd = get_volume(), get_brightness(), get_profile(), get_charge_limit(), get_kbd()
         GLib.idle_add(self._apply, st, vol, bri, prof, lim, kbd, battery_line() or ("󰁹 98%  full  0.0 W" if DEMO else ""))
@@ -1237,6 +1238,63 @@ class MixerPopup(Popup):
             threading.Thread(target=work, daemon=True).start()
 
 
+class NotePopup(Popup):
+    """Quick capture: one line into ~/notes/inbox.md (GITS_NOTES to change), with a timestamp. Enter saves and closes, Esc cancels.
+    The last few notes are shown underneath so you can see what is already there."""
+    CARD_W = 480
+
+    def __init__(self, monitor):
+        super().__init__(monitor, center=True)
+        self.path = os.environ.get("GITS_NOTES") or os.path.join(HOME, "notes", "inbox.md")
+        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        root.add_css_class("panel")
+        head = Gtk.Box(spacing=6)
+        head.append(label("NOTE // 記録", "m-head"))
+        sp = Gtk.Box()
+        sp.set_hexpand(True)
+        head.append(sp)
+        self.l_hint = label("Enter: save · Esc: cancel", "m-tag")
+        head.append(self.l_hint)
+        root.append(head)
+        self.entry = Gtk.Entry()
+        self.entry.add_css_class("m-entry")
+        self.entry.set_placeholder_text("type a note (#tags are fine)_")
+        self.entry.connect("activate", self._save)
+        root.append(self.entry)
+        for ln in self._recent(3):
+            lb = label(ln, "n-body")
+            lb.set_ellipsize(Pango.EllipsizeMode.END)
+            lb.set_max_width_chars(60)
+            root.append(lb)
+        self.l_path = label(self.path.replace(HOME, "~"), "foot")
+        root.append(self.l_path)
+        self.set_child(root)
+        GLib.idle_add(lambda: (self.entry.grab_focus(), False)[1])
+        auto = os.environ.get("GITS_PANEL_AUTOTEXT")   # test hook: type a note and press Enter
+        if auto:
+            GLib.timeout_add(900, lambda: (self.entry.set_text(auto), self._save(), False)[2])
+
+    def _recent(self, n):
+        try:
+            lines = [ln.rstrip("\n") for ln in open(self.path, encoding="utf-8") if ln.strip()]
+        except OSError:
+            return []
+        return [ln[2:] if ln.startswith("- ") else ln for ln in lines[-n:]]
+
+    def _save(self, *_):
+        import time
+        text = self.entry.get_text().strip()
+        if not text:
+            return
+        if not DEMO:
+            os.makedirs(os.path.dirname(self.path), exist_ok=True)
+            with open(self.path, "a", encoding="utf-8") as f:
+                f.write(f"- {time.strftime('%Y-%m-%d %H:%M')}  {text}\n")
+        self.l_hint.set_text("saved")
+        self.entry.set_sensitive(False)
+        GLib.timeout_add(380, lambda: (self.dismiss(), False)[1])
+
+
 def main():
     if not LS.is_supported():
         print("gits-panel: no layer-shell support", file=sys.stderr)
@@ -1271,6 +1329,8 @@ def main():
         return 0
     if mode == "notify":
         win = NotifyPopup(mon)
+    elif mode == "note":
+        win = NotePopup(mon)
     elif mode == "mixer":
         cx = int(sh(["hyprctl", "cursorpos"]).split(",")[0] or 640) if not DEMO else 700
         width = mon.get_geometry().width if mon else 1280

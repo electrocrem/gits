@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# gits-daynight: night-light schedule for hyprsunset (the screen turns warmer in the evening and again at night, back to normal in the morning).
+#   gits-daynight menu | status | set off|gentle|warm|strong
+# Writes profile blocks into ~/.config/hypr/hyprsunset.conf (between the gits-daynight markers) and restarts hyprsunset's unit; hyprsunset then
+# switches by the clock by itself, no daemon of ours. Presets (time, temperature K, gamma):
+#   gentle  20:30 5500 1.00 | 23:30 4500 0.92        warm  20:00 4800 1.00 | 23:00 3800 0.88        strong  19:30 4300 0.96 | 22:30 3400 0.85
+# The NIGHT toggle of the control panel (HyDE's hyprsunset.sh) still overrides by hand until the next profile time.
+conf=${GITS_DAYNIGHT_CONF:-$HOME/.config/hypr/hyprsunset.conf}
+state=${XDG_STATE_HOME:-$HOME/.local/state}/gits-daynight
+unit=hyde-Hyprland-blue-light-filter.service
+declare -A eve=([gentle]="20:30 5500 1.00" [warm]="20:00 4800 1.00" [strong]="19:30 4300 0.96")
+declare -A night=([gentle]="23:30 4500 0.92" [warm]="23:00 3800 0.88" [strong]="22:30 3400 0.85")
+cur() { cat "$state" 2>/dev/null || echo off; }
+block() {
+    local p=$1 t k g
+    echo "# >>> gits-daynight (preset: $p)"
+    echo "profile {"; echo "    time = 07:00"; echo "    identity = true"; echo "}"
+    read -r t k g <<<"${eve[$p]}";   printf 'profile {\n    time = %s\n    temperature = %s\n    gamma = %s\n}\n' "$t" "$k" "$g"
+    read -r t k g <<<"${night[$p]}"; printf 'profile {\n    time = %s\n    temperature = %s\n    gamma = %s\n}\n' "$t" "$k" "$g"
+    echo "# <<< gits-daynight"
+}
+apply() {  # preset
+    local p=$1
+    [[ -f $conf ]] || { echo "no $conf" >&2; return 1; }
+    [[ -e $conf.bak-pre-gits-daynight ]] || cp -a "$conf" "$conf.bak-pre-gits-daynight"
+    local text; text=$(cat "$conf")
+    # drop HyDE's empty sample profiles and any previous generated block, keep the header comments
+    text=$(python3 - "$conf" <<'PY'
+import re, sys
+t = open(sys.argv[1]).read()
+t = re.sub(r"# >>> gits-daynight.*?# <<< gits-daynight\n?", "", t, flags=re.S)
+t = re.sub(r"(?:# [^\n]*\n)*profile \{(?:\s*#[^\n]*\n)+\s*\}\n?", "", t)      # profile blocks that only contain comments
+sys.stdout.write(t.rstrip("\n") + "\n")
+PY
+)
+    if [[ $p == off ]]; then printf '%s\n' "$text" >"$conf"
+    else printf '%s\n\n%s\n' "$text" "$(block "$p")" >"$conf"; fi
+    mkdir -p "$(dirname "$state")"; echo "$p" >"$state"
+    [[ -n ${GITS_DAYNIGHT_NO_RESTART:-} ]] || systemctl --user restart "$unit" 2>/dev/null
+}
+case ${1:-menu} in
+    status) cur ;;
+    set) [[ $2 =~ ^(off|gentle|warm|strong)$ ]] || { echo "usage: gits-daynight set off|gentle|warm|strong" >&2; exit 2; }; apply "$2" ;;
+    menu)
+        now=$(cur); rows=(); keys=(off gentle warm strong)
+        labels=("Off (no schedule)" "Gentle: 20:30 slightly warm, 23:30 warmer" "Warm: 20:00 warm, 23:00 very warm" "Strong: 19:30 warm, 22:30 very warm")
+        for i in 0 1 2 3; do m="  "; [[ ${keys[i]} == "$now" ]] && m="● "; rows+=("$m${labels[i]}"); done
+        idx=$(printf '%s\n' "${rows[@]}" | gits-menu $'\U000F0A3B  NIGHT LIGHT' "// 夜間" -format i) || exit 0
+        apply "${keys[idx]}"; notify-send -a "HyDE Notify" -t 3000 "Night light" "${labels[idx]}" ;;
+    *) echo "usage: gits-daynight [menu|status|set PRESET]" >&2; exit 2 ;;
+esac

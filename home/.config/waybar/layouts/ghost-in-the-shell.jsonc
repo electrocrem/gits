@@ -21,6 +21,7 @@
     ],
     "modules-right": [
         "custom/gits-player",
+        "custom/gits-focus",
         "custom/gits-rec",
         "custom/gits-sys",
         "network#gits",
@@ -153,6 +154,15 @@
         "on-click": "gits-panel mixer",
         "on-click-right": "pavucontrol-qt -t 3 || pavucontrol -t 3",
         "on-click-middle": "hyde-shell volumecontrol -o m"
+    },
+
+    // Focus timer (gits-focus): hidden while idle; shows the time left of the work / break phase; click opens its menu
+    "custom/gits-focus": {
+        "exec": "gits-focus bar",
+        "return-type": "json",
+        "interval": 1,
+        "tooltip": true,
+        "on-click": "gits-focus menu"
     },
 
     // Screen recording indicator: empty (= hidden) unless gits-rec is recording; click stops it

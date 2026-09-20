@@ -68,4 +68,7 @@ save("error", np.concatenate((tone(220, 0.09, "square"), silence(0.03), tone(196
 sweep = tone(180, 0.32, "tri", 0.6, glide=900)
 chord = sum(tone(f, 0.55, "sine", a) for f, a in ((440, 1.0), (659, 0.7), (880, 0.6)))
 save("login", echo(np.concatenate((sweep, silence(0.04), chord)), 0.14, 0.3, 3), peak=0.5)
+# focus timer: "start" is three rising notes, "done" a soft two-note chime
+save("focus", np.concatenate((tone(660, 0.06, "tri"), tone(880, 0.06, "tri"), tone(1320, 0.14, "tri", 0.9))))
+save("done", echo(np.concatenate((tone(1046, 0.10, "sine"), tone(784, 0.22, "sine", 0.9))), 0.12, 0.3, 3))
 print("wrote", ", ".join(sorted(f for f in os.listdir(HERE) if f.endswith(".wav"))))

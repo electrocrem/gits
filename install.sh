@@ -187,6 +187,16 @@ add_block "$HOME/.config/zsh/user.zsh" zsh "#" <<'EOF'
 [[ -r ${0:A:h}/gits/colors.zsh ]] && source ${0:A:h}/gits/colors.zsh
 EOF
 
+if [[ -f $HOME/.config/kitty/kitty.conf ]]; then
+    add_block "$HOME/.config/kitty/kitty.conf" kitty "#" <<'EOF2'
+# Ghost in the Shell: the terminal uses the same font as the bar, the widgets and the popups (HyDE's hyde.conf sets CaskaydiaCove)
+font_family      JetBrainsMono Nerd Font Mono
+bold_font        auto
+italic_font      auto
+bold_italic_font auto
+EOF2
+fi
+
 if [[ -d $HOME/.config/nvim ]]; then
     place "$REPO/tools/nvim-gits-options.lua" "$HOME/.config/nvim/lua/config/gits-options.lua"
     add_block "$HOME/.config/nvim/lua/config/options.lua" nvim "--" <<'EOF'

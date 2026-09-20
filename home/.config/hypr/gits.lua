@@ -72,6 +72,13 @@ end)
 -- Open a project (git repos and Godot projects, recent first): terminal in the folder, plus the Godot editor for Godot projects
 hl.bind("SUPER + O", hl.dsp.exec_cmd("gits-project"), {description = "[GitS] open a project"})
 
+-- Focus timer (pomodoro): Super+F opens the menu (start 25/5, 50/10, ...; stop / skip while it runs)
+hl.bind("SUPER + F", hl.dsp.exec_cmd("gits-focus menu"), {description = "[GitS] focus timer"})
+
+-- Quick notes into ~/notes/inbox.md: Super+N adds a line, Super+Shift+O lists the latest and copies one
+hl.bind("SUPER + N", hl.dsp.exec_cmd("gits-note add"), {description = "[GitS] quick note"})
+hl.bind("SUPER + SHIFT + O", hl.dsp.exec_cmd("gits-note list"), {description = "[GitS] recent notes"})
+
 -- Popups under the bar (gits-panel): control panel and player
 hl.bind("SUPER + SHIFT + C", hl.dsp.exec_cmd("gits-panel control"), {description = "[GitS] control panel"})
 hl.bind("SUPER + SHIFT + M", hl.dsp.exec_cmd("gits-panel media"), {description = "[GitS] player popup"})

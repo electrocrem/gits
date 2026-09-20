@@ -11,6 +11,10 @@ entries=$(cat <<'ROWS'
 󰍹  Displays	nwg-displays
 󰒓  All system settings (KDE: input, keyboard, apps...)	systemsettings
 󰉋  Open a project (git / Godot)	gits-project
+󰎞  Quick note (Super+N)	gits-note add
+󰎞  Recent notes (copy one)	gits-note list
+󱎫  Focus timer (pomodoro)	gits-focus menu
+󰖔  Night light schedule (evening / night warmth)	gits-daynight menu
 󰸉  Wallpaper	hyde-shell wallpaper -GS
 󰏘  Theme	hyde-shell theme.select
 󰆍  Tiling layout (dwindle / master / monocle / scrolling)	hyde-shell layouts --select
