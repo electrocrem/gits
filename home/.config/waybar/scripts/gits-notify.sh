@@ -6,7 +6,7 @@ fi
 waiting=$(dunstctl count waiting 2>/dev/null || echo 0)
 history=$(dunstctl count history 2>/dev/null || echo 0)
 recent=$(dunstctl history 2>/dev/null | jq -r '.data[0][:4][] | "· \(.appname.data): \(.summary.data)"' 2>/dev/null | cut -c1-60)
-hint=$'click: do not disturb · right: show last · middle: clear'
+hint=$'click: notification centre · right: do not disturb · middle: clear'
 if [[ $paused == true ]]; then
     text=$(printf ' %s' "$waiting"); cls=dnd; head="DO NOT DISTURB — $waiting waiting"
 elif (( history > 0 )); then

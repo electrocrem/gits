@@ -54,7 +54,7 @@ if [[ -n $bat && $uw -gt 0 ]]; then
     esac
 fi
 src="battery"; [[ $ac == 1 ]] && src="AC power"
-tip=$(printf 'POWER PROFILE  %s\n──────────────────────────\n%s\n\nSOURCE  %s\nDRAW    %s W  (%s)\n%s\nclick: menu · scroll: cycle' \
+tip=$(printf 'POWER PROFILE  %s\n──────────────────────────\n%s\n\nSOURCE  %s\nDRAW    %s W  (%s)\n%s\nclick: control panel · right: profile menu · scroll: cycle' \
     "$cur" "$desc" "$src" "$watts" "${status:-?} ${cap:+$cap%}" "${eta:+ETA     $eta
 }")
-jq -nc --arg text "$ic" --arg tip "$tip" --arg cls "$cur" '{text:$text, tooltip:$tip, class:$cls}'
+jq -nc --arg text "$(printf '\U000F0493')" --arg tip "$tip" --arg cls "$cur" '{text:$text, tooltip:$tip, class:$cls}'

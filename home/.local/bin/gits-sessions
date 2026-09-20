@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# gits-sessions: fuzzy project / session switcher for tmux (prefix + f opens it as a popup; also works outside tmux).
+# Lists running tmux sessions, git repos and Godot projects below $HOME (depth 3), and the folders in ~/.config. Enter on a
+# session switches to it, Enter on a folder creates (or reuses) a session named after it, started in that folder.
+#   GITS_SESSIONS_ROOTS="$HOME/work:$HOME/src"   extra roots to scan (colon separated)
+#   gits-sessions --list                          just print the candidates
+shopt -s nullglob
+roots=("$HOME" ${GITS_SESSIONS_ROOTS//:/ })
+list() {
+    if tmux ls >/dev/null 2>&1; then
+        tmux list-sessions -F '#{session_name}|#{session_windows} win#{?session_attached, (attached),}' 2>/dev/null |
+            awk -F'|' '{printf "󰆍 %s\t%s\ttmux\n", $1, $2}'
+    fi
+    {
+        for r in "${roots[@]}"; do
+            find "$r" -maxdepth 3 \( -name node_modules -o -name .cache -o -name .local -o -name .var -o -name .cargo -o -name .steam -o -name go \) -prune -o \
+                \( -name .git -o -name project.godot \) -print 2>/dev/null | sed 's|/\.git$||; s|/project\.godot$||'
+        done
+        for d in "$HOME"/.config/*/; do echo "${d%/}"; done
+        echo "$HOME"
+    } | sort -u | while IFS= read -r d; do
+        [[ -d $d ]] || continue
+        icon="󰉋"; [[ -e $d/project.godot ]] && icon="󰊗"; [[ -d $d/.git ]] && icon=""
+        printf '%s %s\t%s\tdir\n' "$icon" "${d/#$HOME/\~}" "$d"
+    done
+}
+if [[ ${1:-} == --list ]]; then list; exit 0; fi
+command -v fzf >/dev/null || { echo "gits-sessions needs fzf" >&2; exit 1; }
+pick=$(list | fzf --delimiter=$'\t' --with-nth=1 --ansi --reverse --height=100% --prompt='session > ' --pointer='▶' \
+    --header='enter: open · esc: cancel' \
+    --color='bg:#060A14,bg+:#0C1A33,fg:#9FC5D6,fg+:#C8F4FF,hl:#2ED3D7,hl+:#5EF1F5,pointer:#E5432B,prompt:#2ED3D7,header:#596977,border:#254F5D,info:#596977,gutter:#060A14' \
+    --preview='if [[ {3} == dir ]]; then ls -A --color=always {2} | head -40; else tmux capture-pane -ep -t {2} 2>/dev/null | tail -30; fi' \
+    --preview-window=right:45%:border-left) || exit 0
+IFS=$'\t' read -r label target kind <<<"$pick"
+if [[ $kind == tmux ]]; then
+    name=${label#* }
+else
+    name=$(basename "$target" | tr '. :' '___')
+    [[ $target == "$HOME" ]] && name=home
+fi
+if [[ -n ${TMUX:-} ]]; then
+    tmux has-session -t "=$name" 2>/dev/null || tmux new-session -ds "$name" -c "${target:-$HOME}"
+    tmux switch-client -t "=$name"
+else
+    exec tmux new-session -A -s "$name" -c "${target:-$HOME}"
+fi

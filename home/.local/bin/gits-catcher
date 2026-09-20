@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# gits-catcher start|stop: an invisible full-screen click catcher under rofi menus. A click outside the menu (or on the bar)
+# closes rofi, like clicking away from any popup. `start` returns once the catcher is mapped, so rofi opens on top of it.
+pidfile=${XDG_RUNTIME_DIR:-/tmp}/gits-catcher.pid
+alive() { local p; p=$(cat "$pidfile" 2>/dev/null) && [[ $p =~ ^[0-9]+$ ]] && grep -qa 'panel.py' "/proc/$p/cmdline" 2>/dev/null; }
+case ${1:-} in
+    start)
+        alive && exit 0
+        setsid -f python3 "$HOME/.config/gits-widgets/panel.py" catcher </dev/null >/dev/null 2>&1
+        sleep 0.15; pgrep -nf "gits-widgets/[p]anel.py catcher" >"$pidfile"
+        for _ in {1..25}; do hyprctl layers 2>/dev/null | grep -q 'gits-catcher' && exit 0; sleep 0.04; done ;;
+    stop) alive && kill "$(cat "$pidfile")" 2>/dev/null; rm -f "$pidfile" ;;
+    *) echo "usage: gits-catcher start|stop" >&2; exit 2 ;;
+esac

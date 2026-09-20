@@ -41,3 +41,10 @@ power-profiles-daemon     # waybar power-profile module
 snapper                   # optional: btrfs snapshots, see home/.local/share/gits-snap/setup.sh
 snap-pac
 grub-btrfs
+
+# popups, OSD, screenshots (optional pieces degrade gracefully)
+wireplumber               # wpctl: volume slider and OSD
+brightnessctl             # brightness slider and OSD
+playerctl                 # media popup, bar player module
+satty                     # screenshot annotation (HyDE opens it; config in home/.config/satty)
+hyprpicker                # colour picker button in the control panel

@@ -3,5 +3,9 @@
 # Ghost in the Shell list menu (style: ~/.config/rofi/themes/gits-menu.rasi). Used by gits-wifi, gits-bt, gits-perf.
 title=${1:?title} tag=${2:-} ; shift 2
 esc() { printf '%s' "$1" | sed 's/[\\"]/\\&/g'; }
-exec rofi -dmenu -i -no-custom -theme "$HOME/.config/rofi/themes/gits-menu.rasi" -p "//" \
+gits-catcher start
+rofi -dmenu -i -no-custom -theme "$HOME/.config/rofi/themes/gits-menu.rasi" -p "//" \
     -theme-str "textbox-title { content: \"$(esc "$title")\"; }" -theme-str "textbox-tag { content: \"$(esc "$tag")\"; }" "$@"
+rc=$?
+gits-catcher stop
+exit $rc

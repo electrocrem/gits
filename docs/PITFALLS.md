@@ -124,3 +124,20 @@ aliases (including links to links) to the `scalable` directories too. `kiconfind
   "Battery Full" plus phantom "Charger Plug Out". A dunst rule with `skip_display` + `history_ignore` hides them
   (`dunstrc.d/70-gits-battery.conf`); the real low-battery warnings stay.
 * **Animation presets:** `borderangle` with style `loop` redraws every frame while it runs, hence the neon border is opt-in.
+
+## Popups, OSD, layouts (round 6c)
+
+* **An exclusive-keyboard layer popup never loses focus.** `KeyboardMode.EXCLUSIVE` keeps the keyboard with the popup even
+  when you click another window, so `notify::is-active` never fires and clicking away did nothing (only Esc closed it).
+  The popups now put an invisible full-screen catcher on the TOP layer under them (covers the bar too, so clicking the bar
+  button again closes the popup = toggle). `gits-layer-watch.sh` does the same for every rofi layer by listening to
+  Hyprland's `openlayer>>rofi` / `closelayer>>rofi` events.
+* **`python3` re-execs itself with LD_PRELOAD (gtk4-layer-shell):** the process command line becomes `/usr/bin/python3 ...`,
+  so `pgrep -f '^python3 ...'` never matches. A launcher that trusted it started a new OSD daemon on every volume key press
+  (50 of them). Match the script path instead, and prefer `$!` of the first launch.
+* **`pkill -f pattern` from a tool shell matches the shell's own command line** whenever the pattern text appears in it
+  (also in an unrelated sed expression). Use `[x]pattern` and keep the plain text out of the same command.
+* **Super+J = dwindle `togglesplit` in HyDE's global binds, but the master layout answers "Unknown master layoutmsg:
+  togglesplit".** `gits-layout-toggle` picks the right message for the active layout.
+* **dunst patterns are POSIX regular expressions:** no `(?i)`, no `\\.` escapes in the config (use `[.]`).
+* **Hyprland does not reload a `dofile`d file on its own:** after editing `gits.lua` run `hyprctl reload`.

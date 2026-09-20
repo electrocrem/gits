@@ -36,6 +36,25 @@ hl.on("hyprland.start", function()
     hl.exec_cmd(home .. "/.config/hypr/scripts/gits-events.sh")
 end)
 
+-- Super+J: HyDE binds it to dwindle's togglesplit, which the master layout (the one in use) ignores. Same combination and flags
+-- (only a description), so this replaces it: dwindle -> toggle split, master -> rotate the master area (gits-layout-toggle).
+hl.bind("SUPER + J", hl.dsp.exec_cmd("gits-layout-toggle"), {description = "[Layout Management] toggle split / rotate master (by layout)"})
+
+-- Popups under the bar (gits-panel): control panel and player
+hl.bind("SUPER + SHIFT + C", hl.dsp.exec_cmd("gits-panel control"), {description = "[GitS] control panel"})
+hl.bind("SUPER + SHIFT + M", hl.dsp.exec_cmd("gits-panel media"), {description = "[GitS] player popup"})
+hl.bind("SUPER + SHIFT + N", hl.dsp.exec_cmd("gits-panel notify"), {description = "[GitS] notification centre"})
+
+-- Click away closes any rofi menu: an invisible click catcher is put under every rofi layer (see the script header)
+hl.on("hyprland.start", function()
+    hl.exec_cmd(home .. "/.config/hypr/scripts/gits-layer-watch.sh")
+end)
+
+-- On-screen display for volume / brightness / keyboard backlight (gits-osd; HyDE's popups are turned into it by a dunst rule)
+hl.on("hyprland.start", function()
+    hl.exec_cmd("gits-osd start")
+end)
+
 -- ROG Control Center (asusctl's tray app, ASUS laptops): its ~/.config/autostart entry never runs here because nothing
 -- starts xdg-autostart.target in a HyDE session (that would launch every autostart file at once). Start just this one,
 -- after the bar's tray is up, and only if it is installed and not already running.

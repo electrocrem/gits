@@ -3,5 +3,9 @@
 # dunst feeds lines like "#Reply (Telegram) [226,inline-reply]"; only the readable middle is shown, rofi still
 # returns the whole line. Options given on the command line only: rofi ignores display-columns in the theme file.
 # Style: ~/.config/rofi/themes/notification.rasi. Hooked in by ~/.config/dunst/dunstrc.d/50-gits-menu.conf.
-exec /usr/bin/rofi -config notification -dmenu -p dunst: \
+gits-catcher start
+/usr/bin/rofi -config notification -dmenu -p dunst: \
     -display-columns 2 -display-column-separator '^#|\s\[[^]]*\]$' "$@"
+rc=$?
+gits-catcher stop
+exit $rc

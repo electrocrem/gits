@@ -1,0 +1,83 @@
+/* Ghost in the Shell control panel: opaque navy, cyan hairlines, square corners */
+* {
+    font-family: "JetBrainsMono Nerd Font", "Noto Sans CJK JP", monospace;
+    border-radius: 0;
+    box-shadow: none;
+    text-shadow: none;
+    outline: none;
+}
+window.panel-win { background: transparent; }
+.panel {
+    background: #060A14;
+    color: #C8F4FF;
+    border: 1px solid alpha(#2ED3D7, 0.5);
+    border-left: 3px solid #2ED3D7;
+    padding: 10px 12px 11px 12px;
+}
+.tag { font-size: 9px; font-weight: 700; letter-spacing: 2px; color: alpha(#2ED3D7, 0.85); }
+.tag-dot { font-size: 9px; color: #E5432B; }
+
+button { background: transparent; border: none; padding: 0; min-height: 0; min-width: 0; }
+.tile {
+    background: rgba(12, 26, 51, 0.8);
+    border: 1px solid alpha(#2ED3D7, 0.28);
+    padding: 7px 4px 6px 4px;
+}
+.tile:hover { border-color: alpha(#2ED3D7, 0.8); }
+.tile-icon { font-size: 17px; color: #596977; }
+.tile-name { font-size: 9px; font-weight: 700; letter-spacing: 1px; color: #9FC5D6; }
+.tile-state { font-size: 8px; color: #596977; }
+.tile.on { background: #2ED3D7; border-color: #2ED3D7; }
+.tile.on .tile-icon, .tile.on .tile-name, .tile.on .tile-state { color: #060A14; }
+
+.row-name { font-size: 9px; font-weight: 700; letter-spacing: 1px; color: #596977; min-width: 52px; }
+.row-val { font-size: 10px; font-weight: 700; color: #5EF1F5; }
+
+scale { min-height: 16px; padding: 0; margin: 0; }
+scale trough { min-height: 5px; background: alpha(#2ED3D7, 0.18); }
+scale highlight { background: #2ED3D7; }
+scale slider { min-width: 9px; min-height: 15px; margin: -5px -1px; background: #5EF1F5; border: none; }
+scale:disabled { opacity: 0.35; }
+
+.segs { border: 1px solid alpha(#2ED3D7, 0.28); }
+.seg { font-size: 10px; font-weight: 700; letter-spacing: 1px; color: #9FC5D6; padding: 5px 0; background: rgba(12, 26, 51, 0.8); }
+.seg:hover { color: #5EF1F5; }
+.seg.on { background: #2ED3D7; color: #060A14; }
+
+.foot { font-size: 9px; color: #596977; margin-top: 2px; }
+
+/* media popup */
+.cover-frame { border: 1px solid alpha(#2ED3D7, 0.4); background: #0C1A33; }
+.nosig { font-size: 14px; font-weight: 800; letter-spacing: 3px; color: #E5432B; }
+.m-title { font-size: 13px; font-weight: 800; color: #C8F4FF; }
+.m-artist { font-size: 10px; color: #9FC5D6; }
+.m-time { font-size: 9px; color: #596977; }
+.ctl { background: rgba(12, 26, 51, 0.8); border: 1px solid alpha(#2ED3D7, 0.28); font-size: 15px; color: #9FC5D6; padding: 6px 0; }
+.ctl:hover { border-color: alpha(#2ED3D7, 0.8); color: #5EF1F5; }
+.ctl.on { color: #5EF1F5; border-color: #2ED3D7; }
+.ctl.big { background: #2ED3D7; color: #060A14; border-color: #2ED3D7; font-size: 17px; }
+.nosig.dim { color: #254F5D; font-size: 12px; }
+
+/* notification centre */
+.nrow { padding: 7px 4px 7px 6px; border-bottom: 1px solid alpha(#2ED3D7, 0.16); border-left: 2px solid transparent; }
+.nrow.crit { border-left-color: #E5432B; }
+.n-app { font-size: 8px; font-weight: 700; letter-spacing: 1px; color: #596977; }
+.n-age { font-size: 8px; color: #596977; }
+.n-sum { font-size: 11px; font-weight: 700; color: #C8F4FF; }
+.n-body { font-size: 9px; color: #9FC5D6; }
+.n-x { font-size: 10px; color: #596977; padding: 2px 5px; }
+.n-x:hover { color: #E5432B; }
+scrolledwindow undershoot, scrolledwindow overshoot { background: none; }
+scrollbar slider { background: alpha(#2ED3D7, 0.4); min-width: 3px; }
+scrollbar trough { background: transparent; }
+
+/* tools and session buttons */
+.act { background: rgba(12, 26, 51, 0.8); border: 1px solid alpha(#2ED3D7, 0.28); padding: 6px 0 5px 0; }
+.act:hover { border-color: #2ED3D7; }
+.act-icon { font-size: 15px; color: #9FC5D6; }
+.act-name { font-size: 8px; font-weight: 700; letter-spacing: 1px; color: #596977; }
+.act:hover .act-icon { color: #5EF1F5; }
+.act.warn { background: #E5432B; border-color: #E5432B; }
+.act.warn .act-icon, .act.warn .act-name { color: #060A14; }
+
+window.catcher { background: rgba(0, 0, 0, 0.01); }

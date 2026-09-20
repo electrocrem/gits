@@ -22,7 +22,6 @@
     "modules-right": [
         "custom/gits-player",
         "custom/gits-sys",
-        "custom/gits-perf",
         "network#gits",
         "bluetooth#gits",
         "pulseaudio#gits",
@@ -31,6 +30,7 @@
         "custom/gits-notify",
         "battery#gits",
         "tray",
+        "custom/gits-perf",
         "custom/gits-power"
     ],
 
@@ -70,11 +70,11 @@
         "return-type": "json",
         "interval": 2,
         "tooltip": true,
-        "on-click": "playerctl play-pause",
-        "on-click-right": "playerctl next",
-        "on-click-middle": "playerctl previous",
-        "on-scroll-up": "playerctl previous",
-        "on-scroll-down": "playerctl next"
+        "on-click": "gits-panel media",
+        "on-click-middle": "gits-media play-pause",
+        "on-click-right": "gits-media next",
+        "on-scroll-up": "gits-media previous",
+        "on-scroll-down": "gits-media next"
     },
 
     // CPU usage + package temperature (k10temp); tooltip: model, freq, load, GPU temp, fans
@@ -107,12 +107,15 @@
     // Power profile (power-profiles-daemon; asusd switches it on plug/unplug): click = menu, scroll = cycle.
     // Refreshed by signal 9 (sent by scripts/gits-perf.sh) plus a poll for changes made elsewhere (Fn key, ROG Control Center).
     "custom/gits-perf": {
+        "min-length": 3,
+        "align": 0.5,
         "exec": "$XDG_CONFIG_HOME/waybar/scripts/gits-perf.sh",
         "return-type": "json",
         "interval": 10,
         "signal": 9,
         "tooltip": true,
-        "on-click": "$XDG_CONFIG_HOME/waybar/scripts/gits-perf.sh menu",
+        "on-click": "gits-panel control",
+        "on-click-right": "$XDG_CONFIG_HOME/waybar/scripts/gits-perf.sh menu",
         "on-scroll-up": "$XDG_CONFIG_HOME/waybar/scripts/gits-perf.sh prev",
         "on-scroll-down": "$XDG_CONFIG_HOME/waybar/scripts/gits-perf.sh next"
     },
@@ -125,6 +128,8 @@
     },
 
     "network#gits": {
+        "min-length": 3,
+        "align": 0.5,
         "interval": 5,
         "format-wifi": "",
         "format-ethernet": "󰈂",
@@ -154,6 +159,8 @@
     },
 
     "pulseaudio#gits": {
+        "min-length": 3,
+        "align": 0.5,
         "format": "{icon}",
         "format-muted": "",
         "format-icons": { "default": ["", "", ""] },
@@ -191,8 +198,8 @@
         "return-type": "json",
         "interval": 1,
         "tooltip": true,
-        "on-click": "dunstctl set-paused toggle",
-        "on-click-right": "dunstctl history-pop",
+        "on-click": "gits-panel notify",
+        "on-click-right": "dunstctl set-paused toggle",
         "on-click-middle": "dunstctl history-clear"
     },
 
@@ -208,7 +215,8 @@
 
     "custom/gits-power": {
         "format": "",
-        "tooltip-format": "power menu",
-        "on-click": "hyde-shell logoutlaunch 1"
+        "tooltip-format": "control panel · power\nright: logout menu",
+        "on-click": "gits-panel control",
+        "on-click-right": "hyde-shell logoutlaunch 1"
     }
 }

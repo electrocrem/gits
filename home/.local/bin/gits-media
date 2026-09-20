@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# gits-media pick             print the MPRIS player the bar/popup/widget should follow
+# gits-media <playerctl args> run playerctl against that player (e.g. gits-media play-pause, gits-media metadata ...)
+# playerctl alone takes the first player in the list, so a paused browser tab beat a playing Spotify. Rule here:
+# a Playing player wins; with none playing, the one that played last (remembered), else the first one listed.
+state=${XDG_STATE_HOME:-$HOME/.local/state}/gits-media
+pick() {
+    local players p st first="" last
+    mapfile -t players < <(playerctl -l 2>/dev/null)
+    ((${#players[@]})) || return 1
+    for p in "${players[@]}"; do
+        st=$(playerctl -p "$p" status 2>/dev/null)
+        if [[ $st == Playing ]]; then
+            mkdir -p "$state"; echo "$p" >"$state/last"
+            echo "$p"; return 0
+        fi
+        [[ -n $st && $st != Stopped && -z $first ]] && first=$p
+    done
+    last=$(cat "$state/last" 2>/dev/null)
+    for p in "${players[@]}"; do [[ $p == "$last" ]] && { echo "$p"; return 0; }; done
+    [[ -n $first ]] && { echo "$first"; return 0; }
+    echo "${players[0]}"
+}
+if [[ ${1:-} == pick ]]; then pick; exit; fi
+p=$(pick) || exit 1
+exec playerctl -p "$p" "$@"

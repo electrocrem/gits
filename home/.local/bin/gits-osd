@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# gits-osd <volume|brightness|mic> <percent> [muted]   show the on-screen display (Ghost in the Shell style)
+# gits-osd start|stop                                   run / stop the tiny daemon (gits.lua starts it at login; events start it lazily)
+# Fed by dunst: ~/.config/dunst/gits-osd.sh turns HyDE's volume/brightness popups into calls of this.
+run=${XDG_RUNTIME_DIR:-/tmp}
+pidfile=$run/gits-osd.pid
+alive() { local p; p=$(cat "$pidfile" 2>/dev/null) && [[ $p =~ ^[0-9]+$ ]] && grep -qa 'osd.py' "/proc/$p/cmdline" 2>/dev/null; }
+start() {
+    alive && return 0
+    setsid -f python3 "$HOME/.config/gits-widgets/osd.py" >"$run/gits-osd.log" 2>&1
+    sleep 0.2; pgrep -nf "gits-widgets/[o]sd.py" >"$pidfile"
+    for _ in {1..30}; do [[ -p $run/gits-osd.fifo ]] && break; sleep 0.1; done
+}
+case ${1:-} in
+    start) start; exit 0 ;;
+    stop) if alive; then p=$(cat "$pidfile"); kill "$p"; for _ in {1..20}; do kill -0 "$p" 2>/dev/null || break; sleep 0.1; done; fi; exit 0 ;;
+    volume|brightness|mic) ;;
+    *) echo "usage: gits-osd <volume|brightness|mic> <percent> [muted] | start | stop" >&2; exit 2 ;;
+esac
+alive || start
+printf '%s %s %s\n' "$1" "${2:-0}" "${3:-0}" >"$run/gits-osd.fifo"

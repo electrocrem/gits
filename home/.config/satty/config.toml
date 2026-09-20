@@ -1,0 +1,7 @@
+# Ghost in the Shell for satty (the screenshot annotator HyDE opens after Super+P): square handles, cyan/red marker palette.
+[general]
+corner-roundness = 0
+initial-tool = "arrow"
+
+[color-palette]
+palette = ["#E5432B", "#2ED3D7", "#5EF1F5", "#C8F4FF", "#E8C547", "#060A14"]

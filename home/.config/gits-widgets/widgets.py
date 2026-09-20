@@ -393,7 +393,7 @@ class MediaCard(Card):
         self.update()
 
     def pc(self, cmd):
-        subprocess.Popen(["playerctl", cmd], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.Popen(["gits-media", cmd], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         GLib.timeout_add(250, lambda: (self.update(), False)[1])
 
     def _draw_prog(self, area, cr, w, h):
@@ -415,7 +415,7 @@ class MediaCard(Card):
         fmt = "\t".join(["{{status}}", "{{artist}}", "{{title}}", "{{mpris:artUrl}}", "{{mpris:length}}",
                          "{{position}}"])
         try:
-            out = subprocess.run(["playerctl", "metadata", "--format", fmt], capture_output=True, text=True,
+            out = subprocess.run(["gits-media", "metadata", "--format", fmt], capture_output=True, text=True,
                                  timeout=1.5).stdout.rstrip("\n")
         except (OSError, subprocess.TimeoutExpired):
             return None

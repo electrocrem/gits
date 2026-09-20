@@ -4,10 +4,13 @@
 #   gits-doctor          full report
 #   gits-doctor -q       only WARN/FAIL lines
 #   gits-doctor -l       also show the tail of the login breadcrumb log and the SDDM journal
+#   gits-doctor --fix    after the report, repair what HyDE updates / KDE apps / crashes typically undo (see the end of this
+#                        file): preset selections, GTK4 hang, kded6 gtkconfig, cursor sync, dead helpers, failed units.
+#                        Never touches the workflow (you may be gaming), login hooks, or anything needing sudo.
 set -u
 
-QUIET=0; LOGS=0
-for a in "$@"; do case $a in -q) QUIET=1 ;; -l) LOGS=1 ;; esac; done
+QUIET=0; LOGS=0; FIX=0
+for a in "$@"; do case $a in -q) QUIET=1 ;; -l) LOGS=1 ;; -f|--fix) FIX=1 ;; esac; done
 
 if [[ -t 1 ]]; then
     C_OK=$'\e[38;2;46;211;215m'; C_WARN=$'\e[38;2;240;200;80m'; C_BAD=$'\e[38;2;240;80;80m'
@@ -191,6 +194,7 @@ n=$(grep -c 'gits/banner.zsh' "$H/.config/zsh/user.zsh" 2>/dev/null)
 n=$(cat "$H/.config/hypr/hyprland.lua" "$H/.config/hypr/gits.lua" 2>/dev/null | grep -c 'gits-widgets/run.sh start')
 [[ ${n:-0} -le 1 ]] && ok "Hyprland hooks are not duplicated" || warn "widgets are started $n times (hyprland.lua and gits.lua both hook them): remove the inline copies"
 [[ -r $H/.config/zsh/gits/tmux.zsh ]] && ok "tmux autostart present (GITS_NO_TMUX=1 disables)" || warn "gits/tmux.zsh missing: no tmux by default"
+pgrep -f "[g]its-layer-watch" >/dev/null && ok "click-away watcher running (rofi menus close on outside click)" || warn "gits-layer-watch.sh is not running (rofi menus only close with Esc)"
 pgrep -f "[g]its-events.sh" >/dev/null && ok "gits-events running (login / plug / lock sounds)" || warn "gits-events.sh is not running (started from gits.lua at login)"
 python3 -c "import numpy" 2>/dev/null && ok "python-numpy present (audio spectrum card)" || warn "python-numpy missing: no audio spectrum card"
 grep -q "gits-events" "$H/.config/hypr/gits.lua" 2>/dev/null && ok "gits.lua hooks the events daemon" || warn "gits.lua does not hook gits-events.sh"
@@ -212,6 +216,38 @@ fi
 if [[ $LOGS == 1 ]]; then
     printf '%s-- gits-login.log%s\n' "$C_DIM" "$C_0"; tail -8 "$lg" 2>/dev/null
     printf '%s-- sddm journal (this boot)%s\n' "$C_DIM" "$C_0"; journalctl -b -u sddm --no-pager -q 2>/dev/null | tail -12
+fi
+
+# ---------------------------------------------------------------- repairs
+if [[ $FIX == 1 ]]; then
+    printf '\n%s// repairs%s\n' "$C_B" "$C_0"
+    FIXED=0
+    fixed() { FIXED=$((FIXED + 1)); printf '  %s[fix ]%s %s\n' "$C_OK" "$C_0" "$1"; }
+    failed_fix() { printf '  %s[FAIL]%s could not: %s\n' "$C_BAD" "$C_0" "$1"; }
+    setst() { sed -i "s|^$1=.*|$1=\"$2\"|" "$st"; }
+
+    [[ $(getst HYPR_ANIMATION) == gits ]] || { hyde-shell animations --set gits >/dev/null 2>&1 && fixed "animation preset -> gits" || failed_fix "animation preset"; }
+    [[ $(getst WAYBAR_LAYOUT_NAME) == ghost-in-the-shell ]] || { hyde-shell waybar.py --set ghost-in-the-shell >/dev/null 2>&1 && fixed "waybar layout -> ghost-in-the-shell" || failed_fix "waybar layout"; }
+    if [[ $(getst HYPRLOCK_LAYOUT) != "Ghost in the Shell" ]]; then
+        setst HYPRLOCK_LAYOUT "Ghost in the Shell"; hyde-shell hyprlock.sh --reload >/dev/null 2>&1; fixed "hyprlock layout -> Ghost in the Shell"
+    fi
+    g4=$H/.config/gtk-4.0/settings.ini
+    if [[ -f $g4 ]] && grep -q 'gtk-application-prefer-dark-theme *= *true' "$g4"; then rm -f "$g4" && fixed "removed the GTK4 settings.ini that hangs GTK4 apps"; fi
+    if ! grep -A1 '^\[Module-gtkconfig\]' "$H/.config/kded6rc" 2>/dev/null | grep -q 'autoload=false'; then
+        printf '\n[Module-gtkconfig]\nautoload=false\n' >>"$H/.config/kded6rc" && fixed "kded6 gtkconfig module switched off (restart kded6 or re-login to apply)"
+    fi
+    kc=$(grep -m1 '^cursorTheme=' "$H/.config/kcminputrc" 2>/dev/null | cut -d= -f2)
+    if [[ -n $kc && $kc != GitS-Cursors ]]; then sed -i 's/^cursorTheme=.*/cursorTheme=GitS-Cursors/' "$H/.config/kcminputrc" && fixed "kcminputrc cursorTheme $kc -> GitS-Cursors"; fi
+    pgrep -f '[g]its-widgets/widgets.py' >/dev/null || { "$H/.config/gits-widgets/run.sh" start </dev/null >/dev/null 2>&1 && fixed "desktop widgets started"; }
+    pgrep -f '[g]its-layer-watch' >/dev/null || { [[ -x $H/.config/hypr/scripts/gits-layer-watch.sh ]] && setsid -f "$H/.config/hypr/scripts/gits-layer-watch.sh" </dev/null >/dev/null 2>&1 && fixed "click-away watcher started"; }
+    pgrep -f '[g]its-widgets/osd.py' >/dev/null || { command -v gits-osd >/dev/null && gits-osd start </dev/null >/dev/null 2>&1 && fixed "OSD daemon started"; }
+    pgrep -f '[g]its-events.sh' >/dev/null || { [[ -x $H/.config/hypr/scripts/gits-events.sh ]] && GITS_EVENTS_NO_LOGIN=1 setsid -f "$H/.config/hypr/scripts/gits-events.sh" </dev/null >/dev/null 2>&1 && fixed "events daemon started (sounds)"; }
+    pgrep -f '[g]its-watchdog.sh' >/dev/null || { [[ -x $H/.config/waybar/scripts/gits-watchdog.sh ]] && setsid -f "$H/.config/waybar/scripts/gits-watchdog.sh" </dev/null >/dev/null 2>&1 && fixed "waybar watchdog started"; }
+    nw=$(ls "$H/.local/share/gits-sounds"/*.wav 2>/dev/null | wc -l)
+    [[ $nw -ge 7 ]] || { python3 "$H/.local/share/gits-sounds/build.py" >/dev/null 2>&1 && fixed "UI sounds rebuilt"; }
+    if [[ -n $(systemctl --user --failed --no-legend 2>/dev/null) ]]; then systemctl --user reset-failed && fixed "failed user units reset (then check again: they may fail again)"; fi
+    command -v dunstctl >/dev/null && dunstctl reload 2>/dev/null
+    (( FIXED )) && printf '  %d repair(s) done: run gits-doctor again\n' "$FIXED" || printf '  nothing to repair\n'
 fi
 
 printf '\n%s%d ok%s, %s%d warn%s, %s%d fail%s\n' "$C_OK" "$OKS" "$C_0" "$C_WARN" "$WARNS" "$C_0" "$C_BAD" "$FAILS" "$C_0"

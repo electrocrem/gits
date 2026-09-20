@@ -1,0 +1,860 @@
+#!/usr/bin/env python3
+"""Ghost in the Shell control panel: a small layer-shell popup under the bar (toggle with `gits-panel`, Super+Shift+C).
+
+Toggles: Wi-Fi, Bluetooth, do-not-disturb, night light, UI sounds, desktop widgets.
+Sliders: volume (wpctl), brightness (brightnessctl). Segments: power profile (power-profiles-daemon), battery charge
+limit (asusctl, ASUS only). Closes on Escape or when it loses focus. Everything is read/written through the same CLI
+tools the bar modules use, so the bar and the panel never disagree for long.
+"""
+import os
+import re
+import subprocess
+import sys
+import threading
+import urllib.parse
+import urllib.request
+
+_LS_LIB = "/usr/lib/libgtk4-layer-shell.so"
+if os.path.exists(_LS_LIB) and _LS_LIB not in os.environ.get("LD_PRELOAD", ""):
+    os.environ["LD_PRELOAD"] = (_LS_LIB + " " + os.environ.get("LD_PRELOAD", "")).strip()
+    os.execv(sys.executable, [sys.executable, os.path.abspath(__file__), *sys.argv[1:]])
+os.environ.setdefault("GSK_RENDERER", "cairo")
+os.environ.setdefault("GDK_BACKEND", "wayland")
+os.environ["GTK_THEME"] = "Adwaita:dark"
+
+import gi
+
+gi.require_version("Gtk", "4.0")
+gi.require_version("Gdk", "4.0")
+gi.require_version("Gtk4LayerShell", "1.0")
+from gi.repository import Gdk, GLib, GLibUnix, Gtk, Pango  # noqa: E402
+from gi.repository import Gtk4LayerShell as LS  # noqa: E402
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+HOME = os.path.expanduser("~")
+STATE = os.environ.get("XDG_STATE_HOME", HOME + "/.local/state")
+DEMO = os.environ.get("GITS_PANEL_DEMO") == "1"  # screenshot mode: fixed made-up state, no commands executed
+
+
+def sh(cmd, timeout=4):
+    """Run a command (list), return stdout ('' on any failure)."""
+    if DEMO:
+        return ""
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+def fire(cmd):
+    """Run a command without waiting."""
+    if not DEMO:
+        try:
+            subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        except OSError:
+            pass
+
+
+def label(text, css=None, xalign=0.0):
+    lb = Gtk.Label(label=text, xalign=xalign)
+    for c in (css or "").split():
+        lb.add_css_class(c)
+    return lb
+
+
+# ---------------------------------------------------------------------------------------------- state readers
+def get_wifi():
+    return sh(["nmcli", "radio", "wifi"]) == "enabled"
+
+
+def get_bt():
+    return "Powered: yes" in sh(["bluetoothctl", "show"])
+
+
+def get_dnd():
+    return sh(["dunstctl", "is-paused"]) == "true"
+
+
+def get_night():
+    try:
+        return open(STATE + "/hyde/hyprsunset").read().strip().split("|")[2] == "1"
+    except (OSError, IndexError):
+        return False
+
+
+def get_sounds():
+    return not os.path.exists(STATE + "/gits-sounds/off")
+
+
+def get_widgets():
+    try:
+        pid = open(os.environ.get("XDG_RUNTIME_DIR", "/tmp") + "/gits-widgets.pid").read().strip()
+        return os.path.exists(f"/proc/{int(pid)}")
+    except (OSError, ValueError):
+        return False
+
+
+def get_awake():
+    """Caffeine: on while hypridle is stopped (the screen never locks or sleeps by itself)."""
+    return subprocess.run(["pgrep", "-x", "hypridle"], capture_output=True).returncode != 0 if not DEMO else False
+
+
+def set_awake():
+    if subprocess.run(["pgrep", "-x", "hypridle"], capture_output=True).returncode == 0:
+        subprocess.run(["pkill", "-x", "hypridle"])
+    else:
+        fire(["setsid", "-f", "hypridle"])
+
+
+def get_airplane():
+    rows = sh(["rfkill", "list", "-n", "-o", "SOFT"]).split()
+    return bool(rows) and all(r == "blocked" for r in rows)
+
+
+def get_game():
+    try:
+        return 'HYPR_WORKFLOW="gaming"' in open(STATE + "/hyde/staterc").read()
+    except OSError:
+        return False
+
+
+def get_kbd():
+    try:
+        base = "/sys/class/leds/asus::kbd_backlight/"
+        return int(open(base + "brightness").read()), int(open(base + "max_brightness").read())
+    except (OSError, ValueError):
+        return None
+
+
+def get_volume():
+    m = re.search(r"([0-9.]+)(\s+\[MUTED\])?", sh(["wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@"]))
+    return (round(float(m.group(1)) * 100), bool(m.group(2))) if m else (0, False)
+
+
+def get_brightness():
+    parts = sh(["brightnessctl", "-m"]).split(",")
+    try:
+        return int(parts[3].rstrip("%"))
+    except (IndexError, ValueError):
+        return None
+
+
+def get_profile():
+    return sh(["powerprofilesctl", "get"]) or "balanced"
+
+
+def get_charge_limit():
+    m = re.search(r"(\d+)%", sh(["asusctl", "battery", "info"]))
+    return int(m.group(1)) if m else None
+
+
+def battery_line():
+    base = "/sys/class/power_supply/BAT0"
+    try:
+        cap = open(base + "/capacity").read().strip()
+        status = open(base + "/status").read().strip()
+        watts = int(open(base + "/power_now").read()) / 1e6
+        return f"󰁹 {cap}%  {status.lower()}  {watts:.1f} W"
+    except (OSError, ValueError):
+        return ""
+
+
+# ---------------------------------------------------------------------------------------------- widgets
+class Tile(Gtk.Button):
+    """A toggle tile: icon + name + ON/OFF, class `on` when active."""
+
+    def __init__(self, icon, name, getter, setter):
+        super().__init__()
+        self.add_css_class("tile")
+        self.getter, self.setter, self.name = getter, setter, name
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
+        self.l_icon = label(icon, "tile-icon")
+        self.l_name = label(name, "tile-name")
+        self.l_state = label("…", "tile-state")
+        for x in (self.l_icon, self.l_name, self.l_state):
+            box.append(x)
+        self.set_child(box)
+        self.set_hexpand(True)
+        self.connect("clicked", self._click)
+
+    def show_state(self, on):
+        (self.add_css_class if on else self.remove_css_class)("on")
+        self.l_state.set_text("ON" if on else "OFF")
+
+    def _click(self, *_):
+        self.setter()
+        # refresh from the real state a moment later (the command needs time to take effect)
+        GLib.timeout_add(350, lambda: threading.Thread(target=lambda: GLib.idle_add(self.show_state, self.getter()),
+                                                       daemon=True).start() or False)
+
+
+class Segments(Gtk.Box):
+    """A row of mutually exclusive buttons; `choose(value)` highlights one."""
+
+    def __init__(self, options, on_pick):
+        super().__init__(spacing=0)
+        self.add_css_class("segs")
+        self.btns = {}
+        self.set_hexpand(True)
+        for text, value in options:
+            b = Gtk.Button(label=text)
+            b.add_css_class("seg")
+            b.set_hexpand(True)
+            b.connect("clicked", lambda _b, v=value: on_pick(v))
+            self.append(b)
+            self.btns[value] = b
+
+    def choose(self, value):
+        for v, b in self.btns.items():
+            (b.add_css_class if v == value else b.remove_css_class)("on")
+
+
+class Catcher(Gtk.Window):
+    """Invisible full-screen click catcher on the TOP layer (under the popups, above windows and the bar).
+    A click anywhere outside the popup lands here and calls `on_click`. Keyboard focus stays with the popup (Escape works)."""
+
+    def __init__(self, monitor, on_click):
+        super().__init__()
+        self.set_decorated(False)
+        self.add_css_class("catcher")
+        LS.init_for_window(self)
+        LS.set_namespace(self, "gits-catcher")
+        LS.set_layer(self, LS.Layer.TOP)
+        for edge in (LS.Edge.TOP, LS.Edge.BOTTOM, LS.Edge.LEFT, LS.Edge.RIGHT):
+            LS.set_anchor(self, edge, True)
+        LS.set_exclusive_zone(self, -1)  # cover the bar too: a click on the bar button then closes the popup (= toggle)
+        LS.set_keyboard_mode(self, LS.KeyboardMode.NONE)
+        if monitor is not None:
+            LS.set_monitor(self, monitor)
+        for button in (0,):  # any mouse button
+            g = Gtk.GestureClick()
+            g.set_button(button)
+            g.connect("pressed", lambda *_: on_click())
+            self.add_controller(g)
+        self.set_child(Gtk.Box())
+
+
+class Popup(Gtk.Window):
+    """Layer-shell popup under the bar: closes on Escape or focus loss. `left` = None anchors it to the right edge,
+    otherwise it sits `left` px from the left edge (the media popup opens under the cursor, i.e. under the bar module)."""
+
+    def __init__(self, monitor, left=None):
+        super().__init__()
+        self.set_decorated(False)
+        self.set_resizable(False)
+        self.set_default_size(300, -1)
+        self.add_css_class("panel-win")
+        LS.init_for_window(self)
+        LS.set_namespace(self, "gits-panel")
+        LS.set_layer(self, LS.Layer.OVERLAY)
+        LS.set_anchor(self, LS.Edge.TOP, True)
+        if left is None:
+            LS.set_anchor(self, LS.Edge.RIGHT, True)
+            LS.set_margin(self, LS.Edge.RIGHT, 8)
+        else:
+            LS.set_anchor(self, LS.Edge.LEFT, True)
+            LS.set_margin(self, LS.Edge.LEFT, left)
+        LS.set_margin(self, LS.Edge.TOP, 34)
+        LS.set_keyboard_mode(self, LS.KeyboardMode.EXCLUSIVE)
+        if monitor is not None:
+            LS.set_monitor(self, monitor)
+        self.armed = False
+        key = Gtk.EventControllerKey()
+        key.connect("key-pressed", lambda _c, kv, *_: (self.close(), True)[1] if kv == Gdk.KEY_Escape else False)
+        self.add_controller(key)
+        self.connect("notify::is-active", self._focus_changed)
+        GLib.timeout_add(1500, self._arm)  # focus loss before the first focus must not close it
+
+    def _arm(self):
+        self.armed = True
+        return False
+
+    def _focus_changed(self, *_):
+        if self.armed and not self.is_active():
+            self.close()
+
+    def header(self, title):
+        head = Gtk.Box(spacing=6)
+        head.append(label(title, "tag"))
+        sp = Gtk.Box()
+        sp.set_hexpand(True)
+        head.append(sp)
+        head.append(label("▪", "tag-dot"))
+        return head
+
+
+class Panel(Popup):
+    def __init__(self, monitor):
+        super().__init__(monitor)
+        self.quiet = False  # True while we set slider values from the state (no command must fire)
+        self.timers = {}
+
+        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=9)
+        root.add_css_class("panel")
+        root.append(self.header("CONTROL // 制御"))
+
+        def toggle_cmd(cmd_on_off):
+            return lambda: fire(cmd_on_off)
+
+        wifi = Tile("󰖩", "WI-FI", get_wifi, lambda: fire(["nmcli", "radio", "wifi", "off" if get_wifi() else "on"]))
+        bt = Tile("󰂯", "BLUETOOTH", get_bt, lambda: fire(["bluetoothctl", "power", "off" if get_bt() else "on"]))
+        dnd = Tile("󰂛", "SILENT", get_dnd, lambda: fire(["dunstctl", "set-paused", "toggle"]))
+        night = Tile("󰖔", "NIGHT", get_night, lambda: fire(["hyde-shell", "hyprsunset", "-t", "-q"]))
+        snd = Tile("󰝚", "SOUNDS", get_sounds, lambda: fire(["gits-sound", "toggle"]))
+        wid = Tile("󰕮", "WIDGETS", get_widgets, lambda: fire([HERE + "/run.sh", "toggle"]))
+        awake = Tile("󰅶", "AWAKE", get_awake, set_awake)
+        plane = Tile("󰀝", "AIRPLANE", get_airplane, lambda: fire(["rfkill", "unblock" if get_airplane() else "block", "all"]))
+        game = Tile("󰊗", "GAME", get_game, lambda: fire(["hyde-shell", "workflows", "--set", "01-default" if get_game() else "gaming"]))
+        self.tiles = [wifi, bt, dnd, night, snd, wid, awake, plane, game]
+        for row in (self.tiles[:3], self.tiles[3:6], self.tiles[6:]):
+            r = Gtk.Box(spacing=6, homogeneous=True)
+            for t in row:
+                r.append(t)
+            root.append(r)
+
+        self.vol = self._slider(root, "VOL", self._set_volume)
+        self.bri = self._slider(root, "LIGHT", self._set_brightness)
+
+        self.kbd = Segments([("OFF", 0), ("LOW", 1), ("MED", 2), ("HIGH", 3)], self._set_kbd)
+        self.kbd_row = self._row(root, "KEYS", self.kbd)
+        self.prof = Segments([("PERF", "performance"), ("BAL", "balanced"), ("SAVE", "power-saver")], self._set_profile)
+        self.chg = Segments([("60", 60), ("80", 80), ("100", 100)], self._set_charge)
+        self._row(root, "POWER", self.prof)
+        self.chg_row = self._row(root, "CHARGE", self.chg)
+
+        # tools: close the panel first (it must not end up in the screenshot), then run
+        tools = Gtk.Box(spacing=6, homogeneous=True)
+        for icon, name, cmd in (("󰄀", "SHOT", "hyde-shell screenshot s"), ("󰗊", "OCR", "hyde-shell screenshot sc"),
+                                ("󰈊", "PICK", "hyprpicker -an"), ("󰅍", "CLIP", "hyde-shell cliphist -c")):
+            tools.append(self._action(icon, name, lambda c=cmd: self._later(c)))
+        root.append(tools)
+        # session: lock / sleep run at once, the destructive three ask twice
+        sess = Gtk.Box(spacing=6, homogeneous=True)
+        sess.append(self._action("󰌾", "LOCK", lambda: self._later("loginctl lock-session")))
+        sess.append(self._action("󰤄", "SLEEP", lambda: self._later("systemctl suspend")))
+        sess.append(self._action("󰍃", "LOGOUT", lambda: self._later("hyprctl dispatch 'hl.dsp.exit()'"), confirm=True))
+        sess.append(self._action("󰜉", "REBOOT", lambda: self._later("systemctl reboot"), confirm=True))
+        sess.append(self._action("󰐥", "OFF", lambda: self._later("systemctl poweroff"), confirm=True))
+        root.append(sess)
+
+        self.foot = label("", "foot")
+        root.append(self.foot)
+        self.set_child(root)
+
+        threading.Thread(target=self._load, daemon=True).start()
+
+    # -- layout helpers
+    def _row(self, root, name, widget):
+        r = Gtk.Box(spacing=8)
+        r.append(label(name, "row-name"))
+        r.append(widget)
+        root.append(r)
+        return r
+
+    def _slider(self, root, name, cb):
+        s = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, 100, 1)
+        s.set_draw_value(False)
+        s.set_hexpand(True)
+        val = label("", "row-val", 1.0)
+        val.set_width_chars(5)
+        s.connect("value-changed", lambda sc: self._slider_moved(name, sc, val, cb))
+        r = Gtk.Box(spacing=8)
+        r.append(label(name, "row-name"))
+        r.append(s)
+        r.append(val)
+        root.append(r)
+        s.val_label = val
+        return s
+
+    def _slider_moved(self, name, sc, val, cb):
+        v = int(sc.get_value())
+        val.set_text(f"{v}%")
+        if self.quiet:
+            return
+        if name in self.timers:
+            GLib.source_remove(self.timers[name])
+        self.timers[name] = GLib.timeout_add(80, lambda: (self.timers.pop(name, None), cb(v), False)[2])  # debounce
+
+    # -- actions
+    def _action(self, icon, name, cb, confirm=False):
+        b = Gtk.Button()
+        b.add_css_class("act")
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
+        box.append(label(icon, "act-icon", 0.5))
+        lb = label(name, "act-name", 0.5)
+        box.append(lb)
+        b.set_child(box)
+        state = {"armed": None}
+
+        def click(*_):
+            if not confirm:
+                cb()
+                return
+            if state["armed"] is None:  # first click: arm, second within 3 s: do it
+                b.add_css_class("warn")
+                lb.set_text("SURE?")
+                state["armed"] = GLib.timeout_add(3000, disarm)
+            else:
+                GLib.source_remove(state["armed"])
+                state["armed"] = None
+                cb()
+
+        def disarm():
+            b.remove_css_class("warn")
+            lb.set_text(name)
+            state["armed"] = None
+            return False
+
+        b.connect("clicked", click)
+        return b
+
+    def _later(self, cmd):
+        """Close the panel, then run a shell command a moment later (screenshots must not catch the panel)."""
+        fire(["sh", "-c", f"sleep 0.45; {cmd}"])
+        self.close()
+
+    def _set_kbd(self, n):
+        fire(["asusctl", "leds", "set", ["off", "low", "med", "high"][n]])
+        self.kbd.choose(n)
+
+    def _set_volume(self, v):
+        fire(["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", f"{v}%"])
+
+    def _set_brightness(self, v):
+        fire(["brightnessctl", "-q", "set", f"{max(v, 1)}%"])
+
+    def _set_profile(self, p):
+        fire(["powerprofilesctl", "set", p])
+        self.prof.choose(p)
+        GLib.timeout_add(600, lambda: (fire(["pkill", "-RTMIN+9", "-x", "waybar"]), False)[1])
+
+    def _set_charge(self, n):
+        fire(["asusctl", "battery", "limit", str(n)])
+        self.chg.choose(n)
+
+    # -- state
+    def _load(self):
+        st = {t.name: t.getter() for t in self.tiles}
+        if DEMO:
+            st = {"WI-FI": True, "BLUETOOTH": True, "SILENT": False, "NIGHT": False, "SOUNDS": True, "WIDGETS": True}
+            vol, bri, prof, lim, kbd = (46, False), 82, "balanced", 80, (2, 3)
+            st.update({"AWAKE": False, "AIRPLANE": False, "GAME": False})
+        else:
+            vol, bri, prof, lim, kbd = get_volume(), get_brightness(), get_profile(), get_charge_limit(), get_kbd()
+        GLib.idle_add(self._apply, st, vol, bri, prof, lim, kbd, battery_line() or ("󰁹 98%  full  0.0 W" if DEMO else ""))
+
+    def _apply(self, st, vol, bri, prof, lim, kbd, bat):
+        for t in self.tiles:
+            t.show_state(st.get(t.name, False))
+        self.quiet = True
+        self.vol.set_value(vol[0])
+        self.vol.val_label.set_text("MUTE" if vol[1] else f"{vol[0]}%")
+        if bri is None:
+            self.bri.set_sensitive(False)
+        else:
+            self.bri.set_value(bri)
+        self.quiet = False
+        self.prof.choose(prof)
+        if lim is None:
+            self.chg_row.set_visible(False)  # not an ASUS laptop
+        else:
+            self.chg.choose(min((60, 80, 100), key=lambda x: abs(x - lim)))
+        if kbd is None:
+            self.kbd_row.set_visible(False)
+        else:
+            self.kbd.choose(kbd[0])
+        self.foot.set_text(bat)
+
+
+
+
+def fmt_time(sec):
+    sec = int(max(sec, 0))
+    return f"{sec // 3600}:{sec % 3600 // 60:02d}:{sec % 60:02d}" if sec >= 3600 else f"{sec // 60}:{sec % 60:02d}"
+
+
+class MediaPopup(Popup):
+    """Player popup (MPRIS through playerctl): cover, title, seek bar, transport, shuffle/repeat, player volume."""
+    CACHE = os.path.join(os.environ.get("XDG_CACHE_HOME", HOME + "/.cache"), "gits-widgets", "art")
+
+    def __init__(self, monitor, left):
+        super().__init__(monitor, left)
+        self.quiet = False
+        self.art_key = None
+        self.length = 0.0
+        self.seek_timer = None
+        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=7)
+        root.add_css_class("panel")
+        head = self.header("MEDIA.LINK // 音")
+        root.append(head)
+
+        self.cover = Gtk.Picture()
+        self.cover.set_content_fit(Gtk.ContentFit.COVER)
+        self.cover.set_can_shrink(True)
+        self.cover.set_size_request(250, 250)
+        self.cover.add_css_class("cover")
+        frame = Gtk.Box()
+        frame.add_css_class("cover-frame")
+        frame.append(self.cover)
+        ov = Gtk.Overlay()
+        ov.set_child(frame)
+        self.nosig = label("NO SIGNAL", "nosig", 0.5)
+        self.nosig.set_halign(Gtk.Align.CENTER)
+        self.nosig.set_valign(Gtk.Align.CENTER)
+        ov.add_overlay(self.nosig)
+        root.append(ov)
+
+        self.title = label("—", "m-title")
+        self.title.set_ellipsize(Pango.EllipsizeMode.END)
+        self.title.set_max_width_chars(30)
+        self.artist = label("", "m-artist")
+        self.artist.set_ellipsize(Pango.EllipsizeMode.END)
+        self.artist.set_max_width_chars(34)
+        root.append(self.title)
+        root.append(self.artist)
+
+        self.seek = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, 100, 1)
+        self.seek.set_draw_value(False)
+        self.seek.set_hexpand(True)
+        self.seek.connect("value-changed", self._seek_moved)
+        root.append(self.seek)
+        times = Gtk.Box()
+        self.t_pos, self.t_len = label("0:00", "m-time"), label("0:00", "m-time", 1.0)
+        self.t_len.set_hexpand(True)
+        times.append(self.t_pos)
+        times.append(self.t_len)
+        root.append(times)
+
+        ctl = Gtk.Box(spacing=6, homogeneous=True)
+        def btn(text, cb, css="ctl"):
+            b = Gtk.Button(label=text)
+            for c in css.split():
+                b.add_css_class(c)
+            b.connect("clicked", lambda *_: cb())
+            ctl.append(b)
+            return b
+        self.b_shuf = btn("󰒟", lambda: self._pc("shuffle", "Toggle"))
+        btn("󰒮", lambda: self._pc("previous"))
+        self.b_play = btn("󰐊", lambda: self._pc("play-pause"), "ctl big")
+        btn("󰒭", lambda: self._pc("next"))
+        self.b_loop = btn("󰑖", self._cycle_loop)
+        root.append(ctl)
+
+        vrow = Gtk.Box(spacing=8)
+        vrow.append(label("VOL", "row-name"))
+        self.vol = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, 100, 1)
+        self.vol.set_draw_value(False)
+        self.vol.set_hexpand(True)
+        self.vol.connect("value-changed", self._vol_moved)
+        vrow.append(self.vol)
+        self.l_vol = label("", "row-val", 1.0)
+        self.l_vol.set_width_chars(5)
+        vrow.append(self.l_vol)
+        self.vol_row = vrow
+        root.append(vrow)
+        self.set_child(root)
+
+        self.refresh()
+        GLib.timeout_add_seconds(1, lambda: (self.refresh(), True)[1])
+
+    # -- playerctl helpers
+    @staticmethod
+    def _pcout(*args):
+        return sh(["gits-media", *args], timeout=2.5)
+
+    def _pc(self, *args):
+        fire(["gits-media", *args])
+        GLib.timeout_add(250, lambda: (self.refresh(), False)[1])
+
+    def _cycle_loop(self):
+        nxt = {"None": "Playlist", "Playlist": "Track", "Track": "None"}
+        self._pc("loop", nxt.get(self._pcout("loop"), "None"))
+
+    def _seek_moved(self, sc):
+        if self.quiet:
+            return
+        v = sc.get_value()
+        self.t_pos.set_text(fmt_time(v))
+        if self.seek_timer:
+            GLib.source_remove(self.seek_timer)
+        self.seek_timer = GLib.timeout_add(120, lambda: (setattr(self, "seek_timer", None), fire(["gits-media", "position", f"{v:.1f}"]), False)[2])
+
+    def _vol_moved(self, sc):
+        v = int(sc.get_value())
+        self.l_vol.set_text(f"{v}%")
+        if not self.quiet:
+            fire(["gits-media", "volume", f"{v / 100:.2f}"])
+
+    # -- state
+    def refresh(self):
+        threading.Thread(target=self._fetch, daemon=True).start()
+
+    def _fetch(self):
+        if DEMO:
+            data = ["Playing", "Lain Iwakura", "Serial Experiments Lain - Duvet", "", str(232 * 10**6), str(84 * 10**6),
+                    "spotify", "On", "None", "0.62"]
+        else:
+            fmt = "\t".join(["{{status}}", "{{artist}}", "{{title}}", "{{mpris:artUrl}}", "{{mpris:length}}", "{{position}}",
+                            "{{playerName}}"])
+            out = self._pcout("metadata", "--format", fmt)
+            parts = out.split("\t")
+            data = parts + [self._pcout("shuffle"), self._pcout("loop"), self._pcout("volume")] if len(parts) == 7 else None
+        GLib.idle_add(self._show, data)
+
+    def _show(self, d):
+        self.nosig.set_visible(d is None or not d[3])   # no player, or a player without cover art
+        self.nosig.set_text("NO SIGNAL" if d is None else "NO COVER")
+        (self.nosig.remove_css_class if d is None else self.nosig.add_css_class)("dim")
+        if d is None:
+            self.title.set_text("NO PLAYER")
+            self.artist.set_text("start something to play")
+            self.cover.set_paintable(None)
+            self.art_key = None
+            return
+        status, artist, title, art, length, pos, name, shuf, loop, vol = d
+        self.title.set_text(title or "—")
+        self.artist.set_text(artist)
+        self.b_play.set_label("󰏤" if status == "Playing" else "󰐊")
+        (self.b_shuf.add_css_class if shuf == "On" else self.b_shuf.remove_css_class)("on")
+        self.b_loop.set_label("󰑘" if loop == "Track" else "󰑖")
+        (self.b_loop.add_css_class if loop in ("Track", "Playlist") else self.b_loop.remove_css_class)("on")
+        try:
+            self.length, ps = float(length or 0) / 1e6, float(pos or 0) / 1e6
+        except ValueError:
+            self.length = ps = 0.0
+        self.quiet = True
+        self.seek.set_range(0, max(self.length, 1))
+        if self.seek_timer is None:
+            self.seek.set_value(ps)
+        self.t_pos.set_text(fmt_time(ps))
+        self.t_len.set_text(fmt_time(self.length))
+        self.seek.set_sensitive(self.length > 0)
+        try:
+            self.vol.set_value(float(vol) * 100)
+            self.l_vol.set_text(f"{float(vol) * 100:.0f}%")
+            self.vol_row.set_visible(True)
+        except ValueError:
+            self.vol_row.set_visible(False)  # this player has no volume control
+        self.quiet = False
+        if art != self.art_key:
+            self.art_key = art
+            self._load_art(art)
+
+    def _load_art(self, url):
+        if not url:
+            self.cover.set_paintable(None)
+            return
+        if url.startswith("file://"):
+            self._set_cover(urllib.parse.unquote(url[7:]))
+            return
+        import hashlib
+        path = os.path.join(self.CACHE, hashlib.sha1(url.encode()).hexdigest())
+        if os.path.exists(path):
+            self._set_cover(path)
+            return
+
+        def work():
+            try:
+                os.makedirs(self.CACHE, exist_ok=True)
+                req = urllib.request.Request(url, headers={"User-Agent": "gits-panel"})
+                with urllib.request.urlopen(req, timeout=8) as r, open(path + ".tmp", "wb") as f:
+                    f.write(r.read())
+                os.replace(path + ".tmp", path)
+                GLib.idle_add(lambda: (self.art_key == url and self._set_cover(path), False)[1])
+            except (OSError, ValueError):
+                pass
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _set_cover(self, path):
+        try:
+            self.cover.set_paintable(Gdk.Texture.new_from_filename(path))
+        except GLib.Error:
+            self.cover.set_paintable(None)
+
+
+
+def fmt_age(sec):
+    sec = int(max(sec, 0))
+    if sec < 60:
+        return "now"
+    if sec < 3600:
+        return f"{sec // 60}m"
+    if sec < 86400:
+        return f"{sec // 3600}h"
+    return f"{sec // 86400}d"
+
+
+def clean_body(text):
+    import html
+    text = html.unescape(html.unescape(text or ""))          # KDE Connect escapes twice
+    text = re.sub(r"(?i)<br\s*/?>", " ", text)
+    text = re.sub(r"<[^>]+>", "", text)
+    return re.sub(r"\s+", " ", text).strip()[:160]
+
+
+class NotifyPopup(Popup):
+    """Notification centre: the dunst history (newest first) with per-entry delete, clear all and do-not-disturb."""
+
+    def __init__(self, monitor):
+        super().__init__(monitor)
+        self.set_default_size(340, -1)
+        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        root.add_css_class("panel")
+        root.append(self.header("NOTIFY // 通知"))
+
+        top = Gtk.Box(spacing=6, homogeneous=True)
+        self.dnd = Tile("󰂛", "SILENT", get_dnd, lambda: fire(["dunstctl", "set-paused", "toggle"]))
+        top.append(self.dnd)
+        clr = Gtk.Button()
+        clr.add_css_class("tile")
+        cb = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
+        cb.append(label("󰎟", "tile-icon"))
+        cb.append(label("CLEAR ALL", "tile-name"))
+        self.l_count = label("", "tile-state")
+        cb.append(self.l_count)
+        clr.set_child(cb)
+        clr.connect("clicked", self._clear)
+        top.append(clr)
+        root.append(top)
+
+        self.scroll = Gtk.ScrolledWindow()
+        self.scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        self.scroll.set_propagate_natural_height(True)
+        self.scroll.set_max_content_height(400)
+        self.scroll.set_min_content_height(60)
+        self.list = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self.scroll.set_child(self.list)
+        root.append(self.scroll)
+        self.empty = label("NO NOTIFICATIONS", "nosig dim", 0.5)
+        self.empty.set_margin_top(14)
+        self.empty.set_margin_bottom(14)
+        root.append(self.empty)
+        self.set_child(root)
+        threading.Thread(target=self._load, daemon=True).start()
+
+    def _load(self):
+        import json
+        import time
+        if DEMO:
+            now = time.monotonic() * 1e6
+            items = [(1, "Telegram Desktop", "Section 9 // chat", "meeting moved to 15:00, bring the report", 120, "NORMAL"),
+                     (2, "Phone", "Alex", "are you coming tonight?", 900, "LOW"),
+                     (3, "HyDE Power", "Battery Low", "Battery is at 19%. Connect the charger.", 3600 * 3, "CRITICAL"),
+                     (4, "Spotify", "Now playing", "Lain Iwakura - Duvet", 3600 * 9, "LOW")]
+            data = [(i, a, sm, b, age, u) for i, a, sm, b, age, u in items]
+        else:
+            try:
+                d = json.loads(sh(["dunstctl", "history"]) or "{}").get("data", [[]])[0]
+            except (ValueError, IndexError):
+                d = []
+            now = time.monotonic() * 1e6
+            data = [(n["id"]["data"], n["appname"]["data"], n["summary"]["data"], clean_body(n["body"]["data"]),
+                     (now - n["timestamp"]["data"]) / 1e6, n["urgency"]["data"]) for n in d]
+        GLib.idle_add(self._show, data, get_dnd())
+
+    def _show(self, data, dnd):
+        self.dnd.show_state(dnd)
+        while (c := self.list.get_first_child()) is not None:
+            self.list.remove(c)
+        for nid, app, summary, body, age, urg in data:
+            self.list.append(self._row(nid, app, summary, body, age, urg))
+        self._count()
+
+    def _row(self, nid, app, summary, body, age, urg):
+        row = Gtk.Box(spacing=8)
+        row.add_css_class("nrow")
+        if urg == "CRITICAL":
+            row.add_css_class("crit")
+        col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
+        col.set_hexpand(True)
+        top = Gtk.Box()
+        top.append(label(app.upper()[:22], "n-app"))
+        t = label(fmt_age(age), "n-age", 1.0)
+        t.set_hexpand(True)
+        top.append(t)
+        col.append(top)
+        s = label(summary or "—", "n-sum")
+        s.set_ellipsize(Pango.EllipsizeMode.END)
+        s.set_max_width_chars(34)
+        col.append(s)
+        if body:
+            b = label(body, "n-body")
+            b.set_wrap(True)
+            b.set_lines(2)
+            b.set_ellipsize(Pango.EllipsizeMode.END)
+            b.set_max_width_chars(38)
+            col.append(b)
+        row.append(col)
+        x = Gtk.Button(label="✕")
+        x.add_css_class("n-x")
+        x.set_valign(Gtk.Align.START)
+        x.connect("clicked", lambda *_: (fire(["dunstctl", "history-rm", str(nid)]), self.list.remove(row), self._count()))
+        row.append(x)
+        return row
+
+    def _count(self):
+        n, c = 0, self.list.get_first_child()
+        while c is not None:
+            n, c = n + 1, c.get_next_sibling()
+        self.l_count.set_text(f"{n} stored")
+        self.empty.set_visible(n == 0)
+        self.scroll.set_visible(n > 0)
+
+    def _clear(self, *_):
+        fire(["dunstctl", "history-clear"])
+        while (c := self.list.get_first_child()) is not None:
+            self.list.remove(c)
+        self._count()
+
+
+def main():
+    if not LS.is_supported():
+        print("gits-panel: no layer-shell support", file=sys.stderr)
+        return 1
+    Gtk.init()
+    css = Gtk.CssProvider()
+    css.load_from_path(os.path.join(HERE, "panel.css"))
+    Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), css, Gtk.STYLE_PROVIDER_PRIORITY_USER)
+    mons = Gdk.Display.get_default().get_monitors()
+    mon = None
+    for i in range(mons.get_n_items()):
+        m = mons.get_item(i)
+        if mon is None:
+            mon = m
+        if (m.get_connector() or "").startswith("eDP"):
+            mon = m
+            break
+    loop = GLib.MainLoop()
+    mode = (sys.argv[1:] or ["control"])[0]
+    if mode == "catcher":
+        # standalone: clicking anywhere kills rofi (gits-menu and friends) and ends; gits-catcher stop ends it too
+        def kill_rofi():
+            subprocess.run(["pkill", "-x", "rofi"])
+            loop.quit()
+        cat = Catcher(mon, kill_rofi)
+        cat.present()
+        for sig in (2, 15):
+            GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, sig, lambda: (loop.quit(), False)[1])
+        loop.run()
+        return 0
+    if mode == "notify":
+        win = NotifyPopup(mon)
+    elif mode == "media":
+        cx = int(sh(["hyprctl", "cursorpos"]).split(",")[0] or 640) if not DEMO else 700  # logical px: under the clicked bar module
+        width = mon.get_geometry().width if mon else 1280
+        win = MediaPopup(mon, max(8, min(cx - 150, width - 308)))
+    else:
+        win = Panel(mon)
+    catcher = Catcher(mon, win.close)
+    catcher.present()  # before the popup: it has to exist (and be mapped) underneath
+    win.connect("close-request", lambda *_: (catcher.close(), loop.quit(), False)[2])
+    win.present()
+    for sig in (2, 15):
+        GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, sig, lambda: (loop.quit(), False)[1])
+    loop.run()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
