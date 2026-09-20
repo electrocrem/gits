@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # gits-daynight: night-light schedule for hyprsunset (the screen turns warmer in the evening and again at night, back to normal in the morning).
-#   gits-daynight menu | status | set off|gentle|warm|strong
+#   gits-daynight menu | status | toggle | set off|gentle|warm|strong   (toggle = warm 4500 K now / back to normal; the panel's NIGHT tile)
 # Writes profile blocks into ~/.config/hypr/hyprsunset.conf (between the gits-daynight markers) and restarts hyprsunset's unit; hyprsunset then
 # switches by the clock by itself, no daemon of ours. Presets (time, temperature K, gamma):
 #   gentle  20:30 5500 1.00 | 23:30 4500 0.92        warm  20:00 4800 1.00 | 23:00 3800 0.88        strong  19:30 4300 0.96 | 22:30 3400 0.85
@@ -40,6 +40,7 @@ PY
 }
 case ${1:-menu} in
     status) cur ;;
+    toggle) t=$(hyprctl hyprsunset temperature 2>/dev/null); if [[ $t == 6000 ]]; then hyprctl hyprsunset temperature 4500 >/dev/null; else hyprctl hyprsunset identity >/dev/null; fi ;;
     set) [[ $2 =~ ^(off|gentle|warm|strong)$ ]] || { echo "usage: gits-daynight set off|gentle|warm|strong" >&2; exit 2; }; apply "$2" ;;
     menu)
         now=$(cur); rows=(); keys=(off gentle warm strong)

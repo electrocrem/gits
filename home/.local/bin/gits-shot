@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# gits-shot area|screen|all|ocr [--no-edit]   screenshots with grim + slurp (+ satty to annotate, + tesseract for text)
+#   area    pick a region, then annotate in satty (Enter/copy inside satty saves and copies); --no-edit saves and copies at once
+#   screen  the focused monitor          all  every monitor          ocr  pick a region, the recognised text goes to the clipboard
+# Files: ~/Pictures/Screenshots/GitS_<date>_<time>.png (GITS_SHOT_DIR to change). Selection colours match the theme.
+dir=${GITS_SHOT_DIR:-$HOME/Pictures/Screenshots}; mkdir -p "$dir"
+f=$dir/GitS_$(date +%F_%H-%M-%S).png
+say() { notify-send -a "HyDE Notify" -t 3500 -i "${3:-camera-photo}" "${1}" "${2:-}"; }
+pick() { slurp -b '#060A14aa' -c '#2ED3D7' -s '#2ED3D722' -w 1; }
+finish() {  # file: copy to the clipboard and tell
+    wl-copy <"$1" && say "Screenshot saved" "${1/#$HOME/~}" || say "Screenshot saved (clipboard failed)" "${1/#$HOME/~}"
+}
+case ${1:-area} in
+    area)
+        geom=$(pick) || exit 0
+        if [[ ${2:-} == --no-edit ]] || ! command -v satty >/dev/null; then grim -g "$geom" "$f" && finish "$f"
+        else grim -g "$geom" - | GSK_RENDERER="${GSK_RENDERER:-gl}" satty -f - -o "$f" --copy-command wl-copy --early-exit --initial-tool arrow && [[ -s $f ]] && say "Screenshot saved" "${f/#$HOME/~}"; fi ;;
+    screen) grim -o "$(hyprctl monitors -j | jq -r '[.[] | select(.focused)][0].name // .[0].name')" "$f" && finish "$f" ;;
+    all) grim "$f" && finish "$f" ;;
+    ocr)
+        command -v tesseract >/dev/null || { say "tesseract is not installed" "" dialog-warning; exit 1; }
+        geom=$(pick) || exit 0
+        langs=eng; tesseract --list-langs 2>/dev/null | grep -qx rus && langs=eng+rus
+        text=$(grim -g "$geom" - | tesseract stdin stdout -l "$langs" 2>/dev/null | sed 's/[[:space:]]*$//')
+        if [[ -n ${text//[[:space:]]/} ]]; then printf '%s' "$text" | wl-copy; say "Text copied" "$(head -c 120 <<<"$text")" edit-copy; else say "No text found" "" dialog-warning; fi ;;
+    *) echo "usage: gits-shot area|screen|all|ocr [--no-edit]" >&2; exit 2 ;;
+esac

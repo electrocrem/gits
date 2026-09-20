@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# gits-bright up|down [STEP]   screen brightness through brightnessctl, shown on the GitS OSD. Never goes fully black (minimum 1 %).
+step=${2:-5}
+case ${1:-} in
+    up)   brightnessctl -q set "${step}%+" ;;
+    down) cur=$(brightnessctl -m | cut -d, -f4 | tr -d %); (( cur - step < 1 )) && brightnessctl -q set 1% || brightnessctl -q set "${step}%-" ;;
+    *) echo "usage: gits-bright up|down [step]" >&2; exit 2 ;;
+esac
+exec gits-osd brightness "$(brightnessctl -m | cut -d, -f4 | tr -d %)"

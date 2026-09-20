@@ -84,7 +84,7 @@
         "return-type": "json",
         "interval": 2,
         "tooltip": true,
-        "on-click": "hyde-shell system.monitor"
+        "on-click": "gits-sysmon"
     },
 
     // CPU + temperature in the text, GPU / RAM / fans / swap in the tooltip (scripts/gits-sys.sh); was three modules
@@ -93,7 +93,7 @@
         "return-type": "json",
         "interval": 3,
         "tooltip": true,
-        "on-click": "hyde-shell system.monitor"
+        "on-click": "gits-sysmon"
     },
 
     // GPU temperature: iGPU always, dGPU only while it is awake (see scripts/gits-gpu.sh)
@@ -102,14 +102,14 @@
         "return-type": "json",
         "interval": 3,
         "tooltip": true,
-        "on-click": "hyde-shell system.monitor"
+        "on-click": "gits-sysmon"
     },
 
     "memory#gits": {
         "interval": 5,
         "format": "󰍛 {used:0.1f}G",
         "tooltip-format": "RAM   {used:0.1f} / {total:0.1f} GiB  ({percentage}%)\nAVAIL {avail:0.1f} GiB\nSWAP  {swapUsed:0.1f} / {swapTotal:0.1f} GiB",
-        "on-click": "hyde-shell system.monitor"
+        "on-click": "gits-sysmon"
     },
 
     "network#gits": {
@@ -153,7 +153,7 @@
         "tooltip-format": "{desc}\nVOLUME {volume}%\nscroll: volume · middle: mute · right: mixer",
         "on-click": "gits-panel mixer",
         "on-click-right": "pavucontrol-qt -t 3 || pavucontrol -t 3",
-        "on-click-middle": "hyde-shell volumecontrol -o m"
+        "on-click-middle": "gits-vol mute"
     },
 
     // Focus timer (gits-focus): hidden while idle; shows the time left of the work / break phase; click opens its menu
@@ -180,7 +180,7 @@
         "return-type": "json",
         "restart-interval": 2,
         "tooltip": true,
-        "on-click": "hyde-shell keyboardswitch"
+        "on-click": "hyprctl switchxkblayout all next"
     },
 
     // HyDE workflow (operating mode) switcher: click = next, scroll = next/prev, right = rofi menu.
@@ -221,6 +221,6 @@
         "format": "",
         "tooltip-format": "control panel · power\nright: logout menu · Super+I: all settings",
         "on-click": "gits-panel control",
-        "on-click-right": "hyde-shell logoutlaunch 1"
+        "on-click-right": "gits-logout"
     }
 }

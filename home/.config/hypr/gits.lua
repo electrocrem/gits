@@ -84,6 +84,28 @@ hl.bind("SUPER + SHIFT + O", hl.dsp.exec_cmd("gits-note list"), {description = "
 hl.bind("SUPER + A", hl.dsp.exec_cmd("gits-panel launch"), {description = "[GitS] launcher / command palette"})
 hl.bind("SUPER + V", hl.dsp.exec_cmd("gits-panel clip"), {description = "[GitS] clipboard history"})
 
+-- HyDE-free replacements (same keys and flags as HyDE's binds, so these take over): volume / brightness with the GitS OSD (gits-vol, gits-bright),
+-- screenshots (gits-shot), power menu (gits-logout), system monitor (gits-sysmon), keyboard layout switch
+local hw = {locked = true}
+local hwr = {locked = true, repeating = true}
+hl.bind("F10", hl.dsp.exec_cmd("gits-vol mute"), {description = "[Hardware Controls|Audio] un/mute output", locked = true})
+hl.bind("F11", hl.dsp.exec_cmd("gits-vol down"), {description = "[Hardware Controls|Audio] decrease volume", locked = true, repeating = true})
+hl.bind("F12", hl.dsp.exec_cmd("gits-vol up"), {description = "[Hardware Controls|Audio] increase volume", locked = true, repeating = true})
+hl.bind("XF86AudioMute", hl.dsp.exec_cmd("gits-vol mute"), {description = "[Hardware Controls|Audio] un/mute output", locked = true})
+hl.bind("XF86AudioMicMute", hl.dsp.exec_cmd("gits-vol mic-mute"), {description = "[Hardware Controls|Audio] un/mute microphone", locked = true})
+hl.bind("XF86AudioLowerVolume", hl.dsp.exec_cmd("gits-vol down"), {description = "[Hardware Controls|Audio] decrease volume", locked = true, repeating = true})
+hl.bind("XF86AudioRaiseVolume", hl.dsp.exec_cmd("gits-vol up"), {description = "[Hardware Controls|Audio] increase volume", locked = true, repeating = true})
+hl.bind("XF86MonBrightnessUp", hl.dsp.exec_cmd("gits-bright up"), {description = "[Hardware Controls|Brightness] increase brightness", locked = true, repeating = true})
+hl.bind("XF86MonBrightnessDown", hl.dsp.exec_cmd("gits-bright down"), {description = "[Hardware Controls|Brightness] decrease brightness", locked = true, repeating = true})
+hl.bind("SUPER + P", hl.dsp.exec_cmd("gits-shot area"), {description = "[Utilities] screenshot a region (annotate)", locked = true})
+hl.bind("SUPER + CTRL + P", hl.dsp.exec_cmd("gits-shot area --no-edit"), {description = "[Utilities] screenshot a region, no editor", locked = true})
+hl.bind("SUPER + ALT + P", hl.dsp.exec_cmd("gits-shot screen"), {description = "[Utilities] print monitor", locked = true})
+hl.bind("Print", hl.dsp.exec_cmd("gits-shot all"), {description = "[Utilities] print all monitors", locked = true})
+hl.bind("SUPER + CTRL + S", hl.dsp.exec_cmd("gits-shot ocr"), {description = "[Utilities] OCR scanner", locked = true})
+hl.bind("CTRL + ALT + DELETE", hl.dsp.exec_cmd("gits-logout"), {description = "[Window Management] logout menu"})
+hl.bind("CTRL + SHIFT + ESCAPE", hl.dsp.exec_cmd("gits-sysmon"), {description = "[Launcher|Apps] system monitor"})
+hl.bind("SUPER + K", hl.dsp.exec_cmd("hyprctl switchxkblayout all next"), {description = "[Utilities] toggle keyboard layout", locked = true})
+
 -- Popups under the bar (gits-panel): control panel and player
 hl.bind("SUPER + SHIFT + C", hl.dsp.exec_cmd("gits-panel control"), {description = "[GitS] control panel"})
 hl.bind("SUPER + SHIFT + M", hl.dsp.exec_cmd("gits-panel media"), {description = "[GitS] player popup"})

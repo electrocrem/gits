@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# gits-sysmon: btop in its own terminal window (bar clicks on CPU/GPU/RAM); a second call focuses nothing new, it just opens another window.
+pgrep -f "kitty --class gits-sysmon" >/dev/null && { pkill -f "kitty --class gits-sysmon"; exit 0; }   # toggle
+exec kitty --class gits-sysmon --title "system monitor" btop

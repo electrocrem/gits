@@ -86,10 +86,9 @@ def get_dnd():
 
 
 def get_night():
-    try:
-        return open(STATE + "/hyde/hyprsunset").read().strip().split("|")[2] == "1"
-    except (OSError, IndexError):
-        return False
+    """Night light is on when hyprsunset's temperature differs from the neutral 6000 K (schedule or manual)."""
+    t = sh(["hyprctl", "hyprsunset", "temperature"])
+    return t.isdigit() and int(t) != 6000
 
 
 def get_sounds():
@@ -424,7 +423,7 @@ class Panel(Popup):
         wifi = Tile("󰖩", "WI-FI", get_wifi, lambda: fire(["nmcli", "radio", "wifi", "off" if get_wifi() else "on"]))
         bt = Tile("󰂯", "BLUETOOTH", get_bt, lambda: fire(["bluetoothctl", "power", "off" if get_bt() else "on"]))
         dnd = Tile("󰂛", "SILENT", get_dnd, lambda: fire(["dunstctl", "set-paused", "toggle"]))
-        night = Tile("󰖔", "NIGHT", get_night, lambda: fire(["hyde-shell", "hyprsunset", "-t", "-q"]))
+        night = Tile("󰖔", "NIGHT", get_night, lambda: fire(["gits-daynight", "toggle"]))
         snd = Tile("󰝚", "SOUNDS", get_sounds, lambda: fire(["gits-sound", "toggle"]))
         wid = Tile("󰕮", "WIDGETS", get_widgets, lambda: fire([HERE + "/run.sh", "toggle"]))
         awake = Tile("󰅶", "AWAKE", get_awake, set_awake)
@@ -454,8 +453,8 @@ class Panel(Popup):
 
         # tools: close the panel first (it must not end up in the screenshot), then run
         tools = Gtk.Box(spacing=6, homogeneous=True)
-        for icon, name, cmd in (("󰄀", "SHOT", "hyde-shell screenshot s"), ("󰗊", "OCR", "hyde-shell screenshot sc"),
-                                ("󰈊", "PICK", "hyprpicker -an"), ("󰅍", "CLIP", "hyde-shell cliphist -c"),
+        for icon, name, cmd in (("󰄀", "SHOT", "gits-shot area"), ("󰗊", "OCR", "gits-shot ocr"),
+                                ("󰈊", "PICK", "hyprpicker -an"), ("󰅍", "CLIP", "gits-panel clip"),
                                 ("󰢮", "ROG", "gits-rog")):
             tools.append(self._action(icon, name, lambda c=cmd: self._later(c)))
         root.append(tools)

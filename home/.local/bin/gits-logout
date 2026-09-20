@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# gits-logout: the wlogout power menu (lock, logout, suspend, reboot, shutdown), styled by ~/.config/wlogout/style_1.css. Run again to close it.
+pgrep -x wlogout >/dev/null && { pkill -x wlogout; exit 0; }
+dir=${XDG_CONFIG_HOME:-$HOME/.config}/wlogout
+mon=$(hyprctl -j monitors); y=$(jq '[.[]|select(.focused)][0].height' <<<"$mon"); scale=$(jq '[.[]|select(.focused)][0].scale*100|floor' <<<"$mon")
+scale=${scale:-100}
+export mgn=$((y * 28 / scale)) hvr=$((y * 23 / scale)) fntSize=$((y * 2 / 100))
+rad=$(hyprctl -j getoption decoration:rounding | jq '.int'); export active_rad=$((rad * 5)) button_rad=$((rad * 8))
+style="$(envsubst <"$dir/style_1.css")"
+exec wlogout -b 6 -c 0 -r 0 -m 0 --layout "$dir/layout_1" --css <(echo "$style") --protocol layer-shell

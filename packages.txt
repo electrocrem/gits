@@ -52,3 +52,9 @@ hyprpicker                # colour picker button in the control panel
 # screen recording (optional): gits-rec, Super+Alt+R
 wf-recorder
 slurp
+
+# screenshots / OCR / power menu (replacing HyDE's scripts)
+tesseract
+tesseract-data-eng
+wlogout
+gettext                   # envsubst for the wlogout style
