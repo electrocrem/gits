@@ -1,21 +1,51 @@
-# Packages this setup needs on top of HyDE (Arch / CachyOS repos). One per line, comments after #.
-# HyDE itself brings hyprland, waybar, rofi, dunst, kitty, wlogout, hyprlock, hypridle, zsh.
+# Packages this setup needs (Arch / CachyOS repos). One per line, comments after #. `./install.sh --deps` installs the missing ones.
+# AUR (not listed, the installer only warns): Bibata-Modern-Ice cursors (bibata-cursor-theme), Tela-circle-grey icons (tela-circle-icon-theme-grey).
+
+# compositor and session
+hyprland
+hyprlock                  # lock screen
+hypridle                  # dim / lock / screen off / sleep timers
+hyprsunset                # night light
+hyprpicker                # colour picker button in the control panel
+awww                      # wallpaper daemon
+xdg-desktop-portal-hyprland
+xdg-desktop-portal-gtk
+polkit-kde-agent          # password prompts of graphical apps
+waybar
+dunst
+cliphist                  # clipboard history
+wl-clipboard
+wl-clip-persist           # keeps a copied text after its window closes
+network-manager-applet
+blueman
+udiskie                   # removable media in the tray
+kitty
+zsh
 
 # fonts
 ttf-jetbrains-mono-nerd   # every UI text; the Nerd glyphs draw the bar icons
+noto-fonts
 noto-fonts-cjk            # the kanji tags (時計, 電池, ...)
 
-# desktop widgets (gits-widgets) and waybar modules
+# desktop widgets and popups (gits-widgets, gits-panel)
 gtk4-layer-shell
 python-gobject
 python-psutil
 python-cairo
-python-numpy             # audio spectrum card, UI sound synthesis
+python-numpy              # audio spectrum card, UI sound synthesis
 python-pillow             # asset generator, boot/telegram builders
 playerctl
 socat
 jq
 grim
+slurp
+libnotify                 # notify-send
+
+# look of other toolkits
+adw-gtk-theme             # GTK 3 widgets; the colours are ours (home/.config/gtk-3.0/gtk.css)
+kvantum                   # Qt style, theme GitS
+qt5ct
+qt6ct
 
 # terminal
 starship
@@ -28,32 +58,23 @@ yazi
 fzf
 neovim
 
-# Qt look (Dolphin and friends)
-kvantum
-qt6ct
-
 # menus, sounds, power (optional: each feature simply does nothing without its tool)
 networkmanager            # gits-wifi
 bluez-utils               # gits-bt (bluetoothctl)
 libpulse                  # parec: the spectrum card records the default sink's monitor
 pipewire-audio            # pw-play: UI sounds
+pavucontrol
+nwg-displays
 power-profiles-daemon     # waybar power-profile module
 snapper                   # optional: btrfs snapshots, see home/.local/share/gits-snap/setup.sh
 snap-pac
 grub-btrfs
 
-# popups, OSD, screenshots (optional pieces degrade gracefully)
+# OSD, screenshots, recording, power menu (optional pieces degrade gracefully)
 wireplumber               # wpctl: volume slider and OSD
 brightnessctl             # brightness slider and OSD
-playerctl                 # media popup, bar player module
-satty                     # screenshot annotation (HyDE opens it; config in home/.config/satty)
-hyprpicker                # colour picker button in the control panel
-
-# screen recording (optional): gits-rec, Super+Alt+R
-wf-recorder
-slurp
-
-# screenshots / OCR / power menu (replacing HyDE's scripts)
+satty                     # screenshot annotation
+wf-recorder               # gits-rec, Super+Alt+R
 tesseract
 tesseract-data-eng
 wlogout

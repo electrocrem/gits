@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# gits-vol up|down|mute|mic-mute [STEP]   output volume / mute / microphone mute through wpctl, shown on the GitS OSD (no HyDE, no popups).
+# gits-vol up|down|mute|mic-mute [STEP]   output volume / mute / microphone mute through wpctl, shown on the GitS OSD.
 # Bound to the volume keys in gits.lua. Volume is capped at 100 %.
 step=${2:-5}
 sink=@DEFAULT_AUDIO_SINK@; src=@DEFAULT_AUDIO_SOURCE@

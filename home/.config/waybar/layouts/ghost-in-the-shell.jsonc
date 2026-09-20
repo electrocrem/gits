@@ -7,10 +7,6 @@
     "passthrough": false,
     "reload_style_on_change": true,
     "spacing": 0,
-    "include": [
-        "$XDG_CONFIG_HOME/waybar/modules/*json*",
-        "$XDG_CONFIG_HOME/waybar/includes/includes.json"
-    ],
 
     "modules-left": [
         "hyprland/workspaces#gits",
@@ -34,6 +30,11 @@
         "tray",
         "custom/gits-power"
     ],
+
+    "tray": {
+        "icon-size": 16,
+        "spacing": 8
+    },
 
     "hyprland/workspaces#gits": {
         "all-outputs": true,
@@ -183,7 +184,7 @@
         "on-click": "hyprctl switchxkblayout all next"
     },
 
-    // HyDE workflow (operating mode) switcher: click = next, scroll = next/prev, right = rofi menu.
+    // Workflow (operating mode) switcher: click = next, scroll = next/prev, right = menu.
     // Refreshed by signal 8 (sent by scripts/gits-mode.sh) plus a slow poll for changes made elsewhere (keybinds).
     "custom/gits-mode": {
         "exec": "$XDG_CONFIG_HOME/waybar/scripts/gits-mode.sh",
@@ -192,7 +193,7 @@
         "signal": 8,
         "tooltip": true,
         "on-click": "$XDG_CONFIG_HOME/waybar/scripts/gits-mode.sh next",
-        "on-click-right": "hyde-shell workflows --select",
+        "on-click-right": "gits-workflow select",
         "on-scroll-up": "$XDG_CONFIG_HOME/waybar/scripts/gits-mode.sh prev",
         "on-scroll-down": "$XDG_CONFIG_HOME/waybar/scripts/gits-mode.sh next"
     },

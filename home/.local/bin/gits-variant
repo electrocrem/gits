@@ -25,6 +25,8 @@ apply() {
     mkdir -p "$(dirname "$state")"; touch "$state"
     grep -q "^$key=" "$state" && sed -i "s|^$key=.*|$key=$1|" "$state" || echo "$key=$1" >>"$state"
     hyprctl reload >/dev/null
+    [[ $kind == workflow ]] && pkill -RTMIN+8 -x waybar   # the bar's mode module
+    return 0
 }
 case ${1:-select} in
     list) names ;;

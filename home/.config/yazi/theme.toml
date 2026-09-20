@@ -1,6 +1,6 @@
 # Ghost in the Shell for yazi: CRT cyan on navy-black, flat status strip, the hovered row is a solid cyan block
 # (like the active tab in kitty / the browser), the red "eye" for cut files and errors.
-# Palette = ~/.config/hyde/themes/Ghost in the Shell/kitty.theme; preview syntax colours = the bat theme.
+# Palette = docs/PALETTE.md (kitty.theme in the repo); preview syntax colours = the bat theme.
 #   bg #060A14  surface #0C1A33  line #254F5D  fg #C8F4FF  muted #596977
 #   cyan #2ED3D7  cyan-hi #5EF1F5  red #E5432B  yellow #E8C547  green #34D399  blue #459BF1  purple #A99CF5
 

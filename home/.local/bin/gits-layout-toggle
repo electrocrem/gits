@@ -2,11 +2,11 @@
 # Super+J: "change the split" for whatever tiling layout is active.
 #   dwindle -> toggle the split direction of the focused container (horizontal <-> vertical)
 #   master  -> rotate where the master area sits: left -> top -> right -> bottom -> center
-# HyDE binds Super+J to dwindle's `togglesplit` only, which the master layout silently ignores (this setup uses master).
+# (dwindle's `togglesplit` alone would do nothing in the master layout, which is the default here.)
 layout=$(hyprctl getoption general:layout -j 2>/dev/null | jq -r '.str')
 case $layout in
     dwindle) msg=togglesplit ;;
     master)  msg=orientationnext ;;
-    *) notify-send -a "HyDE Notify" -t 1500 "Super+J" "nothing to toggle in the '$layout' layout"; exit 0 ;;
+    *) notify-send -a "GitS Notify" -t 1500 "Super+J" "nothing to toggle in the '$layout' layout"; exit 0 ;;
 esac
 hyprctl dispatch "hl.dsp.layout(\"$msg\")" >/dev/null

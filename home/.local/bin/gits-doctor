@@ -4,8 +4,8 @@
 #   gits-doctor          full report
 #   gits-doctor -q       only WARN/FAIL lines
 #   gits-doctor -l       also show the tail of the login breadcrumb log and the SDDM journal
-#   gits-doctor --fix    after the report, repair what HyDE updates / KDE apps / crashes typically undo (see the end of this
-#                        file): preset selections, GTK4 hang, kded6 gtkconfig, cursor sync, dead helpers, failed units.
+#   gits-doctor --fix    after the report, repair what KDE apps / crashes typically undo (see the end of this
+#                        file): GTK4 hang, kded6 gtkconfig, cursor sync, dead helpers, failed units.
 #                        Never touches the workflow (you may be gaming), login hooks, or anything needing sudo.
 set -u
 
@@ -49,26 +49,27 @@ else
     else warn "$ndirs Hyprland instance dirs in $RUN/hypr (the session restarted at least once)"; fi
 fi
 
-# ---------------------------------------------------------------- hyde state
-head_ "HyDE state"
-st=$H/.local/state/hyde/staterc
-getst() { grep -m1 "^$1=" "$st" 2>/dev/null | cut -d= -f2- | tr -d '"'; }
-[[ $(getst HYDE_THEME) == "Ghost in the Shell" ]] && ok "theme: Ghost in the Shell" || warn "theme is '$(getst HYDE_THEME)'"
-wf=$(getst HYPR_WORKFLOW)
-if [[ $wf == 01-default ]]; then ok "workflow: default"
-else warn "workflow is '$wf': it overrides parts of the GitS look (gaps/blur/animations). Back: hyde-shell workflows --set 01-default"; fi
-[[ $(getst HYPR_ANIMATION) == gits ]] && ok "animation preset: gits" || warn "animation preset is '$(getst HYPR_ANIMATION)'"
-[[ $(getst HYPRLOCK_LAYOUT) == "Ghost in the Shell" ]] && ok "hyprlock layout: Ghost in the Shell" || warn "hyprlock layout is '$(getst HYPRLOCK_LAYOUT)'"
-[[ $(getst WAYBAR_LAYOUT_NAME) == ghost-in-the-shell ]] && ok "waybar layout: ghost-in-the-shell" || warn "waybar layout is '$(getst WAYBAR_LAYOUT_NAME)'"
+# ---------------------------------------------------------------- desktop state
+head_ "desktop state"
+st=$H/.local/state/gits/state
+getst() { grep -m1 "^$1=" "$st" 2>/dev/null | cut -d= -f2-; }
+[[ -f $H/.config/hypr/hyprland.lua ]] && grep -q 'gits' "$H/.config/hypr/hyprland.lua" && ok "hyprland.lua is the GitS config" || bad "~/.config/hypr/hyprland.lua is not the GitS config (./install.sh)"
+ce=$H/.local/state/gits/config-errors.log
+if [[ -s $ce ]]; then bad "a config module failed to load, see $ce: $(head -c 160 "$ce" | tr '\n' ' ')"; else ok "all config modules loaded"; fi
+wf=$(getst workflow)
+if [[ -z $wf || $wf == 01-default ]]; then ok "workflow: default"
+else warn "workflow is '$wf': it overrides parts of the GitS look (gaps/blur/animations). Back: gits-workflow set 01-default"; fi
+an=$(getst animation); [[ -z $an || $an == gits ]] && ok "animation preset: gits" || warn "animation preset is '$an'"
 cur=$(gsettings get org.gnome.desktop.interface cursor-theme 2>/dev/null | tr -d "'")
 [[ $cur == GitS-Cursors ]] && ok "cursor theme: GitS-Cursors" || warn "cursor theme is '$cur' (a KDE app's kded6 syncs kcminputrc into GTK; do not flip it live, waybar/Zen can crash)"
+gt=$(gsettings get org.gnome.desktop.interface gtk-theme 2>/dev/null | tr -d "'")
+[[ $gt == adw-gtk3-dark ]] && ok "GTK theme: adw-gtk3-dark (+ GitS colours)" || warn "GTK theme is '$gt' (adw-gtk3-dark expected)"
 gi=$(grep -m1 '^gtk-icon-theme-name' "$H/.config/gtk-3.0/settings.ini" 2>/dev/null | cut -d= -f2)
 [[ -z $gi || $gi == GitS-Icons ]] && ok "GTK3 icon theme: ${gi:-unset}" || warn "gtk-3.0/settings.ini icon theme is '$gi' (GitS-Icons expected; gits-doctor --fix)"
 kc=$(grep -m1 '^cursorTheme=' "$H/.config/kcminputrc" 2>/dev/null | cut -d= -f2)
 [[ -z $kc || $kc == GitS-Cursors ]] && ok "kcminputrc cursorTheme: ${kc:-unset}" || warn "kcminputrc cursorTheme=$kc: any KDE app (KDE Connect, Dolphin) will push it into GTK settings"
 
-# GTK4 apps hang forever while loading the theme when gtk-4.0/settings.ini (inside the theme dir, ~/.config/gtk-4.0 is a
-# symlink to it) says gtk-application-prefer-dark-theme=true. KDE's kded6 "gtkconfig" module keeps recreating that file.
+# GTK4 apps hang forever while loading the theme when gtk-4.0/settings.ini says gtk-application-prefer-dark-theme=true. KDE's kded6 "gtkconfig" module keeps recreating that file.
 g4=$H/.config/gtk-4.0/settings.ini
 if [[ -f $g4 ]] && grep -q 'gtk-application-prefer-dark-theme *= *true' "$g4"; then
     bad "$g4 has prefer-dark-theme: every GTK4 app will hang at start (rm it; kded6 gtkconfig recreates it)"
@@ -79,20 +80,20 @@ else warn "kded6 gtkconfig module is on: KDE apps rewrite GTK settings (cursor t
 # ---------------------------------------------------------------- services
 head_ "processes and units"
 if pgrep -x waybar >/dev/null; then ok "waybar running (pid $(pgrep -x waybar | head -1))"
-elif [[ -f $H/.local/state/hyde/waybar.hidden || -f $H/.local/state/gits-bar-hidden ]]; then ok "waybar hidden on purpose"
-else bad "waybar is not running (hyde-shell waybar.py --watch)"; fi
+elif [[ -f $H/.local/state/gits-bar-hidden ]]; then ok "waybar hidden on purpose"
+else bad "waybar is not running (systemctl --user status gits-bar)"; fi
 
-res=$(systemctl --user show hyde-Hyprland-bar.service -p Result --value 2>/dev/null)
-[[ -z $res || $res == success ]] && ok "bar unit Result: ${res:-n/a}" || warn "bar unit Result=$res (a crash; the watchdog should revive it)"
-
-pgrep -f '[g]its-watchdog.sh' >/dev/null && ok "waybar watchdog running" || bad "gits-watchdog.sh is not running"
+if systemctl --user is-active --quiet gits-session.target; then ok "gits-session.target active"; else bad "gits-session.target is not active (gits-session start)"; fi
+for u in bar notifications idle sunset wallpaper polkit clip-text clip-image clip-persist; do
+    systemctl --user is-active --quiet "gits-$u.service" || warn "gits-$u.service is not running ($(systemctl --user show "gits-$u.service" -p Result --value 2>/dev/null))"
+done
 
 if pgrep -f '[g]its-widgets/widgets.py' >/dev/null; then ok "desktop widgets running"; else warn "desktop widgets not running (~/.config/gits-widgets/run.sh start)"; fi
 
 failed=$(systemctl --user --failed --no-legend 2>/dev/null | awk '{print $2}' | paste -sd' ' -)
 [[ -z $failed ]] && ok "no failed user units" || bad "failed user units: $failed"
 
-# every hyde-Hyprland-* unit must belong to the CURRENT compositor (login race leaves stale ones)
+# every gits-* unit must belong to the CURRENT compositor (a login race can leave units of a dead one)
 cursig=${HYPRLAND_INSTANCE_SIGNATURE:-}
 stale=()
 if [[ -n $cursig ]]; then
@@ -101,26 +102,19 @@ if [[ -n $cursig ]]; then
         [[ $pid -gt 0 ]] || continue
         sig=$(tr '\0' '\n' <"/proc/$pid/environ" 2>/dev/null | grep -m1 '^HYPRLAND_INSTANCE_SIGNATURE=' | cut -d= -f2)
         [[ -n $sig && $sig != "$cursig" ]] && stale+=("$u")
-    done < <(systemctl --user list-units 'hyde-Hyprland-*.service' --no-legend --plain | awk '{print $1}')
-    [[ ${#stale[@]} -eq 0 ]] && ok "no units left over from a dead compositor" || bad "stale units from a previous Hyprland: ${stale[*]}"
+    done < <(systemctl --user list-units 'gits-*.service' --no-legend --plain | awk '{print $1}')
+    [[ ${#stale[@]} -eq 0 ]] && ok "no units left over from a dead compositor" || bad "stale units from a previous Hyprland: ${stale[*]} (gits-session restart)"
 fi
 
 # ---------------------------------------------------------------- hooks
-head_ "login hooks (hyprland.lua / gits.lua)"
-hooks=$(cat "$H/.config/hypr/hyprland.lua" "$H/.config/hypr/gits.lua" 2>/dev/null)   # the gits.lua block is what install.sh adds
-for pair in "gits-watchdog.sh:waybar watchdog" "gits-stale-guard.sh:stale-unit guard" "gits-blind-guard.sh:blind-session guard" \
-            "gits-widgets/run.sh:widgets autostart" "gits-workspaces.lua:workspace rules"; do
-    f=${pair%%:*}; n=${pair#*:}
-    if ! grep -q "$f" <<<"$hooks"; then
-        if [[ $f == gits-blind-guard.sh ]]; then warn "$n is not hooked (opt-in: install.sh --login-guards)"; else bad "$n is not hooked in hyprland.lua / gits.lua"; fi
-    else
-        p=$(find "$H/.config" -name "${f##*/}" -type f 2>/dev/null | head -1)
-        if [[ -z $p ]]; then bad "$n hooked, but ${f##*/} is missing"
-        elif [[ ${p##*.} == sh && ! -x $p ]]; then bad "$n: $p is not executable"
-        else ok "$n"; fi
-    fi
+head_ "login (hypr/gits/start.lua)"
+for f in .config/hypr/gits/start.lua .config/gits-widgets/run.sh .config/hypr/scripts/gits-events.sh; do
+    p=$H/$f
+    if [[ ! -e $p ]]; then bad "$f is missing"
+    elif [[ ${p##*.} == sh && ! -x $p ]]; then bad "$f is not executable"
+    else ok "${f##*/}"; fi
 done
-grep -q "sleep 10; pgrep -x waybar" <<<"$hooks" && ok "waybar login-race guard" || warn "waybar login-race guard missing"
+[[ -x $H/.config/hypr/scripts/gits-blind-guard.sh ]] && ok "blind-session guard installed" || warn "blind-session guard not installed (opt-in: install.sh --login-guards)"
 
 if grep -vE '^\s*#' "$H/.config/zsh/.zprofile" 2>/dev/null | grep -qE 'wait.*sddm|pgrep -u sddm'; then
     bad ".zprofile waits for sddm again: that blocking guard broke login on Sep 20, remove it"
@@ -129,22 +123,19 @@ else ok ".zprofile has no blocking login wait"; fi
 # ---------------------------------------------------------------- theme files
 head_ "theme files"
 need=(
-    ".config/hyde/themes/Ghost in the Shell/theme.dcol"
+    ".config/kitty/theme.conf" ".config/gtk-3.0/gtk.css" ".config/gtk-4.0/gtk.css" ".config/Kvantum/GitS/GitS.kvconfig" ".config/qt6ct/qt6ct.conf"
+    ".config/hypr/hyprland.lua" ".config/hypr/gits/options.lua" ".config/dunst/dunstrc" ".local/share/gits/wallpapers/gits_smoke.png"
     ".config/waybar/layouts/ghost-in-the-shell.jsonc" ".config/waybar/styles/ghost-in-the-shell.css"
-    ".config/hypr/hyprlock/Ghost in the Shell.conf" ".config/hypr/hyprlock/gits_lock_bg.png"
+    ".config/hypr/hyprlock.conf" ".config/hypr/hyprlock/gits_lock_bg.png"
     ".config/starship/starship.toml" ".config/zsh/gits/banner.zsh" ".config/nvim/colors/gits.lua"
     ".config/btop/themes/gits.theme" ".config/bat/themes/GitS.tmTheme" ".config/yazi/theme.toml"
-    ".config/lazygit/config.yml" ".config/tmux/tmux.conf" ".config/rofi/theme.rasi"
-    ".config/rofi/themes/style_1.rasi" ".config/wlogout/style_1.css" ".config/gits-widgets/widgets.py"
+    ".config/lazygit/config.yml" ".config/tmux/tmux.conf"
+    ".config/wlogout/style_1.css" ".config/gits-widgets/widgets.py"
     ".local/share/icons/GitS-Cursors/index.theme"
 )
 miss=()
 for f in "${need[@]}"; do [[ -e $H/$f ]] || miss+=("$f"); done
 [[ ${#miss[@]} -eq 0 ]] && ok "${#need[@]} theme files present" || bad "missing: ${miss[*]}"
-
-# broken symlinks in the rofi themes dir would silently drop a launcher style
-brk=$(find "$H/.local/share/rofi/themes" -xtype l 2>/dev/null | wc -l)
-[[ $brk -eq 0 ]] && ok "rofi theme symlinks resolve" || warn "$brk broken rofi theme symlinks"
 
 # ---------------------------------------------------------------- boot chain
 head_ "boot chain (SDDM / GRUB / Plymouth)"
@@ -192,15 +183,11 @@ nw=$(ls "$H/.local/share/gits-sounds"/*.wav 2>/dev/null | wc -l)
 [[ $nw -ge 7 ]] && ok "UI sounds built ($nw wav files)" || warn "UI sounds missing: python3 ~/.local/share/gits-sounds/build.py"
 [[ -e $H/.local/state/gits-sounds/off ]] && warn "UI sounds are muted (gits-sound on)" || ok "UI sounds on"
 n=$(grep -c 'gits/banner.zsh' "$H/.config/zsh/user.zsh" 2>/dev/null)
-[[ ${n:-0} -le 1 ]] && ok "terminal banner is hooked once" || warn "banner.zsh is sourced $n times in user.zsh (fastfetch runs several times): keep only the gits-hyde block"
-n=$(cat "$H/.config/hypr/hyprland.lua" "$H/.config/hypr/gits.lua" 2>/dev/null | grep -c 'gits-widgets/run.sh start')
-[[ ${n:-0} -le 1 ]] && ok "Hyprland hooks are not duplicated" || warn "widgets are started $n times (hyprland.lua and gits.lua both hook them): remove the inline copies"
+[[ ${n:-0} -le 1 ]] && ok "terminal banner is hooked once" || warn "banner.zsh is sourced $n times in user.zsh (fastfetch runs several times): keep only the gits block"
 [[ -r $H/.config/zsh/gits/tmux.zsh ]] && ok "tmux helper present (autostart is opt-in: GITS_TMUX=1)" || warn "gits/tmux.zsh missing"
 grep -q '# >>> gits-idle' "$H/.config/hypr/hypridle.conf" 2>/dev/null && ok "sleep timers managed by gits-idle" || warn "hypridle.conf is not managed by gits-idle (run: gits-idle apply)"
-grep -q 'hyprctl dispatch dpms' "$H/.config/hypr/hypridle.conf" 2>/dev/null && warn "hypridle.conf uses 'hyprctl dispatch dpms', invalid in the Lua config: the screen never turns off (gits-idle apply fixes it)"
-pgrep -f "[g]its-events.sh" >/dev/null && ok "gits-events running (login / plug / lock sounds)" || warn "gits-events.sh is not running (started from gits.lua at login)"
+pgrep -f "[g]its-events.sh" >/dev/null && ok "gits-events running (login / plug / lock sounds)" || warn "gits-events.sh is not running (started from hypr/gits/start.lua at login)"
 python3 -c "import numpy" 2>/dev/null && ok "python-numpy present (audio spectrum card)" || warn "python-numpy missing: no audio spectrum card"
-grep -q "gits-events" "$H/.config/hypr/gits.lua" 2>/dev/null && ok "gits.lua hooks the events daemon" || warn "gits.lua does not hook gits-events.sh"
 if command -v rog-control-center >/dev/null; then
     pgrep -f "^/usr/bin/rog-control-center" >/dev/null && ok "ROG Control Center running" || warn "ROG Control Center installed but not running"
 fi
@@ -227,13 +214,6 @@ if [[ $FIX == 1 ]]; then
     FIXED=0
     fixed() { FIXED=$((FIXED + 1)); printf '  %s[fix ]%s %s\n' "$C_OK" "$C_0" "$1"; }
     failed_fix() { printf '  %s[FAIL]%s could not: %s\n' "$C_BAD" "$C_0" "$1"; }
-    setst() { sed -i "s|^$1=.*|$1=\"$2\"|" "$st"; }
-
-    [[ $(getst HYPR_ANIMATION) == gits ]] || { hyde-shell animations --set gits >/dev/null 2>&1 && fixed "animation preset -> gits" || failed_fix "animation preset"; }
-    [[ $(getst WAYBAR_LAYOUT_NAME) == ghost-in-the-shell ]] || { hyde-shell waybar.py --set ghost-in-the-shell >/dev/null 2>&1 && fixed "waybar layout -> ghost-in-the-shell" || failed_fix "waybar layout"; }
-    if [[ $(getst HYPRLOCK_LAYOUT) != "Ghost in the Shell" ]]; then
-        setst HYPRLOCK_LAYOUT "Ghost in the Shell"; hyde-shell hyprlock.sh --reload >/dev/null 2>&1; fixed "hyprlock layout -> Ghost in the Shell"
-    fi
     g4=$H/.config/gtk-4.0/settings.ini
     if [[ -f $g4 ]] && grep -q 'gtk-application-prefer-dark-theme *= *true' "$g4"; then rm -f "$g4" && fixed "removed the GTK4 settings.ini that hangs GTK4 apps"; fi
     if ! grep -A1 '^\[Module-gtkconfig\]' "$H/.config/kded6rc" 2>/dev/null | grep -q 'autoload=false'; then
@@ -246,7 +226,6 @@ if [[ $FIX == 1 ]]; then
     pgrep -f '[g]its-widgets/widgets.py' >/dev/null || { "$H/.config/gits-widgets/run.sh" start </dev/null >/dev/null 2>&1 && fixed "desktop widgets started"; }
     pgrep -f '[g]its-widgets/osd.py' >/dev/null || { command -v gits-osd >/dev/null && gits-osd start </dev/null >/dev/null 2>&1 && fixed "OSD daemon started"; }
     pgrep -f '[g]its-events.sh' >/dev/null || { [[ -x $H/.config/hypr/scripts/gits-events.sh ]] && GITS_EVENTS_NO_LOGIN=1 setsid -f "$H/.config/hypr/scripts/gits-events.sh" </dev/null >/dev/null 2>&1 && fixed "events daemon started (sounds)"; }
-    pgrep -f '[g]its-watchdog.sh' >/dev/null || { [[ -x $H/.config/waybar/scripts/gits-watchdog.sh ]] && setsid -f "$H/.config/waybar/scripts/gits-watchdog.sh" </dev/null >/dev/null 2>&1 && fixed "waybar watchdog started"; }
     nw=$(ls "$H/.local/share/gits-sounds"/*.wav 2>/dev/null | wc -l)
     [[ $nw -ge 7 ]] || { python3 "$H/.local/share/gits-sounds/build.py" >/dev/null 2>&1 && fixed "UI sounds rebuilt"; }
     if [[ -n $(systemctl --user --failed --no-legend 2>/dev/null) ]]; then systemctl --user reset-failed && fixed "failed user units reset (then check again: they may fail again)"; fi

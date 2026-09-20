@@ -1,4 +1,4 @@
--- Ghost in the Shell palette. Same values as ~/.config/hyde/themes/Ghost in the Shell/kitty.theme,
+-- Ghost in the Shell palette. Same values as docs/PALETTE.md (kitty.theme in the repo),
 -- so the editor matches the terminal, waybar, rofi and the prompt.
 return {
   -- surfaces (navy-black -> lifted navy)

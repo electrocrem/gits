@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-# Ghost in the Shell for HyDE / Hyprland: installer.
+# Ghost in the Shell for Hyprland: installer. The whole desktop: Hyprland config, bar, popups, lock screen, notifications, terminal, themes.
 #
-#   ./install.sh                 user-level install (no sudo): theme, waybar, widgets, hyprlock, terminal, editors...
-#   ./install.sh --apply         ... and switch HyDE to the theme right away (see the warning in README.md)
+#   ./install.sh                 user-level install (no sudo)
 #   ./install.sh --system        ... plus SDDM, Plymouth and GRUB themes (asks for sudo)
 #   ./install.sh --deps          ... pacman -S --needed for the packages in packages.txt first (asks for sudo)
 #   ./install.sh --login-guards  ... plus the blind-login guard (hybrid AMD/NVIDIA laptops)
@@ -10,7 +9,8 @@
 #   ./install.sh --dry-run       only print what would happen
 #
 # Every file that already exists and differs is moved to ~/.local/share/gits-hyde/backup/<time>/ first;
-# ./uninstall.sh puts everything back. Running the installer twice is safe.
+# ./uninstall.sh puts everything back. Running the installer twice is safe. Log out and in afterwards (or pick the Hyprland session
+# at the login screen): the compositor config is read at login.
 set -euo pipefail
 
 REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -18,20 +18,18 @@ STATE=$HOME/.local/share/gits-hyde
 STAMP=$(date +%Y%m%d-%H%M%S)
 BK=$STATE/backup/$STAMP
 LIST=$STATE/installed.list
-THEME="Ghost in the Shell"
-THEME_DIR=$HOME/.config/hyde/themes/$THEME
+WALLS=$HOME/.local/share/gits/wallpapers
 
-DRY=0 APPLY=0 SYSTEM=0 DEPS=0 GUARDS=0 TELEGRAM=0 FIXGRUB=0
+DRY=0 SYSTEM=0 DEPS=0 GUARDS=0 TELEGRAM=0 FIXGRUB=0
 for a in "$@"; do
     case $a in
         --dry-run) DRY=1 ;;
-        --apply) APPLY=1 ;;
         --system) SYSTEM=1 ;;
         --deps) DEPS=1 ;;
         --login-guards) GUARDS=1 ;;
         --telegram) TELEGRAM=1 ;;
         --fix-grub) FIXGRUB=1 ;;
-        -h | --help) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h | --help) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) echo "unknown option: $a (see --help)" >&2; exit 2 ;;
     esac
 done
@@ -47,8 +45,9 @@ run()  { if ((DRY)); then printf '   (dry) %s\n' "$*"; else "$@"; fi; }
 # ------------------------------------------------------------------ preflight
 say "checking the system"
 if [[ -z ${GITS_SKIP_PREFLIGHT:-} ]]; then
-    command -v hyde-shell >/dev/null || die "HyDE is not installed (hyde-shell not found): https://github.com/HyDE-Project/HyDE"
-    [[ -f $HOME/.config/hypr/hyprland.lua ]] || die "~/.config/hypr/hyprland.lua not found: this setup targets Hyprland's Lua config (0.55+ with HyDE)"
+    command -v Hyprland >/dev/null || die "Hyprland is not installed (pacman -S hyprland)"
+    hv=$(Hyprland --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1)
+    [[ -z $hv ]] || printf '%s\n0.55\n' "$hv" | sort -CV || die "Hyprland $hv is too old: the config is Lua, which needs 0.55 or newer"
     command -v pacman >/dev/null || warn "not an Arch-based system: package checks are skipped, everything else should still work"
 fi
 
@@ -144,24 +143,24 @@ asset() { [[ -f $ASSETS/$1 ]] && echo "$ASSETS/$1"; }
 
 # ------------------------------------------------------------------ files
 say "copying configuration"
+# ~/.config/gtk-4.0 used to be a link into a GTK theme directory: writing through it would edit that theme, so replace the link
+if [[ -L $HOME/.config/gtk-4.0 ]]; then
+    if ((DRY)); then echo "   (dry) replace the link ~/.config/gtk-4.0"; else mkdir -p "$BK/.config"; mv "$HOME/.config/gtk-4.0" "$BK/.config/gtk-4.0"; record "$HOME/.config/gtk-4.0"; fi
+fi
 count=0
 while IFS= read -r -d '' f; do
     rel=${f#"$REPO"/home/}
+    [[ $rel == */gits-blind-guard.sh ]] && ((!GUARDS)) && continue   # hypr/gits/start.lua runs it when it exists: opt-in only
     place "$f" "$HOME/$rel"
     count=$((count + 1))
 done < <(find "$REPO/home" -type f -print0)
 say "$count files"
 
-# pictures used by the theme and friends
-WP=$THEME_DIR/wallpapers
-run mkdir -p "$WP"
+# pictures used by the desktop and friends
+run mkdir -p "$WALLS"
 for f in gits_smoke.png gits_eye.png gits_cyborg.jpg gits_teal_wires.jpg; do
-    s=$(asset "$f") && place "$s" "$WP/$f"
+    s=$(asset "$f") && place "$s" "$WALLS/$f"
 done
-[[ -f $WP/gits_cyborg.jpg || ${DRY} == 1 ]] && side=gits_cyborg.jpg || side=gits_smoke.png
-link "$WP/gits_smoke.png" "$THEME_DIR/wall.set"
-link "$WP/$side" "$THEME_DIR/wall.awww.png"
-link "$WP/$side" "$THEME_DIR/wall.hyprlock.png"
 s=$(asset gits_eye.png) && place "$s" "$HOME/.config/hypr/hyprlock/gits_lock_bg.png"
 s=$(asset gits_eye.png) && place "$s" "$HOME/.local/share/gits-sddm/ghost-in-the-shell/background.png"
 for f in art.png cyborg.txt lain.txt shodan.txt; do
@@ -170,32 +169,13 @@ done
 s=$(asset lain.txt) && place "$s" "$HOME/.config/nvim/lua/gits/lain.txt"
 
 # ------------------------------------------------------------------ hooks into your own config files
-say "hooking into hyprland.lua, zsh and neovim"
-HL=$HOME/.config/hypr/hyprland.lua
-if ((GUARDS)) && [[ -f $HOME/.config/hypr/gits.lua ]] && ! grep -q 'gits-blind-guard' "$HOME/.config/hypr/gits.lua"; then
-    ((DRY)) || { sed -i "/-- @BLIND_GUARD@/{
-r $REPO/tools/blind-guard.lua.in
-d
-}" "$HOME/.config/hypr/gits.lua"; }
-fi
-printf 'dofile(os.getenv("HOME") .. "/.config/hypr/gits.lua")  -- Ghost in the Shell hooks (remove this line to disable)\n' | add_block "$HL" hyprland "--"
-
+say "hooking into zsh and neovim"
 add_block "$HOME/.config/zsh/user.zsh" zsh "#" <<'EOF'
 # Ghost in the Shell: tmux autostart (opt-in: GITS_TMUX=1), banner (GITS_NO_BANNER=1 disables) and fzf colours
 [[ -r ${0:A:h}/gits/tmux.zsh ]] && source ${0:A:h}/gits/tmux.zsh
 [[ -r ${0:A:h}/gits/banner.zsh ]] && source ${0:A:h}/gits/banner.zsh
 [[ -r ${0:A:h}/gits/colors.zsh ]] && source ${0:A:h}/gits/colors.zsh
 EOF
-
-if [[ -f $HOME/.config/kitty/kitty.conf ]]; then
-    add_block "$HOME/.config/kitty/kitty.conf" kitty "#" <<'EOF2'
-# Ghost in the Shell: the terminal uses the same font as the bar, the widgets and the popups (HyDE's hyde.conf sets CaskaydiaCove)
-font_family      JetBrainsMono Nerd Font Mono
-bold_font        auto
-italic_font      auto
-bold_italic_font auto
-EOF2
-fi
 
 if [[ -d $HOME/.config/nvim ]]; then
     place "$REPO/tools/nvim-gits-options.lua" "$HOME/.config/nvim/lua/config/gits-options.lua"
@@ -228,26 +208,23 @@ else
     warn "skipped: Bibata-Modern-Ice not found"
 fi
 say "building the icon theme (cyan folders on top of Tela-circle-grey)"
-run python3 "$HOME/.local/share/gits-icons/build.py" || warn "icon theme build failed (needs Tela-circle-grey, shipped with HyDE): the theme falls back to it"
+run python3 "$HOME/.local/share/gits-icons/build.py" || warn "icon theme build failed (needs Tela-circle-grey: AUR tela-circle-icon-theme-grey): the theme falls back to it"
 run python3 "$HOME/.local/share/gits-sounds/build.py" || warn "UI sounds not built (needs python-numpy)"
 ((TELEGRAM)) && run python3 "$HOME/.local/share/gits-telegram/build.py"
 
-# ------------------------------------------------------------------ HyDE selection
-setstate() {  # setstate KEY VALUE  in HyDE's staterc
-    local rc=$HOME/.local/state/hyde/staterc
-    ((DRY)) && { echo "   (dry) staterc $1=$2"; return; }
-    mkdir -p "$(dirname "$rc")"; touch "$rc"
-    if grep -q "^$1=" "$rc"; then sed -i "s|^$1=.*|$1=\"$2\"|" "$rc"; else echo "$1=\"$2\"" >>"$rc"; fi
-}
-if ((APPLY)); then
-    say "switching HyDE to $THEME"
-    warn "the theme sets the cursor theme live; GTK apps (waybar, Zen) can crash on that. The bar watchdog revives waybar."
-    setstate HYPRLOCK_LAYOUT "$THEME"
-    run hyde-shell theme.switch.sh -s "$THEME" || warn "theme.switch failed"
-    run hyde-shell waybar.py --set ghost-in-the-shell || true
-    run hyde-shell animations --set gits || true
-    run hyde-shell hyprlock.sh --reload || true
-    run hyde-shell workflows --set 01-default || true
+# ------------------------------------------------------------------ activation
+say "session units and toolkit settings"
+if ((DRY)); then
+    echo "   (dry) systemctl --user daemon-reload; gsettings gtk-theme adw-gtk3-dark, icons GitS-Icons, cursor GitS-Cursors"
+else
+    [[ -n ${GITS_SKIP_PREFLIGHT:-} ]] || systemctl --user daemon-reload 2>/dev/null || true   # (tests run with a throw-away $HOME: leave the real session alone)
+    if [[ -z ${GITS_SKIP_PREFLIGHT:-} ]] && command -v gsettings >/dev/null; then
+        gsettings set org.gnome.desktop.interface gtk-theme adw-gtk3-dark 2>/dev/null || true
+        gsettings set org.gnome.desktop.interface icon-theme GitS-Icons 2>/dev/null || true
+        gsettings set org.gnome.desktop.interface color-scheme prefer-dark 2>/dev/null || true
+        gsettings set org.gnome.desktop.interface cursor-theme GitS-Cursors 2>/dev/null || true
+    fi
+    GITS_IDLE_NO_RESTART=1 "$HOME/.local/bin/gits-idle" apply >/dev/null 2>&1 || true   # write the sleep timers into hypridle.conf
 fi
 
 # ------------------------------------------------------------------ system part (sudo)
@@ -277,15 +254,6 @@ fi
 
 # ------------------------------------------------------------------ done
 echo
-say "${B}done${C0}${C1}: run  ${B}gits-doctor${C0}${C1}  for a health report${C0}"
-if ((!APPLY)); then
-    cat <<EOF
-
-next steps (not done automatically, they change your live session):
-  hyde-shell theme.switch.sh -s "$THEME"      # or rerun with --apply
-  hyde-shell waybar.py --set ghost-in-the-shell
-  hyde-shell animations --set gits
-then log out and in once so every app picks up the cursor and colours.
-EOF
-fi
+say "${B}done${C0}${C1}: log out and in (pick the Hyprland session), then run  ${B}gits-doctor${C0}${C1}  for a health report${C0}"
+echo "  to try the config first, inside your current session:  GITS_NESTED=1 Hyprland -c ~/.config/hypr/hyprland.lua"
 ((SYSTEM)) || echo "  boot/login screens:  ./install.sh --system   (SDDM + Plymouth + GRUB, needs sudo)"

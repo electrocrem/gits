@@ -1,4 +1,4 @@
--- Ghost in the Shell for Hyprland: the whole session config, no HyDE. Copy this file to ~/.config/hypr/hyprland.lua (install.sh --standalone does it).
+-- Ghost in the Shell for Hyprland: the whole session config, no HyDE. install.sh puts it at ~/.config/hypr/hyprland.lua.
 -- Everything else lives in ~/.config/hypr/gits/*.lua. Set GITS_NESTED=1 to test it in a nested Hyprland window (no services are started).
 local root = assert(debug.getinfo(1, "S").source:match("^@(.*)/"), "not loaded from a file")
 package.path = root .. "/?.lua;" .. root .. "/?/init.lua;" .. package.path

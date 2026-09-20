@@ -1,7 +1,7 @@
 /*
  * Ghost in the Shell for Zen.
  * CRT cyan on navy-black, square corners, thin frames, the red "eye" only as the selected-tab marker.
- * Palette = ~/.config/hyde/themes/Ghost in the Shell/kitty.theme (same as the terminal, waybar, rofi, nvim).
+ * Palette = docs/PALETTE.md (kitty.theme in the repo) (same as the terminal, waybar, rofi, nvim).
  * Zen derives its colours from --zen-primary-color, so setting that plus the surfaces below is enough;
  * the rest is shape (no rounding), fonts and the tab/urlbar frames.
  */

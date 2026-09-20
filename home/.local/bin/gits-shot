@@ -5,7 +5,7 @@
 # Files: ~/Pictures/Screenshots/GitS_<date>_<time>.png (GITS_SHOT_DIR to change). Selection colours match the theme.
 dir=${GITS_SHOT_DIR:-$HOME/Pictures/Screenshots}; mkdir -p "$dir"
 f=$dir/GitS_$(date +%F_%H-%M-%S).png
-say() { notify-send -a "HyDE Notify" -t 3500 -i "${3:-camera-photo}" "${1}" "${2:-}"; }
+say() { notify-send -a "GitS Notify" -t 3500 -i "${3:-camera-photo}" "${1}" "${2:-}"; }
 pick() { slurp -b '#060A14aa' -c '#2ED3D7' -s '#2ED3D722' -w 1; }
 finish() {  # file: copy to the clipboard and tell
     wl-copy <"$1" && say "Screenshot saved" "${1/#$HOME/~}" || say "Screenshot saved (clipboard failed)" "${1/#$HOME/~}"

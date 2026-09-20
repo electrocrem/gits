@@ -1,5 +1,5 @@
 # Ghost in the Shell for btop: CRT cyan on navy-black, gradients run cyan -> yellow -> the red "eye" when things get hot.
-# Palette = ~/.config/hyde/themes/Ghost in the Shell/kitty.theme
+# Palette = docs/PALETTE.md (kitty.theme in the repo)
 
 theme[main_bg]="#060A14"
 theme[main_fg]="#C8F4FF"

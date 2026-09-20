@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# gits-battery icon|percent|status|charging: the battery for the lock screen, and for anything else that wants a glyph or a number.
+# Several batteries are averaged. Prints nothing on a machine without one.
+sum=0; n=0; state=
+for b in /sys/class/power_supply/BAT*; do
+    [[ -r $b/capacity ]] || continue
+    sum=$((sum + $(<"$b/capacity"))); n=$((n + 1))
+    s=$(<"$b/status"); [[ $s == Charging ]] && state=Charging; [[ -z $state ]] && state=$s
+done
+((n)) || exit 0
+pct=$((sum / n))
+case ${1:-icon} in
+    percent) echo "$pct" ;;
+    status) echo "$state" ;;
+    charging) [[ $state == Charging ]] ;;
+    icon)
+        # Full / Not charging count as plugged in too: this laptop's charge limit keeps it at "Not charging" around 98 %
+        if [[ $state == Discharging ]]; then icons=(󰂎 󰁺 󰁻 󰁼 󰁽 󰁾 󰁿 󰂀 󰂁 󰂂 󰁹); else icons=(󰢟 󰢜 󰂆 󰂇 󰂈 󰢝 󰂉 󰢞 󰂊 󰂋 󰂅); fi
+        echo "${icons[pct / 10]}" ;;
+    *) echo "usage: gits-battery icon|percent|status|charging" >&2; exit 2 ;;
+esac

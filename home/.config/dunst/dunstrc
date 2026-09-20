@@ -1,0 +1,87 @@
+# Ghost in the Shell: notifications (dunst). Extra rules live in dunstrc.d/ (UI sounds, KDE Connect).
+# Colours: the theme palette (bg #060A14, text #DDF9FF, cyan #5EF1F5, alert #E5432B).
+[global]
+    monitor = 0
+    follow = mouse
+    origin = top-right
+    offset = (16,42)                 # below the bar
+    width = 340
+    notification_limit = 20
+    corner_radius = 0
+    icon_corner_radius = 0
+    frame_width = 1
+    gap_size = 6
+    separator_height = 1
+    separator_color = auto
+    padding = 12
+    horizontal_padding = 14
+    text_icon_padding = 10
+    transparency = 0
+    progress_bar = true
+    progress_bar_height = 8
+    progress_bar_frame_width = 0
+    progress_bar_min_width = 125
+    progress_bar_max_width = 250
+    progress_bar_corner_radius = 0
+    indicate_hidden = yes
+    sort = yes
+    line_height = 2
+    markup = full
+    format = "<b>%a</b>  //  %s\n%b"
+    alignment = left
+    vertical_alignment = center
+    show_age_threshold = 60
+    ellipsize = middle
+    ignore_newline = no
+    stack_duplicates = true
+    hide_duplicate_count = false
+    show_indicators = yes
+    font = JetBrainsMono Nerd Font 8
+    icon_theme = "GitS-Icons,Tela-circle-grey"
+    enable_recursive_icon_lookup = true
+    icon_position = left
+    min_icon_size = 32
+    max_icon_size = 40
+    sticky_history = yes
+    history_length = 20
+    always_run_script = true
+    enable_posix_regex = true
+    browser = /usr/bin/xdg-open
+    dmenu = @HOME@/.config/dunst/gits-notify-menu.sh
+    title = Dunst
+    class = Dunst
+    scale = 0
+    force_xwayland = false
+    mouse_left_click = context, close_current
+    mouse_middle_click = do_action, close_current
+    mouse_right_click = close_all
+
+[experimental]
+    per_monitor_dpi = true
+
+[urgency_low]
+    background = "#060A14F2"
+    foreground = "#A8BFC9"
+    frame_color = "#596977"
+    timeout = 5
+
+[urgency_normal]
+    background = "#060A14F2"
+    foreground = "#DDF9FF"
+    frame_color = "#5EF1F5"
+    timeout = 6
+
+[urgency_critical]
+    background = "#060A14F2"
+    foreground = "#FF7A5C"
+    frame_color = "#E5432B"
+    timeout = 0
+
+# messages from our own tools (screenshots, notes, focus timer, ...): no app name in front, no automatic blip (they play their own sound)
+[gits-notify]
+    appname = "GitS Notify"
+    format = "<b>%s</b>\n%b"
+
+[telegram]
+    desktop_entry = "^Telegram Desktop$"
+    new_icon = telegram-desktop

@@ -1,12 +1,10 @@
 #!/usr/bin/env bash
-# HyDE workflow ("operating mode") switcher for the GitS bar.
+# Workflow ("operating mode") switcher for the GitS bar.
 #   gits-mode.sh          print the current mode as waybar JSON
 #   gits-mode.sh next|prev  cycle to the next / previous mode, then refresh the bar (signal 8)
-# Modes are the workflow files HyDE knows: ~/.local/share/hypr/lua/workflows/*.lua
+# Modes are the workflow files of the Hyprland config: ~/.config/hypr/gits/workflows/*.lua (gits-workflow list)
 modes=(01-default editing gaming powersaver snappy)
-staterc="${XDG_STATE_HOME:-$HOME/.local/state}/hyde/staterc"
 
-current() { sed -n 's/^HYPR_WORKFLOW="\(.*\)"$/\1/p' "$staterc" 2>/dev/null | head -1; }
 
 label() {  # key -> "icon|SHORT|Name|description"
     case $1 in
@@ -19,14 +17,13 @@ label() {  # key -> "icon|SHORT|Name|description"
     esac
 }
 
-cur=$(current); cur=${cur:-01-default}
+cur=$(gits-workflow current 2>/dev/null); cur=${cur:-01-default}
 
 if [[ $1 == next || $1 == prev ]]; then
     n=${#modes[@]}; idx=0
     for i in "${!modes[@]}"; do [[ ${modes[i]} == "$cur" ]] && idx=$i; done
     [[ $1 == next ]] && idx=$(( (idx + 1) % n )) || idx=$(( (idx + n - 1) % n ))
-    hyde-shell workflows --set "${modes[idx]}" >/dev/null 2>&1
-    pkill -RTMIN+8 -x waybar
+    gits-workflow set "${modes[idx]}" >/dev/null 2>&1   # refreshes the bar itself
     exit 0
 fi
 

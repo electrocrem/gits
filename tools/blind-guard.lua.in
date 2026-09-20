@@ -1,7 +1,0 @@
--- Blind-login guard (hybrid AMD/NVIDIA laptops): if the greeter still held the iGPU at login, Hyprland comes up on
--- the dGPU with no monitor and just sits there (black screen). ~12s after start with still no monitor: end the
--- session so SDDM shows the greeter again (a second login works). Does nothing when a monitor exists.
--- Known false positive: logging in with the lid closed and no external monitor.
-hl.on("hyprland.start", function()
-    hl.exec_cmd(home .. "/.config/hypr/scripts/gits-blind-guard.sh")
-end)

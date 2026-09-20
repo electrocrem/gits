@@ -4,7 +4,7 @@
 #   gits-update --check     only count pending updates (repo + AUR), change nothing
 #   gits-update --post      only the after-update repairs (gits-doctor --fix, timers, dunst)
 # What it does: list what is pending -> ask -> `paru -Syu` (snap-pac takes a snapshot before and after the pacman transaction,
-# so a bad update can be rolled back from the GRUB snapshot menu) -> repair what HyDE / KDE updates typically undo
+# so a bad update can be rolled back from the GRUB snapshot menu) -> repair what KDE updates and crashes typically undo
 # (gits-doctor --fix) -> tell you whether a reboot is advisable (new kernel or NVIDIA driver).
 run_here() { [[ -t 0 && -t 1 ]]; }
 count_updates() {

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # gits-settings: one menu for ALL the settings of this desktop (Super+I, the ALL SETTINGS button of the control panel).
-# System settings apps, HyDE selectors (theme, wallpaper, tiling layout, workflow, animations, bar, lock screen), the ASUS bits.
+# System settings apps, the look and feel selectors (tiling layout, workflow, animations), the ASUS bits.
 # Add your own: append a "label<TAB>command" line to ~/.config/gits/settings.tsv.
 extra=${XDG_CONFIG_HOME:-$HOME/.config}/gits/settings.tsv
 entries=$(cat <<'ROWS'
@@ -15,19 +15,15 @@ entries=$(cat <<'ROWS'
 󰎞  Recent notes (copy one)	gits-note list
 󱎫  Focus timer (pomodoro)	gits-focus menu
 󰖔  Night light schedule (evening / night warmth)	gits-daynight menu
-󰸉  Wallpaper	hyde-shell wallpaper -GS
-󰏘  Theme	hyde-shell theme.select
-󰆍  Tiling layout (dwindle / master / monocle / scrolling)	hyde-shell layouts --select
-󰓅  Workflow (default / gaming / editing / powersaver)	hyde-shell workflows --select
-󱂬  Window animations	hyde-shell animations --select
-󰖲  Bar layout	hyde-shell waybar.py --select
-󰌾  Lock screen layout	hyde-shell hyprlock.sh --select
-󰌌  Key bindings	hyde-shell keybinds_hint
+󰆍  Tiling layout (dwindle / master / monocle / scrolling)	gits-layout select
+󰓅  Workflow (default / gaming / editing / powersaver)	gits-workflow select
+󱂬  Window animations	gits-anim select
+󰌌  Key bindings	gits-panel keys
 󰢮  ROG Control Center	gits-rog
 󰤄  Sleep and power timers (dim / lock / screen off / sleep)	gits-idle menu
 󰁹  Power profile	$HOME/.config/waybar/scripts/gits-perf.sh menu
 󰍽  Touchpad on / off	gits-touchpad toggle
-󰈙  HyDE config file	xdg-open $HOME/.config/hyde/config.toml
+󰈙  Hyprland config (options, rules, key bindings)	xdg-open $HOME/.config/hypr/gits
 󰑋  Screen recording: area (again = stop)	gits-rec toggle area
 󰑋  Screen recording: whole screen	gits-rec toggle screen
 󰚰  Update the system (snapshot, then repairs)	gits-update

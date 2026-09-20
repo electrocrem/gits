@@ -104,15 +104,12 @@ def get_widgets():
 
 
 def get_awake():
-    """Caffeine: on while hypridle is stopped (the screen never locks or sleeps by itself)."""
-    return subprocess.run(["pgrep", "-x", "hypridle"], capture_output=True).returncode != 0 if not DEMO else False
+    """Caffeine: on while the idle unit (hypridle) is stopped (the screen never locks or sleeps by itself)."""
+    return subprocess.run(["systemctl", "--user", "is-active", "--quiet", "gits-idle.service"]).returncode != 0 if not DEMO else False
 
 
 def set_awake():
-    if subprocess.run(["pgrep", "-x", "hypridle"], capture_output=True).returncode == 0:
-        subprocess.run(["pkill", "-x", "hypridle"])
-    else:
-        fire(["setsid", "-f", "hypridle"])
+    fire(["systemctl", "--user", "stop" if not get_awake() else "start", "gits-idle.service"])
 
 
 def get_airplane():
@@ -122,7 +119,7 @@ def get_airplane():
 
 def get_game():
     try:
-        return 'HYPR_WORKFLOW="gaming"' in open(STATE + "/hyde/staterc").read()
+        return "workflow=gaming" in open(STATE + "/gits/state").read().split()
     except OSError:
         return False
 
@@ -428,7 +425,7 @@ class Panel(Popup):
         wid = Tile("󰕮", "WIDGETS", get_widgets, lambda: fire([HERE + "/run.sh", "toggle"]))
         awake = Tile("󰅶", "AWAKE", get_awake, set_awake)
         plane = Tile("󰀝", "AIRPLANE", get_airplane, lambda: fire(["rfkill", "unblock" if get_airplane() else "block", "all"]))
-        game = Tile("󰊗", "GAME", get_game, lambda: fire(["hyde-shell", "workflows", "--set", "01-default" if get_game() else "gaming"]))
+        game = Tile("󰊗", "GAME", get_game, lambda: fire(["gits-workflow", "toggle", "gaming"]))
         self.tiles = [wifi, bt, dnd, night, snd, wid, awake, plane, game]
         pad = Tile("󰍽", "TOUCHPAD", get_touchpad, lambda: fire(["gits-touchpad", "toggle"]))
         glitch = Tile("󰘨", "GLITCH", get_glitch, set_glitch)
@@ -943,7 +940,7 @@ class NotifyPopup(Popup):
             now = time.monotonic() * 1e6
             items = [(1, "Telegram Desktop", "Section 9 // chat", "meeting moved to 15:00, bring the report", 120, "NORMAL"),
                      (2, "Phone", "Alex", "are you coming tonight?", 900, "LOW"),
-                     (3, "HyDE Power", "Battery Low", "Battery is at 19%. Connect the charger.", 3600 * 3, "CRITICAL"),
+                     (3, "GitS", "Battery Low", "Battery is at 19%. Connect the charger.", 3600 * 3, "CRITICAL"),
                      (4, "Spotify", "Now playing", "Lain Iwakura - Duvet", 3600 * 9, "LOW")]
             data = [(i, a, sm, b, age, u) for i, a, sm, b, age, u in items]
         else:
@@ -1628,7 +1625,7 @@ class LauncherPopup(Popup):
         elif kind == "win":
             cmd = ["hyprctl", "dispatch", f'hl.dsp.focus({{ window = "address:{arg}" }})']
         elif kind == "copy":
-            cmd = ["bash", "-c", f"printf %s {shlex.quote(arg)} | wl-copy && notify-send -a 'GitS' -t 2500 'Copied' {shlex.quote(arg[:80])}"]
+            cmd = ["bash", "-c", f"printf %s {shlex.quote(arg)} | wl-copy && notify-send -a 'GitS Notify' -t 2500 'Copied' {shlex.quote(arg[:80])}"]
         elif kind == "web":
             import urllib.parse
             cmd = ["xdg-open", "https://duckduckgo.com/?q=" + urllib.parse.quote_plus(arg)]

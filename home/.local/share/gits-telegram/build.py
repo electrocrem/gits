@@ -14,7 +14,7 @@ import sys
 import zipfile
 
 TG_BIN = "/var/lib/flatpak/app/org.telegram.desktop/current/active/files/bin/Telegram"
-WALL = os.path.expanduser("~/.config/hyde/themes/Ghost in the Shell/wallpapers/gits_smoke.png")
+WALL = os.path.expanduser("~/.local/share/gits/wallpapers/gits_smoke.png")
 
 BG, ALT, SURF, RIP = "#060A14", "#0A1226", "#0C1A33", "#12294A"
 LINE, FG, DIM, MUTED, FAINT, WHITE = "#254F5D", "#C8F4FF", "#9FC5D6", "#596977", "#3F4C5C", "#DDF9FF"

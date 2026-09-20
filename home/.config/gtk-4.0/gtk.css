@@ -1,0 +1,50 @@
+/* Ghost in the Shell: colours for GTK apps. The widgets come from adw-gtk3 (GTK 3) and libadwaita (GTK 4); these named colours
+   recolour them (same file for gtk-3.0 and gtk-4.0). Palette: docs/PALETTE.md */
+@define-color accent_color #2ED3D7;
+@define-color accent_bg_color #2ED3D7;
+@define-color accent_fg_color #060A14;
+@define-color destructive_color #FF7A5C;
+@define-color destructive_bg_color #E5432B;
+@define-color destructive_fg_color #060A14;
+@define-color success_color #34D399;
+@define-color success_bg_color #34D399;
+@define-color success_fg_color #060A14;
+@define-color warning_color #E8C547;
+@define-color warning_bg_color #E8C547;
+@define-color warning_fg_color #060A14;
+@define-color error_color #FF7A5C;
+@define-color error_bg_color #E5432B;
+@define-color error_fg_color #060A14;
+
+@define-color window_bg_color #060A14;
+@define-color window_fg_color #D0FDFF;
+@define-color view_bg_color #0A1226;
+@define-color view_fg_color #D0FDFF;
+@define-color headerbar_bg_color #0C1A33;
+@define-color headerbar_fg_color #D0FDFF;
+@define-color headerbar_border_color rgba(46, 211, 215, 0.35);
+@define-color headerbar_backdrop_color #060A14;
+@define-color headerbar_shade_color rgba(0, 0, 0, 0.36);
+@define-color card_bg_color #0C1A33;
+@define-color card_fg_color #D0FDFF;
+@define-color card_shade_color rgba(0, 0, 0, 0.36);
+@define-color dialog_bg_color #0C1A33;
+@define-color dialog_fg_color #D0FDFF;
+@define-color popover_bg_color #0C1A33;
+@define-color popover_fg_color #D0FDFF;
+@define-color popover_shade_color rgba(0, 0, 0, 0.36);
+@define-color sidebar_bg_color #0A1226;
+@define-color sidebar_fg_color #D0FDFF;
+@define-color sidebar_backdrop_color #060A14;
+@define-color sidebar_shade_color rgba(0, 0, 0, 0.36);
+@define-color secondary_sidebar_bg_color #060A14;
+@define-color secondary_sidebar_fg_color #D0FDFF;
+@define-color secondary_sidebar_backdrop_color #060A14;
+@define-color secondary_sidebar_shade_color rgba(0, 0, 0, 0.36);
+@define-color scrollbar_outline_color rgba(0, 0, 0, 0.5);
+@define-color shade_color rgba(0, 0, 0, 0.36);
+@define-color thumbnail_bg_color #0C1A33;
+@define-color thumbnail_fg_color #D0FDFF;
+
+/* square corners, like everything else here */
+* { border-radius: 0; }

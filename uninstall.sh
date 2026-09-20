@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Undo ./install.sh: restore every file it replaced (from ~/.local/share/gits-hyde/backup/*, oldest copy wins),
-# delete the files it created, remove the blocks it appended to hyprland.lua / user.zsh / options.lua.
+# delete the files it created, remove the blocks it appended to user.zsh / options.lua.
 # System-level pieces (SDDM, GRUB, Plymouth) are left alone; the commands to revert them are printed at the end.
 #   ./uninstall.sh [--dry-run]
 set -euo pipefail
@@ -66,6 +66,9 @@ if [[ -d $HOME/.logseq/plugins-backup/nord-theme ]]; then
     run rmdir "$HOME/.logseq/plugins-backup" 2>/dev/null || true
 fi
 
+# the session units
+systemctl --user stop gits-session.target 2>/dev/null || true
+
 # things the installer generated from scripts (not tracked as placed files)
 for d in "$HOME/.local/share/icons/GitS-Icons" "$HOME/.local/share/icons/GitS-Cursors"; do
     [[ -d $d ]] && { echo "delete   $d"; run rm -rf "$d"; }
@@ -77,9 +80,10 @@ if compgen -G "$HOME/.local/share/gits-sounds/*.wav" >/dev/null; then
 fi
 
 # files that were created by the blocks' host (nothing to restore) and are now empty
-for f in "$HOME/.config/hypr/hyprland.lua" "$HOME/.config/zsh/user.zsh" "$HOME/.config/nvim/lua/config/options.lua" "$HOME/.config/kded6rc"; do
+for f in "$HOME/.config/zsh/user.zsh" "$HOME/.config/nvim/lua/config/options.lua" "$HOME/.config/kded6rc"; do
     [[ -f $f && ! -s $f ]] && run rm -f "$f"
 done
+((DRY)) || systemctl --user daemon-reload 2>/dev/null || true
 ((DRY)) || mv "$LIST" "$LIST.uninstalled-$(date +%s)"
 cat <<TXT
 
@@ -88,5 +92,5 @@ Not touched (edited outside your \$HOME, needs sudo):
   Boot:     sudo ~/.local/share/gits-boot/install.sh --revert     (run BEFORE removing that folder)
   GRUB:     sudo cp /etc/default/grub.bak-pre-savedefault /etc/default/grub && sudo grub-mkconfig -o /boot/grub/grub.cfg
 Logseq, Zen, VS Code and kdeglobals were restored from their .bak-pre-gits / plugins-backup copies (log out and in for Qt colours).
-Then switch HyDE to another theme:  hyde-shell theme.select
+Log out and in. (The session units gits-*.service are removed; whatever was in place before is back.)
 TXT

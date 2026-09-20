@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # gits-osd <volume|brightness|mic|kbd|touchpad> <percent> [muted] [label]   show the on-screen display (Ghost in the Shell style)
 # gits-osd start|stop                                   run / stop the tiny daemon (gits.lua starts it at login; events start it lazily)
-# Fed by dunst: ~/.config/dunst/gits-osd.sh turns HyDE's volume/brightness popups into calls of this.
+# Fed by gits-vol, gits-bright and the keyboard-backlight keys.
 run=${XDG_RUNTIME_DIR:-/tmp}
 pidfile=$run/gits-osd.pid
 alive() { local p; p=$(cat "$pidfile" 2>/dev/null) && [[ $p =~ ^[0-9]+$ ]] && grep -qa 'osd.py' "/proc/$p/cmdline" 2>/dev/null; }

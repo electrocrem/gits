@@ -11,7 +11,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STAGE = os.path.join(HERE, "staging")
-EYE = os.path.expanduser("~/.config/hyde/themes/Ghost in the Shell/wallpapers/gits_eye.png")
+EYE = os.path.expanduser("~/.local/share/gits/wallpapers/gits_eye.png")
 FONTS = os.path.expanduser("~/.local/share/fonts/JetBrainsMono")
 F_REG = os.path.join(FONTS, "JetBrainsMonoNerdFontMono-Regular.ttf")
 F_BOLD = os.path.join(FONTS, "JetBrainsMonoNerdFontMono-Bold.ttf")

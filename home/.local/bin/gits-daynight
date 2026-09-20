@@ -4,10 +4,10 @@
 # Writes profile blocks into ~/.config/hypr/hyprsunset.conf (between the gits-daynight markers) and restarts hyprsunset's unit; hyprsunset then
 # switches by the clock by itself, no daemon of ours. Presets (time, temperature K, gamma):
 #   gentle  20:30 5500 1.00 | 23:30 4500 0.92        warm  20:00 4800 1.00 | 23:00 3800 0.88        strong  19:30 4300 0.96 | 22:30 3400 0.85
-# The NIGHT toggle of the control panel (HyDE's hyprsunset.sh) still overrides by hand until the next profile time.
+# The NIGHT toggle of the control panel overrides by hand until the next profile time.
 conf=${GITS_DAYNIGHT_CONF:-$HOME/.config/hypr/hyprsunset.conf}
 state=${XDG_STATE_HOME:-$HOME/.local/state}/gits-daynight
-unit=hyde-Hyprland-blue-light-filter.service
+unit=gits-sunset.service
 declare -A eve=([gentle]="20:30 5500 1.00" [warm]="20:00 4800 1.00" [strong]="19:30 4300 0.96")
 declare -A night=([gentle]="23:30 4500 0.92" [warm]="23:00 3800 0.88" [strong]="22:30 3400 0.85")
 cur() { cat "$state" 2>/dev/null || echo off; }
@@ -24,7 +24,7 @@ apply() {  # preset
     [[ -f $conf ]] || { echo "no $conf" >&2; return 1; }
     [[ -e $conf.bak-pre-gits-daynight ]] || cp -a "$conf" "$conf.bak-pre-gits-daynight"
     local text; text=$(cat "$conf")
-    # drop HyDE's empty sample profiles and any previous generated block, keep the header comments
+    # drop any previous generated block (and profile blocks that only hold comments), keep the header comments
     text=$(python3 - "$conf" <<'PY'
 import re, sys
 t = open(sys.argv[1]).read()
@@ -47,6 +47,6 @@ case ${1:-menu} in
         labels=("Off (no schedule)" "Gentle: 20:30 slightly warm, 23:30 warmer" "Warm: 20:00 warm, 23:00 very warm" "Strong: 19:30 warm, 22:30 very warm")
         for i in 0 1 2 3; do m="  "; [[ ${keys[i]} == "$now" ]] && m="● "; rows+=("$m${labels[i]}"); done
         idx=$(printf '%s\n' "${rows[@]}" | gits-menu $'\U000F0A3B  NIGHT LIGHT' "// 夜間" -format i) || exit 0
-        apply "${keys[idx]}"; notify-send -a "HyDE Notify" -t 3000 "Night light" "${labels[idx]}" ;;
+        apply "${keys[idx]}"; notify-send -a "GitS Notify" -t 3000 "Night light" "${labels[idx]}" ;;
     *) echo "usage: gits-daynight [menu|status|set PRESET]" >&2; exit 2 ;;
 esac

@@ -1,5 +1,5 @@
 /* Ghost in the Shell: one slim monochrome strip, glyph + label, brighter with a solid rule on hover.
-   Colours come from the waybar theme.css; ${mgn} is the launcher's horizontal margin. */
+   Colours are the theme palette; ${mgn} is the launcher's horizontal margin. */
 * {
     background-image: none;
     font-family: "JetBrainsMono Nerd Font", "Noto Sans CJK JP", monospace;
@@ -7,7 +7,13 @@
     font-weight: 600;
 }
 
-@import "$HOME/.config/waybar/theme.css";
+@define-color bar-bg rgba(6, 10, 20, 0.86);
+@define-color main-bg #060A14;
+@define-color main-fg #2ED3D7;
+@define-color wb-act-bg #2ED3D7;
+@define-color wb-act-fg #060A14;
+@define-color wb-hvr-bg #0C1A33;
+@define-color wb-hvr-fg #5EF1F5;
 
 window {
     background-color: rgba(6, 10, 20, 0.35);

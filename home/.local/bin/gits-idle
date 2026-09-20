@@ -7,13 +7,12 @@
 #                                hypridle if that changed anything (run at login and on every plug / unplug by gits-events.sh)
 # Stages, in order: dim the screen -> lock -> screen off -> suspend. Changing one keeps the order (earlier stages are pulled down
 # to it, later ones up). The listeners between the "gits-idle" markers are generated; the rest of hypridle.conf is left alone.
-# NOTE: HyDE's own file used `hyprctl dispatch dpms off`, which does not exist in the Lua config ("')' expected"): the screen-off
-# stage never worked. The generated one uses hl.dsp.dpms.
+# Screen off is `hl.dsp.dpms` (the old `hyprctl dispatch dpms off` does not exist in the Lua config).
 conf=${GITS_IDLE_CONF:-$HOME/.config/hypr/hypridle.conf}
 state=${XDG_STATE_HOME:-$HOME/.local/state}/gits-idle/settings
 stages=(dim lock off sleep)
 declare -A label=([dim]="Dim screen" [lock]="Lock" [off]="Screen off" [sleep]="Sleep")
-declare -A val=([ac.dim]=1 [ac.lock]=2 [ac.off]=5 [ac.sleep]=8 [bat.dim]=1 [bat.lock]=2 [bat.off]=5 [bat.sleep]=8)  # = HyDE's old timers
+declare -A val=([ac.dim]=1 [ac.lock]=2 [ac.off]=5 [ac.sleep]=8 [bat.dim]=1 [bat.lock]=2 [bat.off]=5 [bat.sleep]=8)  
 [[ -r $state ]] && while IFS== read -r k v; do [[ $k =~ ^(ac|bat)\.(dim|lock|off|sleep)$ && $v =~ ^[0-9]+$ ]] && val[$k]=$v; done <"$state"
 
 save() { mkdir -p "$(dirname "$state")"; for k in "${!val[@]}"; do echo "$k=${val[$k]}"; done | sort >"$state"; }
@@ -54,7 +53,6 @@ generate() {  # profile -> hypridle listener text
 apply() {
     [[ -f $conf ]] || { echo "no $conf" >&2; return 1; }
     local p new; p=$(source_now)
-    [[ -e $conf.bak-pre-gits-idle ]] || cp -a "$conf" "$conf.bak-pre-gits-idle"
     new=$(GEN="$(generate "$p")" python3 - "$conf" <<'PY'
 import os, re, sys
 text = open(sys.argv[1]).read()
@@ -62,21 +60,18 @@ gen = os.environ["GEN"]
 if "# >>> gits-idle" in text:
     text = re.sub(r"# >>> gits-idle.*?# <<< gits-idle", lambda m: gen, text, flags=re.S)
 else:
-    # first run: drop HyDE's four timer listeners (their comment line + block) and put ours before the custom listeners
-    text = re.sub(r"# // --- Listener:[^\n]*\n(?:#[^\n]*\n)*listener \{.*?\n\}\n", "", text, flags=re.S)
-    mark = "# // --- Custom listeners ---"
-    text = text.replace(mark, gen + "\n" + mark, 1) if mark in text else text.rstrip("\n") + "\n\n" + gen + "\n"
+    text = text.rstrip("\n") + "\n\n" + gen + "\n"
 sys.stdout.write(text)
 PY
 )
     if [[ $new != "$(cat "$conf")" ]]; then
         printf '%s\n' "$new" >"$conf"
-        [[ -n ${GITS_IDLE_NO_RESTART:-} ]] || systemctl --user restart hyde-Hyprland-idle.service 2>/dev/null
+        [[ -n ${GITS_IDLE_NO_RESTART:-} ]] || systemctl --user try-restart gits-idle.service 2>/dev/null
         echo "applied the $p profile"
     fi
 }
 
-say() { notify-send -a "HyDE Notify" -t 2500 -i "$2" "Power timers" "$1"; }
+say() { notify-send -a "GitS Notify" -t 2500 -i "$2" "Power timers" "$1"; }
 
 menu() {
     local rows=() keys=() p s

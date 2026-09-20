@@ -1,4 +1,4 @@
-# Ghost in the Shell for satty (the screenshot annotator HyDE opens after Super+P): square handles, cyan/red marker palette.
+# Ghost in the Shell for satty (the screenshot annotator that opens after Super+P): square handles, cyan/red marker palette.
 [general]
 corner-roundness = 0
 initial-tool = "arrow"

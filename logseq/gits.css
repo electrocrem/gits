@@ -1,6 +1,6 @@
 /* Ghost in the Shell for Logseq.
  * Loaded as a theme plugin: this file replaces the stylesheet of the Nord plugin (original kept in
- * ~/.logseq/plugins-backup/nord-theme/custom.css). Palette = kitty.theme of the HyDE theme; needs no network.
+ * ~/.logseq/plugins-backup/nord-theme/custom.css). Palette = docs/PALETTE.md; needs no network.
  */
 :root {
   --gits-bg:    #060a14;

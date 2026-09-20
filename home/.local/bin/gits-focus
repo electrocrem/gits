@@ -10,7 +10,7 @@ mkdir -p "$dir"
 get() { sed -n "s/^$1=//p" "$state" 2>/dev/null | head -1; }
 put() { local k=$1 v=$2; touch "$state"; grep -q "^$k=" "$state" && sed -i "s|^$k=.*|$k=$v|" "$state" || echo "$k=$v" >>"$state"; }
 running() { local p; p=$(cat "$pidfile" 2>/dev/null) && [[ $p =~ ^[0-9]+$ ]] && kill -0 "$p" 2>/dev/null && [[ -s $state ]]; }
-say() { notify-send -a "HyDE Notify" -t 4000 -i "${2:-appointment-soon}" "Focus" "$1"; }   # "HyDE Notify" has no automatic blip: the sounds are explicit
+say() { notify-send -a "GitS Notify" -t 4000 -i "${2:-appointment-soon}" "Focus" "$1"; }   # "GitS Notify" has no automatic blip: the sounds are explicit
 dnd() { dunstctl set-paused "$1" 2>/dev/null; }
 fmt() { printf '%02d:%02d' $(($1 / 60)) $(($1 % 60)); }
 
