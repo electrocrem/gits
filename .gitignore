@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+*.bak*
+.DS_Store
+# build outputs of home/.local/share/gits-boot/build.py
+staging/

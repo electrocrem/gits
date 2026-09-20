@@ -1,0 +1,91 @@
+/* Ghost in the Shell desktop widgets: navy glass, cyan hairlines, square corners, JetBrainsMono */
+@define-color gw-bg rgba(6, 10, 20, 0.80);
+@define-color cy #2ED3D7;
+@define-color cyb #5EF1F5;
+@define-color fg #C8F4FF;
+@define-color mid #9FC5D6;
+@define-color dim #596977;
+@define-color red #E5432B;
+
+* {
+    font-family: "JetBrainsMono Nerd Font", "Noto Sans CJK JP", monospace;
+    border-radius: 0;
+    box-shadow: none;
+    text-shadow: none;
+    outline: none;
+}
+
+window.gw { background: transparent; }
+
+.card {
+    background: @gw-bg;
+    color: @fg;
+    border: 1px solid alpha(@cy, 0.36);
+    border-left: 3px solid @cy;
+    padding: 9px 12px 10px 12px;
+}
+
+.tag { font-size: 9px; font-weight: 700; letter-spacing: 2px; color: alpha(@cy, 0.8); }
+.tag-dot { font-size: 9px; color: @red; }
+
+/* clock */
+.clock-h, .clock-m { font-size: 66px; font-weight: 800; line-height: 0.9; }
+.clock-h { color: @fg; }
+.clock-m { color: @cyb; margin-top: -6px; }
+.clock-date { font-size: 12px; font-weight: 700; letter-spacing: 2px; color: @mid; }
+
+/* calendar */
+.cal-title { font-size: 12px; font-weight: 700; letter-spacing: 1px; color: @fg; }
+.cal-dow { font-size: 9px; font-weight: 700; color: @dim; }
+.cal-day { font-size: 11px; color: @mid; padding: 1px 0; border: 1px solid transparent; }
+.cal-out { color: alpha(@dim, 0.55); }
+.cal-we { color: alpha(@cyb, 0.75); }
+.cal-today { background: @cy; color: #060A14; font-weight: 800; }
+button.flat-btn {
+    background: none; border: 1px solid alpha(@cy, 0.35); color: @cy;
+    min-width: 22px; min-height: 18px; padding: 0; font-size: 13px;
+}
+button.flat-btn:hover { background: alpha(@cy, 0.16); color: @cyb; border-color: @cyb; }
+
+/* media */
+.cover-frame { border: 1px solid alpha(@cy, 0.5); background: #050810; }
+.cover { filter: grayscale(0.9) contrast(1.15) brightness(0.92) sepia(0.15); }
+.nosig { font-size: 12px; font-weight: 700; letter-spacing: 3px; color: alpha(@red, 0.9); }
+.m-title { font-size: 13px; font-weight: 800; color: @fg; margin-top: 6px; }
+.m-artist { font-size: 11px; color: @mid; }
+.m-time { font-size: 9px; color: @dim; }
+
+/* weather */
+.w-temp { font-size: 40px; font-weight: 800; color: @fg; }
+.w-cond { font-size: 11px; font-weight: 700; letter-spacing: 0.5px; color: @cyb; }
+.w-meta { font-size: 9px; letter-spacing: 1px; color: @dim; }
+
+/* battery */
+.b-big { font-size: 26px; font-weight: 800; color: @fg; }
+.b-big.low { color: @red; }
+.b-state { font-size: 9px; font-weight: 700; letter-spacing: 1px; color: @mid; margin-top: 6px; }
+
+/* graph */
+.g-cpu { font-size: 10px; font-weight: 800; color: @cyb; }
+.g-ram { font-size: 10px; font-weight: 800; color: @fg; }
+.g-used { font-size: 9px; color: @dim; }
+
+/* to-do */
+.t-count { font-size: 9px; font-weight: 700; letter-spacing: 1px; color: @mid; }
+.t-row { padding: 3px 0; }
+.t-text { font-size: 12px; color: @fg; }
+.t-text.t-done { color: @dim; text-decoration: line-through; }
+.t-x { font-size: 14px; color: alpha(@dim, 0.6); min-width: 16px; }
+.t-x:hover { color: @red; }
+scrolledwindow { background: none; }
+entry.t-entry {
+    background: alpha(@cy, 0.07); color: @fg; caret-color: @cyb;
+    border: 1px solid alpha(@cy, 0.30); padding: 4px 8px; min-height: 0; font-size: 11px;
+}
+entry.t-entry:focus-within { border-color: @cyb; background: alpha(@cy, 0.12); }
+entry.t-entry placeholder { color: @dim; }
+
+/* network card */
+.n-down { font-size: 15px; font-weight: 800; color: @cyb; }
+.n-up { font-size: 11px; font-weight: 700; color: @mid; margin-top: 3px; }
+.n-meta { font-size: 9px; letter-spacing: 1px; color: @dim; }

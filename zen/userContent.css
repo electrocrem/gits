@@ -1,0 +1,88 @@
+/*
+ * Ghost in the Shell for Zen: web content side.
+ * Only browser pages (about:*) are restyled; websites keep their own look, except for thin cyan scrollbars
+ * (a site's own scrollbar-color still wins).
+ */
+
+@-moz-document url-prefix("about:"), url-prefix("chrome:"), url-prefix("moz-extension:") {
+  :root {
+    --in-content-page-background: #060a14 !important;
+    --in-content-page-color: #c8f4ff !important;
+    --in-content-text-color: #c8f4ff !important;
+    --in-content-deemphasized-text: #596977 !important;
+    --in-content-box-background: #0a1226 !important;
+    --in-content-box-background-hover: #0c1a33 !important;
+    --in-content-box-background-active: #0c1a33 !important;
+    --in-content-box-border-color: #254f5d !important;
+    --in-content-border-color: #254f5d !important;
+    --in-content-border-hover: #2ed3d7 !important;
+    --in-content-border-active: #2ed3d7 !important;
+    --in-content-border-focus: #2ed3d7 !important;
+    --in-content-accent-color: #2ed3d7 !important;
+    --in-content-link-color: #5ef1f5 !important;
+    --in-content-link-color-hover: #ddf9ff !important;
+    --in-content-primary-button-background: #2ed3d7 !important;
+    --in-content-primary-button-background-hover: #5ef1f5 !important;
+    --in-content-primary-button-background-active: #5ef1f5 !important;
+    --in-content-primary-button-text-color: #060a14 !important;
+    --in-content-primary-button-text-color-hover: #060a14 !important;
+    --in-content-button-background: #0c1a33 !important;
+    --in-content-button-background-hover: #254f5d !important;
+    --in-content-button-background-active: #254f5d !important;
+    --in-content-button-text-color: #c8f4ff !important;
+    --in-content-focus-outline-color: #2ed3d7 !important;
+    --in-content-selected-item: #254f5d !important;
+    --in-content-item-hover: rgba(46, 211, 215, 0.14) !important;
+    --in-content-item-selected: #2ed3d7 !important;
+    --in-content-item-selected-text: #060a14 !important;
+    /* newer design tokens used by about:preferences and friends */
+    --background-color-canvas: #060a14 !important;
+    --background-color-box: #0a1226 !important;
+    --background-color-information: #0c1a33 !important;
+    --background-color-interactive: #0c1a33 !important;
+    --background-color-interactive-hover: #254f5d !important;
+    --border-color: #254f5d !important;
+    --border-color-card: #254f5d !important;
+    --border-color-interactive: #254f5d !important;
+    --text-color: #c8f4ff !important;
+    --text-color-deemphasized: #596977 !important;
+    --icon-color: #9fc5d6 !important;
+    --icon-color-primary: #2ed3d7 !important;
+    --color-accent-primary: #2ed3d7 !important;
+    --color-accent-primary-hover: #5ef1f5 !important;
+    --border-radius-small: 0px !important;
+    --border-radius-medium: 0px !important;
+    --border-radius-large: 0px !important;
+    --border-radius-circle: 0px !important;
+    --button-border-radius: 0px !important;
+    --link-color: #5ef1f5 !important;
+    color-scheme: dark !important;
+    font-family: "JetBrainsMono Nerd Font", "Noto Sans CJK JP", monospace !important;
+  }
+
+  body {
+    background-color: #060a14 !important;
+    color: #c8f4ff !important;
+  }
+
+  ::selection {
+    background: #254f5d;
+    color: #ddf9ff;
+  }
+}
+
+/* new tab / blank page: no white flash, same navy-black as the rest */
+@-moz-document url("about:blank"), url("about:newtab"), url("about:home"), url("about:privatebrowsing") {
+  html,
+  body {
+    background: #060a14 !important;
+  }
+}
+
+/* thin cyan scrollbars on every page (Firefox's own overlay style otherwise) */
+@-moz-document url-prefix("") {
+  :root {
+    scrollbar-color: #2ed3d7 transparent;
+    scrollbar-width: thin;
+  }
+}

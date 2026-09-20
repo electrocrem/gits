@@ -1,0 +1,185 @@
+#!/usr/bin/env bash
+# gits-doctor: one-shot health report for the Ghost in the Shell desktop customisations.
+# Read-only: it never restarts anything. Exit code = number of FAILs.
+#   gits-doctor          full report
+#   gits-doctor -q       only WARN/FAIL lines
+#   gits-doctor -l       also show the tail of the login breadcrumb log and the SDDM journal
+set -u
+
+QUIET=0; LOGS=0
+for a in "$@"; do case $a in -q) QUIET=1 ;; -l) LOGS=1 ;; esac; done
+
+if [[ -t 1 ]]; then
+    C_OK=$'\e[38;2;46;211;215m'; C_WARN=$'\e[38;2;240;200;80m'; C_BAD=$'\e[38;2;240;80;80m'
+    C_DIM=$'\e[2m'; C_B=$'\e[1m'; C_0=$'\e[0m'
+else
+    C_OK= C_WARN= C_BAD= C_DIM= C_B= C_0=
+fi
+FAILS=0 WARNS=0 OKS=0
+
+ok()   { OKS=$((OKS + 1));     [[ $QUIET == 1 ]] || printf '  %s[ ok ]%s %s\n' "$C_OK" "$C_0" "$1"; }
+warn() { WARNS=$((WARNS + 1)); printf '  %s[warn]%s %s\n' "$C_WARN" "$C_0" "$1"; }
+bad()  { FAILS=$((FAILS + 1)); printf '  %s[FAIL]%s %s\n' "$C_BAD" "$C_0" "$1"; }
+head_() { [[ $QUIET == 1 ]] || printf '\n%s// %s%s\n' "$C_B" "$1" "$C_0"; }
+
+H=$HOME
+RUN=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
+
+# ---------------------------------------------------------------- session
+head_ "session"
+if [[ -z ${HYPRLAND_INSTANCE_SIGNATURE:-} ]] && ! hyprctl version >/dev/null 2>&1; then
+    bad "Hyprland is not reachable from this shell (run gits-doctor inside the session)"
+else
+    mons=$(hyprctl monitors -j 2>/dev/null | jq 'length' 2>/dev/null || echo 0)
+    if [[ ${mons:-0} -ge 1 ]]; then
+        desc=$(hyprctl monitors -j | jq -r '.[] | "\(.name) \(.width)x\(.height)@\(.refreshRate|floor)"' | paste -sd, -)
+        ok "monitors: $desc"
+    else
+        bad "Hyprland has 0 monitors (blind session: the AMD/NVIDIA login race)"
+    fi
+
+    errs=$(hyprctl configerrors 2>/dev/null | sed '/^$/d')
+    if [[ -z $errs ]]; then ok "no Hyprland config errors"; else bad "config errors: $(head -c 200 <<<"$errs")"; fi
+
+    ndirs=$(find "$RUN/hypr" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
+    if [[ $ndirs -le 1 ]]; then ok "single Hyprland instance dir"
+    else warn "$ndirs Hyprland instance dirs in $RUN/hypr (the session restarted at least once)"; fi
+fi
+
+# ---------------------------------------------------------------- hyde state
+head_ "HyDE state"
+st=$H/.local/state/hyde/staterc
+getst() { grep -m1 "^$1=" "$st" 2>/dev/null | cut -d= -f2- | tr -d '"'; }
+[[ $(getst HYDE_THEME) == "Ghost in the Shell" ]] && ok "theme: Ghost in the Shell" || warn "theme is '$(getst HYDE_THEME)'"
+wf=$(getst HYPR_WORKFLOW)
+if [[ $wf == 01-default ]]; then ok "workflow: default"
+else warn "workflow is '$wf': it overrides parts of the GitS look (gaps/blur/animations). Back: hyde-shell workflows --set 01-default"; fi
+[[ $(getst HYPR_ANIMATION) == gits ]] && ok "animation preset: gits" || warn "animation preset is '$(getst HYPR_ANIMATION)'"
+[[ $(getst HYPRLOCK_LAYOUT) == "Ghost in the Shell" ]] && ok "hyprlock layout: Ghost in the Shell" || warn "hyprlock layout is '$(getst HYPRLOCK_LAYOUT)'"
+[[ $(getst WAYBAR_LAYOUT_NAME) == ghost-in-the-shell ]] && ok "waybar layout: ghost-in-the-shell" || warn "waybar layout is '$(getst WAYBAR_LAYOUT_NAME)'"
+cur=$(gsettings get org.gnome.desktop.interface cursor-theme 2>/dev/null | tr -d "'")
+[[ $cur == GitS-Cursors ]] && ok "cursor theme: GitS-Cursors" || warn "cursor theme is '$cur' (a KDE app's kded6 syncs kcminputrc into GTK; do not flip it live, waybar/Zen can crash)"
+kc=$(grep -m1 '^cursorTheme=' "$H/.config/kcminputrc" 2>/dev/null | cut -d= -f2)
+[[ -z $kc || $kc == GitS-Cursors ]] && ok "kcminputrc cursorTheme: ${kc:-unset}" || warn "kcminputrc cursorTheme=$kc: any KDE app (KDE Connect, Dolphin) will push it into GTK settings"
+
+# ---------------------------------------------------------------- services
+head_ "processes and units"
+if pgrep -x waybar >/dev/null; then ok "waybar running (pid $(pgrep -x waybar | head -1))"
+elif [[ -f $H/.local/state/hyde/waybar.hidden || -f $H/.local/state/gits-bar-hidden ]]; then ok "waybar hidden on purpose"
+else bad "waybar is not running (hyde-shell waybar.py --watch)"; fi
+
+res=$(systemctl --user show hyde-Hyprland-bar.service -p Result --value 2>/dev/null)
+[[ -z $res || $res == success ]] && ok "bar unit Result: ${res:-n/a}" || warn "bar unit Result=$res (a crash; the watchdog should revive it)"
+
+pgrep -f '[g]its-watchdog.sh' >/dev/null && ok "waybar watchdog running" || bad "gits-watchdog.sh is not running"
+
+if pgrep -f '[g]its-widgets/widgets.py' >/dev/null; then ok "desktop widgets running"; else warn "desktop widgets not running (~/.config/gits-widgets/run.sh start)"; fi
+
+failed=$(systemctl --user --failed --no-legend 2>/dev/null | awk '{print $2}' | paste -sd' ' -)
+[[ -z $failed ]] && ok "no failed user units" || bad "failed user units: $failed"
+
+# every hyde-Hyprland-* unit must belong to the CURRENT compositor (login race leaves stale ones)
+cursig=${HYPRLAND_INSTANCE_SIGNATURE:-}
+stale=()
+if [[ -n $cursig ]]; then
+    while read -r u; do
+        pid=$(systemctl --user show "$u" -p MainPID --value 2>/dev/null)
+        [[ $pid -gt 0 ]] || continue
+        sig=$(tr '\0' '\n' <"/proc/$pid/environ" 2>/dev/null | grep -m1 '^HYPRLAND_INSTANCE_SIGNATURE=' | cut -d= -f2)
+        [[ -n $sig && $sig != "$cursig" ]] && stale+=("$u")
+    done < <(systemctl --user list-units 'hyde-Hyprland-*.service' --no-legend --plain | awk '{print $1}')
+    [[ ${#stale[@]} -eq 0 ]] && ok "no units left over from a dead compositor" || bad "stale units from a previous Hyprland: ${stale[*]}"
+fi
+
+# ---------------------------------------------------------------- hooks
+head_ "login hooks (hyprland.lua)"
+lua=$H/.config/hypr/hyprland.lua
+for pair in "gits-watchdog.sh:waybar watchdog" "gits-stale-guard.sh:stale-unit guard" "gits-blind-guard.sh:blind-session guard" \
+            "gits-widgets/run.sh:widgets autostart" "gits-workspaces.lua:workspace rules"; do
+    f=${pair%%:*}; n=${pair#*:}
+    if ! grep -q "$f" "$lua" 2>/dev/null; then bad "$n is not hooked in hyprland.lua"
+    else
+        p=$(find "$H/.config" -name "${f##*/}" -type f 2>/dev/null | head -1)
+        if [[ -z $p ]]; then bad "$n hooked, but ${f##*/} is missing"
+        elif [[ ${p##*.} == sh && ! -x $p ]]; then bad "$n: $p is not executable"
+        else ok "$n"; fi
+    fi
+done
+grep -q "sleep 10; pgrep -x waybar" "$lua" && ok "waybar login-race guard" || warn "waybar login-race guard missing"
+
+if grep -vE '^\s*#' "$H/.config/zsh/.zprofile" 2>/dev/null | grep -qE 'wait.*sddm|pgrep -u sddm'; then
+    bad ".zprofile waits for sddm again: that blocking guard broke login on Sep 20, remove it"
+else ok ".zprofile has no blocking login wait"; fi
+
+# ---------------------------------------------------------------- theme files
+head_ "theme files"
+need=(
+    ".config/hyde/themes/Ghost in the Shell/theme.dcol"
+    ".config/waybar/layouts/ghost-in-the-shell.jsonc" ".config/waybar/styles/ghost-in-the-shell.css"
+    ".config/hypr/hyprlock/Ghost in the Shell.conf" ".config/hypr/hyprlock/gits_lock_bg.png"
+    ".config/starship/starship.toml" ".config/zsh/gits/banner.zsh" ".config/nvim/colors/gits.lua"
+    ".config/btop/themes/gits.theme" ".config/bat/themes/GitS.tmTheme" ".config/yazi/theme.toml"
+    ".config/lazygit/config.yml" ".config/tmux/tmux.conf" ".config/rofi/theme.rasi"
+    ".config/rofi/themes/style_1.rasi" ".config/wlogout/style_1.css" ".config/gits-widgets/widgets.py"
+    ".local/share/icons/GitS-Cursors/index.theme"
+)
+miss=()
+for f in "${need[@]}"; do [[ -e $H/$f ]] || miss+=("$f"); done
+[[ ${#miss[@]} -eq 0 ]] && ok "${#need[@]} theme files present" || bad "missing: ${miss[*]}"
+
+# broken symlinks in the rofi themes dir would silently drop a launcher style
+brk=$(find "$H/.local/share/rofi/themes" -xtype l 2>/dev/null | wc -l)
+[[ $brk -eq 0 ]] && ok "rofi theme symlinks resolve" || warn "$brk broken rofi theme symlinks"
+
+# ---------------------------------------------------------------- boot chain
+head_ "boot chain (SDDM / GRUB / Plymouth)"
+sd=/usr/share/sddm/themes/ghost-in-the-shell
+if [[ -d $sd ]] && diff -rq "$H/.local/share/gits-sddm/ghost-in-the-shell" "$sd" >/dev/null 2>&1; then ok "SDDM theme installed and identical to staging"
+elif [[ -d $sd ]]; then warn "SDDM theme installed but differs from ~/.local/share/gits-sddm (needs sudo cp)"
+else bad "SDDM theme not installed"; fi
+grep -rqs '^Current=ghost-in-the-shell' /etc/sddm.conf.d/ && ok "SDDM Current=ghost-in-the-shell" || warn "SDDM does not select the GitS theme"
+
+gt=/usr/share/grub/themes/ghost-in-the-shell/theme.txt
+if [[ -f $gt ]]; then
+    if grep -qE '=\s*[0-9]+\.[0-9]+' "$gt"; then bad "GRUB theme.txt has decimals (grub_strtoull error at boot)"
+    elif diff -q "$H/.local/share/gits-boot/staging/grub/ghost-in-the-shell/theme.txt" "$gt" >/dev/null 2>&1; then ok "GRUB theme installed, integers only, matches staging"
+    else warn "GRUB theme differs from staging"; fi
+else bad "GRUB theme missing"; fi
+if [[ $(findmnt -T /boot/grub -no FSTYPE 2>/dev/null) == btrfs ]] && grep -qE '^GRUB_SAVEDEFAULT=true' /etc/default/grub 2>/dev/null; then
+    warn "GRUB_SAVEDEFAULT=true on btrfs: GRUB prints 'sparse file not allowed / Press any key' every boot (sudo ~/.local/share/gits-boot/fix-grub-savedefault.sh)"
+else ok "GRUB savedefault is not fighting btrfs"; fi
+grep -q '^GRUB_THEME=.*ghost-in-the-shell' /etc/default/grub 2>/dev/null && ok "GRUB_THEME set" || warn "GRUB_THEME not set to the GitS theme"
+
+grep -qE '^Theme=ghost-in-the-shell' /etc/plymouth/plymouthd.conf 2>/dev/null && ok "Plymouth theme: ghost-in-the-shell" || warn "Plymouth theme is not GitS"
+grep -q '\bsplash\b' /proc/cmdline && ok "kernel cmdline has splash" || warn "no splash on the kernel cmdline"
+grep -qE '^HOOKS=.*plymouth' /etc/mkinitcpio.conf 2>/dev/null && ok "mkinitcpio has the plymouth hook" || warn "plymouth hook missing in mkinitcpio.conf"
+
+# ---------------------------------------------------------------- apps
+head_ "apps"
+zp=
+for d in "$H"/.var/app/app.zen_browser.zen/.zen/*/; do
+    [[ -f $d/user.js && -d $d/chrome ]] && { zp=${d%/}; break; }
+done
+[[ -z $zp ]] && zp=$(find "$H/.var/app/app.zen_browser.zen/.zen" -maxdepth 2 -name prefs.js 2>/dev/null | head -1 | xargs -r dirname)
+if [[ -n $zp ]]; then
+    rc=$(grep -h 'toolkit.startup.recent_crashes' "$zp/prefs.js" 2>/dev/null | grep -oE '[0-9]+\)' | tr -d ')')
+    if [[ ${rc:-0} -ge 3 ]]; then warn "Zen recent_crashes=$rc: next start asks for Troubleshoot Mode (flatpak kill it, set the pref to 0 in prefs.js)"
+    else ok "Zen crash counter ${rc:-0}"; fi
+    [[ -f $zp/chrome/userChrome.css ]] && ok "Zen userChrome.css present" || warn "Zen userChrome.css missing"
+fi
+command -v tmux >/dev/null && ok "tmux installed" || warn "tmux not installed"
+
+# ---------------------------------------------------------------- login history
+head_ "login history"
+lg=$H/.local/state/gits-login.log
+if [[ -f $lg ]]; then
+    n=$(grep -c "wayland session" "$lg")
+    ok "$n logins recorded, last: $(tail -1 "$lg")"
+fi
+if [[ $LOGS == 1 ]]; then
+    printf '%s-- gits-login.log%s\n' "$C_DIM" "$C_0"; tail -8 "$lg" 2>/dev/null
+    printf '%s-- sddm journal (this boot)%s\n' "$C_DIM" "$C_0"; journalctl -b -u sddm --no-pager -q 2>/dev/null | tail -12
+fi
+
+printf '\n%s%d ok%s, %s%d warn%s, %s%d fail%s\n' "$C_OK" "$OKS" "$C_0" "$C_WARN" "$WARNS" "$C_0" "$C_BAD" "$FAILS" "$C_0"
+exit "$FAILS"

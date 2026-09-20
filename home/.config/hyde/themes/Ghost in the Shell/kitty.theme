@@ -1,0 +1,36 @@
+$HOME/.config/kitty/theme.conf|killall -SIGUSR1 kitty
+
+# Ghost in the Shell - CRT cyan on navy-black, red eye accent
+foreground            #C8F4FF
+background            #060A14
+selection_foreground  #060A14
+selection_background  #2ED3D7
+url_color             #5EF1F5
+cursor                #E5432B
+cursor_text_color     #060A14
+
+active_border_color   #2ED3D7
+inactive_border_color #0C1A33
+
+color0  #0C1A33
+color8  #254F5D
+color1  #E5432B
+color9  #FF7A5C
+color2  #34D399
+color10 #6EE7B7
+color3  #E8C547
+color11 #F5DC7E
+color4  #3B74D0
+color12 #459BF1
+color5  #7C6CE0
+color13  #A99CF5
+color6  #2ED3D7
+color14 #5EF1F5
+color7  #9FC5D6
+color15 #DDF9FF
+
+tab_bar_background      #060A14
+active_tab_foreground   #060A14
+active_tab_background   #2ED3D7
+inactive_tab_foreground #9FC5D6
+inactive_tab_background #0C1A33

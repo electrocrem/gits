@@ -1,0 +1,12 @@
+[SddmGreeterTheme]
+Name=Ghost in the Shell
+Description=Section 9 terminal login, palette taken from the wallpaper
+Author=gits-hyde
+License=MIT
+Type=sddm-theme
+Version=1.0
+MainScript=Main.qml
+ConfigFile=theme.conf
+Theme-Id=ghost-in-the-shell
+Theme-API=2.0
+QtVersion=6

@@ -1,0 +1,191 @@
+// Ghost in the Shell: one solid monochrome strip, no islands, no theme/wallpaper switchers.
+{
+    "layer": "top",
+    "output": ["*"],
+    "height": 24,
+    "exclusive": true,
+    "passthrough": false,
+    "reload_style_on_change": true,
+    "spacing": 0,
+    "include": [
+        "$XDG_CONFIG_HOME/waybar/modules/*json*",
+        "$XDG_CONFIG_HOME/waybar/includes/includes.json"
+    ],
+
+    "modules-left": [
+        "hyprland/workspaces#gits",
+        "hyprland/window#gits"
+    ],
+    "modules-center": [
+        "clock#gits"
+    ],
+    "modules-right": [
+        "custom/gits-player",
+        "custom/gits-cpu",
+        "custom/gits-gpu",
+        "memory#gits",
+        "network#gits",
+        "bluetooth#gits",
+        "pulseaudio#gits",
+        "custom/gits-lang",
+        "custom/gits-mode",
+        "custom/gits-notify",
+        "battery#gits",
+        "tray",
+        "custom/gits-power"
+    ],
+
+    "hyprland/workspaces#gits": {
+        "all-outputs": true,
+        "disable-scroll": false,
+        "tooltip": false,
+        "format": "{id}",
+        "on-scroll-up": "hyprctl dispatch 'hl.dsp.focus({workspace=\"e-1\"})'",
+        "on-scroll-down": "hyprctl dispatch 'hl.dsp.focus({workspace=\"e+1\"})'"
+    },
+
+    "hyprland/window#gits": {
+        "format": " {title}",
+        "max-length": 24,
+        "separate-outputs": true,
+        "rewrite": { "^$": " SECTION 9" }
+    },
+
+    "clock#gits": {
+        "interval": 1,
+        "format": "{:%H:%M:%S  //  %Y.%m.%d}",
+        "format-alt": "{:%A  //  %d %B %Y}",
+        "tooltip-format": "<tt>{calendar}</tt>",
+        "calendar": {
+            "mode": "month",
+            "format": {
+                "months": "<b>{}</b>",
+                "weekdays": "<b>{}</b>",
+                "today": "<u><b>{}</b></u>"
+            }
+        }
+    },
+
+    "custom/gits-player": {
+        "exec": "$XDG_CONFIG_HOME/waybar/scripts/gits-player.sh",
+        "return-type": "json",
+        "interval": 2,
+        "tooltip": true,
+        "on-click": "playerctl play-pause",
+        "on-click-right": "playerctl next",
+        "on-click-middle": "playerctl previous",
+        "on-scroll-up": "playerctl previous",
+        "on-scroll-down": "playerctl next"
+    },
+
+    // CPU usage + package temperature (k10temp); tooltip: model, freq, load, GPU temp, fans
+    "custom/gits-cpu": {
+        "exec": "$XDG_CONFIG_HOME/waybar/scripts/gits-cpu.sh",
+        "return-type": "json",
+        "interval": 2,
+        "tooltip": true,
+        "on-click": "hyde-shell system.monitor"
+    },
+
+    // GPU temperature: iGPU always, dGPU only while it is awake (see scripts/gits-gpu.sh)
+    "custom/gits-gpu": {
+        "exec": "$XDG_CONFIG_HOME/waybar/scripts/gits-gpu.sh",
+        "return-type": "json",
+        "interval": 3,
+        "tooltip": true,
+        "on-click": "hyde-shell system.monitor"
+    },
+
+    "memory#gits": {
+        "interval": 5,
+        "format": "󰍛 {used:0.1f}G",
+        "tooltip-format": "RAM   {used:0.1f} / {total:0.1f} GiB  ({percentage}%)\nAVAIL {avail:0.1f} GiB\nSWAP  {swapUsed:0.1f} / {swapTotal:0.1f} GiB",
+        "on-click": "hyde-shell system.monitor"
+    },
+
+    "network#gits": {
+        "interval": 5,
+        "format-wifi": " {signalStrength}%",
+        "format-ethernet": "󰈂 LINK",
+        "format-disconnected": "󰦩 OFFLINE",
+        "tooltip-format-wifi": "{essid}  ({signalStrength}%)\nIP    {ipaddr}/{cidr}\nGW    {gwaddr}\nBAND  {frequency} GHz\nDOWN  {bandwidthDownBytes}\nUP    {bandwidthUpBytes}",
+        "tooltip-format-ethernet": "{ifname}\nIP    {ipaddr}/{cidr}\nGW    {gwaddr}\nDOWN  {bandwidthDownBytes}\nUP    {bandwidthUpBytes}",
+        "tooltip-format-disconnected": "no network link",
+        "on-click": "nm-connection-editor"
+    },
+
+    // Bluetooth: dim when off, bright with a device count when connected
+    "bluetooth#gits": {
+        "format": "",
+        "format-on": "",
+        "format-off": "󰂲",
+        "format-disabled": "󰂲",
+        "format-connected": "󰂱 {num_connections}",
+        "format-connected-battery": "󰂱 {num_connections}",
+        "tooltip-format": "{controller_alias}  [{status}]\n{controller_address}",
+        "tooltip-format-connected": "{controller_alias}  [{status}]\n{num_connections} connected\n──────────────────────\n{device_enumerate}",
+        "tooltip-format-enumerate-connected": "{device_alias}",
+        "tooltip-format-enumerate-connected-battery": "{device_alias}   {device_battery_percentage}%",
+        "on-click": "blueman-manager",
+        "on-click-right": "bluetoothctl show | grep -q 'Powered: yes' && bluetoothctl power off || bluetoothctl power on"
+    },
+
+    "pulseaudio#gits": {
+        "format": "{icon} {volume}%",
+        "format-muted": " MUTE",
+        "format-icons": { "default": ["", "", ""] },
+        "scroll-step": 5,
+        "tooltip-format": "{desc}\nVOLUME {volume}%\nscroll: volume · middle: mute · right: mixer",
+        "on-click": "pavucontrol-qt -t 3 || pavucontrol -t 3",
+        "on-click-middle": "hyde-shell volumecontrol -o m"
+    },
+
+    // Current keyboard layout (event-driven, see scripts/gits-lang.sh); caps lock toggles it, click too
+    "custom/gits-lang": {
+        "exec": "$XDG_CONFIG_HOME/waybar/scripts/gits-lang.sh",
+        "return-type": "json",
+        "restart-interval": 2,
+        "tooltip": true,
+        "on-click": "hyde-shell keyboardswitch"
+    },
+
+    // HyDE workflow (operating mode) switcher: click = next, scroll = next/prev, right = rofi menu.
+    // Refreshed by signal 8 (sent by scripts/gits-mode.sh) plus a slow poll for changes made elsewhere (keybinds).
+    "custom/gits-mode": {
+        "exec": "$XDG_CONFIG_HOME/waybar/scripts/gits-mode.sh",
+        "return-type": "json",
+        "interval": 30,
+        "signal": 8,
+        "tooltip": true,
+        "on-click": "$XDG_CONFIG_HOME/waybar/scripts/gits-mode.sh next",
+        "on-click-right": "hyde-shell workflows --select",
+        "on-scroll-up": "$XDG_CONFIG_HOME/waybar/scripts/gits-mode.sh prev",
+        "on-scroll-down": "$XDG_CONFIG_HOME/waybar/scripts/gits-mode.sh next"
+    },
+
+    "custom/gits-notify": {
+        "exec": "$XDG_CONFIG_HOME/waybar/scripts/gits-notify.sh",
+        "return-type": "json",
+        "interval": 1,
+        "tooltip": true,
+        "on-click": "dunstctl set-paused toggle",
+        "on-click-right": "dunstctl history-pop",
+        "on-click-middle": "dunstctl history-clear"
+    },
+
+    "battery#gits": {
+        "interval": 10,
+        "states": { "warning": 25, "critical": 12 },
+        "format": "{icon} {capacity}%",
+        "format-charging": " {capacity}%",
+        "format-plugged": " {capacity}%",
+        "format-icons": ["", "", "", "", ""],
+        "tooltip-format": "{timeTo}\nPOWER  {power:0.1f} W\nHEALTH {health}%\nCYCLES {cycles}"
+    },
+
+    "custom/gits-power": {
+        "format": "",
+        "tooltip-format": "power menu",
+        "on-click": "hyde-shell logoutlaunch 1"
+    }
+}

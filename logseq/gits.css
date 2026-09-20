@@ -1,0 +1,232 @@
+/* Ghost in the Shell for Logseq.
+ * Loaded as a theme plugin: this file replaces the stylesheet of the Nord plugin (original kept in
+ * ~/.logseq/plugins-backup/nord-theme/custom.css). Palette = kitty.theme of the HyDE theme; needs no network.
+ */
+:root {
+  --gits-bg:    #060a14;
+  --gits-bg2:   #0a1226;
+  --gits-bg3:   #0c1a33;
+  --gits-line:  #254f5d;
+  --gits-cy:    #2ed3d7;
+  --gits-cyb:   #5ef1f5;
+  --gits-fg:    #c8f4ff;
+  --gits-mid:   #9fc5d6;
+  --gits-dim:   #596977;
+  --gits-red:   #e5432b;
+  --gits-blue:  #398ff0;
+  --gits-warn:  #f0c850;
+  --gits-green: #3fe0a0;
+
+  --ls-font-family: "JetBrainsMono Nerd Font", "JetBrains Mono", "Noto Sans CJK JP", monospace;
+  --ls-border-radius-low: 0px;
+  --ls-border-radius-medium: 0px;
+  --ls-scrollbar-width: 6px;
+}
+
+html:root:root[data-theme="dark"],
+html[data-theme="dark"] body,
+.dark-theme {
+  /* Logseq expects a third-party theme to define its radix-style scales itself */
+  --lx-gray-01: #060a14;
+  --lx-gray-01-alpha: rgba(159, 197, 214, 0.03);
+  --lx-accent-01: #06111a;
+  --lx-accent-01-alpha: rgba(6,17,26, 0.15);
+  --lx-gray-02: #0a1226;
+  --lx-gray-02-alpha: rgba(159, 197, 214, 0.06);
+  --lx-accent-02: #08171f;
+  --lx-accent-02-alpha: rgba(8,23,31, 0.20);
+  --lx-gray-03: #0c1a33;
+  --lx-gray-03-alpha: rgba(159, 197, 214, 0.09);
+  --lx-accent-03: #0b2a35;
+  --lx-accent-03-alpha: rgba(11,42,53, 0.25);
+  --lx-gray-04: #10233f;
+  --lx-gray-04-alpha: rgba(159, 197, 214, 0.12);
+  --lx-accent-04: #0b3a45;
+  --lx-accent-04-alpha: rgba(11,58,69, 0.30);
+  --lx-gray-05: #163046;
+  --lx-gray-05-alpha: rgba(159, 197, 214, 0.16);
+  --lx-accent-05: #0e4b57;
+  --lx-accent-05-alpha: rgba(14,75,87, 0.35);
+  --lx-gray-06: #1c3d52;
+  --lx-gray-06-alpha: rgba(159, 197, 214, 0.2);
+  --lx-accent-06: #146070;
+  --lx-accent-06-alpha: rgba(20,96,112, 0.40);
+  --lx-gray-07: #254f5d;
+  --lx-gray-07-alpha: rgba(159, 197, 214, 0.26);
+  --lx-accent-07: #1a7c8a;
+  --lx-accent-07-alpha: rgba(26,124,138, 0.45);
+  --lx-gray-08: #33697a;
+  --lx-gray-08-alpha: rgba(159, 197, 214, 0.34);
+  --lx-accent-08: #22a3ae;
+  --lx-accent-08-alpha: rgba(34,163,174, 0.50);
+  --lx-gray-09: #596977;
+  --lx-gray-09-alpha: rgba(159, 197, 214, 0.5);
+  --lx-accent-09: #2ed3d7;
+  --lx-accent-09-alpha: rgba(46,211,215, 0.55);
+  --lx-gray-10: #748692;
+  --lx-gray-10-alpha: rgba(159, 197, 214, 0.62);
+  --lx-accent-10: #5ef1f5;
+  --lx-accent-10-alpha: rgba(94,241,245, 0.60);
+  --lx-gray-11: #9fc5d6;
+  --lx-gray-11-alpha: rgba(159, 197, 214, 0.82);
+  --lx-accent-11: #5ef1f5;
+  --lx-accent-11-alpha: rgba(94,241,245, 0.65);
+  --lx-gray-12: #c8f4ff;
+  --lx-gray-12-alpha: rgba(159, 197, 214, 0.96);
+  --lx-accent-12: #c8f4ff;
+  --lx-accent-12-alpha: rgba(200,244,255, 0.70);
+  --ls-left-sidebar-text-color: var(--gits-mid);
+  --ls-header-button-color: var(--gits-mid);
+  --ls-font-family: "JetBrainsMono Nerd Font", "JetBrains Mono", "Noto Sans CJK JP", monospace !important;
+  --ls-border-radius-low: 0px !important;
+  --ls-border-radius-medium: 0px !important;
+  --ls-primary-background-color: var(--gits-bg);
+  --ls-secondary-background-color: var(--gits-bg2);
+  --ls-tertiary-background-color: var(--gits-bg3);
+  --ls-quaternary-background-color: var(--gits-line);
+  --ls-table-tr-even-background-color: var(--gits-bg2);
+  --ls-block-properties-background-color: var(--gits-bg2);
+  --ls-page-properties-background-color: var(--gits-bg2);
+  --ls-header-button-background: var(--gits-bg2);
+  --ls-a-chosen-bg: var(--gits-bg3);
+  --ls-menu-hover-color: var(--gits-bg3);
+  --ls-highlight-color-default: var(--gits-bg3);
+
+  --ls-primary-text-color: var(--gits-fg);
+  --ls-secondary-text-color: var(--gits-mid);
+  --ls-title-text-color: var(--gits-cyb);
+  --ls-head-text-color: var(--gits-cyb);
+  --ls-icon-color: var(--gits-mid);
+  --ls-cloze-text-color: var(--gits-cy);
+
+  --ls-border-color: var(--gits-line);
+  --ls-secondary-border-color: var(--gits-line);
+  --ls-tertiary-border-color: rgba(46, 211, 215, 0.16);
+  --ls-guideline-color: rgba(46, 211, 215, 0.14);
+  --ls-block-bullet-color: var(--gits-cy);
+  --ls-block-bullet-border-color: rgba(46, 211, 215, 0.18);
+
+  --ls-active-primary-color: var(--gits-cy);
+  --ls-active-secondary-color: var(--gits-cyb);
+  --ls-link-text-color: var(--gits-cyb);
+  --ls-link-text-hover-color: #ddf9ff;
+  --ls-link-ref-text-color: var(--gits-cy);
+  --ls-link-ref-text-hover-color: var(--gits-cyb);
+  --ls-tag-text-color: var(--gits-blue);
+  --ls-tag-text-hover-color: var(--gits-cyb);
+  --ls-external-link-color: var(--gits-blue);
+
+  --ls-selection-background-color: var(--gits-cy);
+  --ls-selection-text-color: var(--gits-bg);
+  --ls-search-icon-color: var(--gits-dim);
+  --ls-search-icon-hover-color: var(--gits-cy);
+
+  --ls-scrollbar-foreground-color: rgba(46, 211, 215, 0.25);
+  --ls-scrollbar-background-color: transparent;
+  --ls-scrollbar-thumb-hover-color: var(--gits-cy);
+
+  --ls-page-checkbox-color: var(--gits-cy);
+  --ls-page-checkbox-border-color: var(--gits-cy);
+  --ls-page-blockquote-color: var(--gits-mid);
+  --ls-page-blockquote-bg-color: var(--gits-bg2);
+  --ls-page-blockquote-border-color: var(--gits-cy);
+  --ls-page-inline-code-color: var(--gits-cyb);
+  --ls-page-inline-code-bg-color: var(--gits-bg3);
+
+  --ls-success-color: var(--gits-green);
+  --ls-warning-color: var(--gits-warn);
+  --ls-error-color: var(--gits-red);
+  --ls-error-background-color: rgba(229, 67, 43, 0.14);
+  --ls-warning-background-color: rgba(240, 200, 80, 0.12);
+
+  --ls-highlight-color-yellow: #4a4520;
+  --ls-highlight-color-red: #4a1f1a;
+  --ls-highlight-color-pink: #4a1d3a;
+  --ls-highlight-color-green: #144a3a;
+  --ls-highlight-color-blue: #123a5a;
+  --ls-highlight-color-purple: #2e2860;
+  --ls-highlight-color-gray: #254f5d;
+}
+
+html[data-theme="dark"] body { background: var(--gits-bg); }
+
+/* square everything, thin cyan frames */
+.cp__sidebar-main-content,
+.cp__right-sidebar,
+#left-sidebar,
+.ui__modal-panel,
+.ui__dropdown-menu,
+.menu-links-wrapper,
+.ls-block .block-content-wrapper,
+.cp__header,
+button, input, textarea, select, .form-input,
+.ui__button, .tippy-box, .search-results, .cp__cmdk {
+  border-radius: 0 !important;
+}
+
+.cp__header { border-bottom: 1px solid var(--gits-line); }
+#left-sidebar { border-right: 1px solid var(--gits-line); }
+.cp__right-sidebar { border-left: 1px solid var(--gits-line); }
+
+/* page title: HUD style */
+h1.title, .page-title, .journal-title { color: var(--gits-cyb); letter-spacing: 0.02em; }
+h1.title::before { content: "// "; color: var(--gits-dim); font-weight: 400; }
+
+/* headings inside blocks */
+.ls-block h1, .ls-block h2, .ls-block h3 { color: var(--gits-cyb); }
+.ls-block h4, .ls-block h5, .ls-block h6 { color: var(--gits-mid); }
+
+/* bullets: small squares instead of dots */
+.bullet-container .bullet { border-radius: 0; background-color: var(--gits-cy); }
+.bullet-container.bullet-closed { background-color: rgba(46, 211, 215, 0.22); border-radius: 0; }
+
+/* links and page refs with an underline rule, no fill */
+a.page-ref, .page-ref { color: var(--gits-cy); border-bottom: 1px solid rgba(46, 211, 215, 0.35); }
+a.page-ref:hover, .page-ref:hover { color: var(--gits-cyb); border-bottom-color: var(--gits-cyb); }
+a.tag, .tag { color: var(--gits-blue); }
+
+/* selected block / active row: cyan rule on the left, no rounded highlight */
+.ls-block.selected, .block-content-wrapper.selected, .selected {
+  background-color: rgba(46, 211, 215, 0.12) !important;
+  box-shadow: inset 2px 0 0 var(--gits-cy);
+}
+
+/* code */
+code, pre, .CodeMirror, .cm-s-default {
+  font-family: var(--ls-font-family) !important;
+  background-color: var(--gits-bg3);
+  border-radius: 0;
+}
+:not(pre) > code { color: var(--gits-cyb); border: 1px solid var(--gits-line); padding: 0 0.3em; }
+
+/* quotes, tables, dividers */
+blockquote { border-left: 2px solid var(--gits-cy); background: var(--gits-bg2); }
+table th { color: var(--gits-cyb); border-bottom: 1px solid var(--gits-cy); }
+table td, table th { border-color: var(--gits-line); }
+hr { border-color: var(--gits-line); }
+
+/* primary buttons: solid cyan, dark text */
+.ui__button.bg-indigo-600, .ui__button.bg-blue-600, button.bg-indigo-600, .bg-indigo-600 {
+  background-color: var(--gits-cy) !important;
+  color: var(--gits-bg) !important;
+}
+.ui__button.bg-indigo-600:hover, .bg-indigo-600:hover { background-color: var(--gits-cyb) !important; }
+
+/* thin scrollbars */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: rgba(46, 211, 215, 0.25); border-radius: 0; }
+::-webkit-scrollbar-thumb:hover { background: var(--gits-cy); }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* text selection */
+::selection { background: var(--gits-cy); color: var(--gits-bg); }
+
+/* Tailwind rounding classes used all over Logseq's UI */
+.rounded, .rounded-sm, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl, .rounded-full:not(.bullet):not(.bullet-container),
+.left-sidebar-inner .nav-content-item, .left-sidebar-inner .create, .left-sidebar-inner .create > *,
+.cp__sidebar-main-content .ui__button, .ls-page-blocks, .chip, .block-ref, .page-ref, .keyboard-shortcut > code, kbd {
+  border-radius: 0 !important;
+}
+body, .ls-block, .block-content, .cp__sidebar-help-docs, #left-sidebar, .cp__header, input, textarea {
+  font-family: var(--ls-font-family) !important;
+}

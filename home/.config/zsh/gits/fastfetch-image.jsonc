@@ -1,0 +1,19 @@
+// Info column next to the image banner (used by banner.zsh in image mode, not the main fastfetch config)
+{
+  "display": { "separator": " │ ", "color": { "keys": "blue", "separator": "blue" }, "key": { "width": 7 } },
+  "modules": [
+    { "type": "custom", "format": "\u001b[34m┌─[ \u001b[94mSECTION 9 // NAVI-00\u001b[34m ]" },
+    { "type": "custom", "format": "\u001b[34m│" },
+    { "type": "os", "key": "OS" },
+    { "type": "kernel", "key": "KERNEL" },
+    { "type": "uptime", "key": "UPTIME" },
+    { "type": "packages", "key": "PKGS", "format": "{pacman}" },
+    { "type": "shell", "key": "SHELL" },
+    { "type": "terminal", "key": "TERM" },
+    { "type": "cpu", "key": "CPU", "format": "{cores-logical} threads @ {freq-max}" },
+    { "type": "gpu", "key": "GPU" },
+    { "type": "memory", "key": "MEMORY" },
+    { "type": "disk", "key": "DISK" },
+    { "type": "custom", "format": "\u001b[34m└──────────────────────" }
+  ]
+}

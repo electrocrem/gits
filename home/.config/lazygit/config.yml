@@ -1,0 +1,40 @@
+# Ghost in the Shell for lazygit: thin square frames, cyan focus, the red "eye" for unstaged/dirty state.
+gui:
+  nerdFontsVersion: "3"
+  border: single
+  showRandomTip: false
+  theme:
+    activeBorderColor:
+      - "#2ED3D7"
+      - bold
+    inactiveBorderColor:
+      - "#254F5D"
+    searchingActiveBorderColor:
+      - "#E8C547"
+      - bold
+    optionsTextColor:
+      - "#459BF1"
+    selectedLineBgColor:
+      - "#0C1A33"
+    inactiveViewSelectedLineBgColor:
+      - "#0A1226"
+    cherryPickedCommitFgColor:
+      - "#5EF1F5"
+    cherryPickedCommitBgColor:
+      - "#254F5D"
+    markedBaseCommitFgColor:
+      - "#A99CF5"
+    markedBaseCommitBgColor:
+      - "#254F5D"
+    unstagedChangesColor:
+      - "#E5432B"
+    defaultFgColor:
+      - "#C8F4FF"
+  authorColors:
+    "*": "#9FC5D6"
+  branchColorPatterns:
+    "^main$": "#5EF1F5"
+    "^master$": "#5EF1F5"
+    "^(feat|feature)/": "#34D399"
+    "^(fix|bugfix|hotfix)/": "#E5432B"
+    "^(chore|refactor|docs)/": "#A99CF5"

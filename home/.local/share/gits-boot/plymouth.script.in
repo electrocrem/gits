@@ -1,0 +1,201 @@
+# Ghost in the Shell boot splash: eye art (same as GRUB), rotating targeting ring around the iris,
+# cyan progress bar with a red head, a status line that follows the boot progress.
+# All text is pre-rendered PNG: the initramfs has no fonts.
+
+Window.SetBackgroundTopColor(0.024, 0.039, 0.078);
+Window.SetBackgroundBottomColor(0.024, 0.039, 0.078);
+
+sw = Window.GetWidth();
+sh = Window.GetHeight();
+ox = Window.GetX();
+oy = Window.GetY();
+
+# the art is 1920x1200: "cover" scale for the background, height based scale for the bar and text
+cov = sw / 1920;
+if (sh / 1200 > cov)
+  cov = sh / 1200;
+ui = sh / 1200;
+
+#----------------------------------------- Background --------------------------------
+bg.orig = Image("bg.png");
+bg.image = bg.orig.Scale(Math.Int(1920 * cov), Math.Int(1200 * cov));
+bg.sprite = Sprite(bg.image);
+bg.sprite.SetPosition(ox + Math.Int((sw - 1920 * cov) / 2), oy + Math.Int((sh - 1200 * cov) / 2), -100);
+
+#----------------------------------------- Ring --------------------------------------
+iris.x = ox + (sw - 1920 * cov) / 2 + @IRIS_X@ * cov;
+iris.y = oy + (sh - 1200 * cov) / 2 + @IRIS_Y@ * cov;
+
+ring.orig = Image("ring.png");
+ring.base = ring.orig.Scale(Math.Int(480 * cov), Math.Int(480 * cov));
+ring.sprite = Sprite(ring.base);
+ring.sprite.SetPosition(iris.x - ring.base.GetWidth() / 2, iris.y - ring.base.GetHeight() / 2, 10);
+ring.angle = 0;
+ring.tick = 0;
+
+fun refresh_callback ()
+  {
+    ring.tick += 1;
+    if (ring.tick >= 2)
+      {
+        ring.tick = 0;
+        ring.angle += 0.07;
+        ring.frame = ring.base.Rotate(ring.angle);
+        ring.sprite.SetImage(ring.frame);
+        ring.sprite.SetPosition(iris.x - ring.frame.GetWidth() / 2, iris.y - ring.frame.GetHeight() / 2, 10);
+      }
+  }
+
+Plymouth.SetRefreshFunction(refresh_callback);
+
+#----------------------------------------- Title -------------------------------------
+title.orig = Image("title.png");
+title.image = title.orig.Scale(Math.Int(title.orig.GetWidth() * ui), Math.Int(title.orig.GetHeight() * ui));
+title.sprite = Sprite(title.image);
+title.sprite.SetPosition(ox + (sw - title.image.GetWidth()) / 2, oy + sh * 0.795, 5);
+
+#----------------------------------------- Progress bar ------------------------------
+bar.w = Math.Int(600 * ui);
+bar.h = Math.Int(10 * ui);
+if (bar.h < 6)
+  bar.h = 6;
+bar.x = ox + Math.Int((sw - bar.w) / 2);
+bar.y = oy + Math.Int(sh * 0.865);
+bar.inset = 2;
+
+frame.orig = Image("bar_frame.png");
+frame.image = frame.orig.Scale(bar.w, bar.h);
+frame.sprite = Sprite(frame.image);
+frame.sprite.SetPosition(bar.x, bar.y, 5);
+
+fill.orig = Image("bar_fill.png");
+fill.maxw = bar.w - bar.inset * 2;
+fill.h = bar.h - bar.inset * 2;
+fill.sprite = Sprite();
+fill.sprite.SetPosition(bar.x + bar.inset, bar.y + bar.inset, 6);
+
+head.orig = Image("bar_head.png");
+head.image = head.orig.Scale(Math.Int(6 * ui) + 2, bar.h + Math.Int(10 * ui));
+head.sprite = Sprite(head.image);
+head.sprite.SetPosition(bar.x, bar.y - Math.Int(5 * ui), 7);
+
+#----------------------------------------- Status line -------------------------------
+for (i = 0; i < 5; i++)
+  {
+    status.orig[i] = Image("status" + i + ".png");
+    status.img[i] = status.orig[i].Scale(Math.Int(status.orig[i].GetWidth() * ui), Math.Int(status.orig[i].GetHeight() * ui));
+  }
+status.sprite = Sprite(status.img[0]);
+status.idx = 0;
+status.sprite.SetPosition(ox + (sw - status.img[0].GetWidth()) / 2, bar.y + bar.h + Math.Int(14 * ui), 5);
+
+fun progress_callback (duration, progress)
+  {
+    w = Math.Int(fill.maxw * progress);
+    if (w < 1)
+      w = 1;
+    fill.image = fill.orig.Scale(w, fill.h);
+    fill.sprite.SetImage(fill.image);
+    head.sprite.SetX(bar.x + bar.inset + w - head.image.GetWidth() / 2);
+
+    idx = 0;
+    if (progress > 0.2)
+      idx = 1;
+    if (progress > 0.45)
+      idx = 2;
+    if (progress > 0.7)
+      idx = 3;
+    if (progress > 0.92)
+      idx = 4;
+    if (idx != status.idx)
+      {
+        status.idx = idx;
+        status.sprite.SetImage(status.img[idx]);
+        status.sprite.SetX(ox + (sw - status.img[idx].GetWidth()) / 2);
+      }
+  }
+
+Plymouth.SetBootProgressFunction(progress_callback);
+
+#----------------------------------------- Passphrase dialog -------------------------
+status_mode = "normal";
+
+fun dialog_setup ()
+  {
+    local.box;
+    local.lock;
+    local.entry;
+
+    box.image = Image("box.png");
+    lock.image = Image("lock.png");
+    entry.image = Image("entry.png");
+
+    box.sprite = Sprite(box.image);
+    box.x = ox + sw / 2 - box.image.GetWidth() / 2;
+    box.y = oy + sh / 2 - box.image.GetHeight() / 2;
+    box.z = 10000;
+    box.sprite.SetPosition(box.x, box.y, box.z);
+
+    lock.sprite = Sprite(lock.image);
+    lock.x = box.x + 24;
+    lock.y = box.y + box.image.GetHeight() / 2 - lock.image.GetHeight() / 2;
+    lock.z = box.z + 1;
+    lock.sprite.SetPosition(lock.x, lock.y, lock.z);
+
+    entry.sprite = Sprite(entry.image);
+    entry.x = lock.x + lock.image.GetWidth() + 16;
+    entry.y = box.y + box.image.GetHeight() / 2 - entry.image.GetHeight() / 2;
+    entry.z = box.z + 1;
+    entry.sprite.SetPosition(entry.x, entry.y, entry.z);
+
+    global.dialog.box = box;
+    global.dialog.lock = lock;
+    global.dialog.entry = entry;
+    global.dialog.bullet_image = Image("bullet.png");
+    dialog_opacity(1);
+  }
+
+fun dialog_opacity (opacity)
+  {
+    dialog.box.sprite.SetOpacity(opacity);
+    dialog.lock.sprite.SetOpacity(opacity);
+    dialog.entry.sprite.SetOpacity(opacity);
+    for (index = 0; dialog.bullet[index]; index++)
+      {
+        dialog.bullet[index].sprite.SetOpacity(opacity);
+      }
+  }
+
+fun display_normal_callback ()
+  {
+    global.status_mode = "normal";
+    if (global.dialog)
+      dialog_opacity(0);
+  }
+
+fun display_password_callback (prompt, bullets)
+  {
+    global.status_mode = "password";
+    if (!global.dialog)
+      dialog_setup();
+    else
+      dialog_opacity(1);
+    for (index = 0; dialog.bullet[index] || index < bullets; index++)
+      {
+        if (!dialog.bullet[index])
+          {
+            dialog.bullet[index].sprite = Sprite(dialog.bullet_image);
+            dialog.bullet[index].x = dialog.entry.x + 8 + index * (dialog.bullet_image.GetWidth() + 4);
+            dialog.bullet[index].y = dialog.entry.y + dialog.entry.image.GetHeight() / 2 - dialog.bullet_image.GetHeight() / 2;
+            dialog.bullet[index].z = dialog.entry.z + 1;
+            dialog.bullet[index].sprite.SetPosition(dialog.bullet[index].x, dialog.bullet[index].y, dialog.bullet[index].z);
+          }
+        if (index < bullets)
+          dialog.bullet[index].sprite.SetOpacity(1);
+        else
+          dialog.bullet[index].sprite.SetOpacity(0);
+      }
+  }
+
+Plymouth.SetDisplayNormalFunction(display_normal_callback);
+Plymouth.SetDisplayPasswordFunction(display_password_callback);

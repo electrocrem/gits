@@ -1,0 +1,171 @@
+# Ghost in the Shell for yazi: CRT cyan on navy-black, flat status strip, the hovered row is a solid cyan block
+# (like the active tab in kitty / the browser), the red "eye" for cut files and errors.
+# Palette = ~/.config/hyde/themes/Ghost in the Shell/kitty.theme; preview syntax colours = the bat theme.
+#   bg #060A14  surface #0C1A33  line #254F5D  fg #C8F4FF  muted #596977
+#   cyan #2ED3D7  cyan-hi #5EF1F5  red #E5432B  yellow #E8C547  green #34D399  blue #459BF1  purple #A99CF5
+
+[mgr]
+cwd = { fg = "#5EF1F5", bold = true }
+
+# Find
+find_keyword  = { fg = "#E8C547", bold = true, italic = true, underline = true }
+find_position = { fg = "#A99CF5", bg = "reset", bold = true, italic = true }
+
+# Symlink
+symlink_target = { fg = "#596977", italic = true }
+
+# Marker
+marker_copied   = { fg = "#34D399", bg = "#34D399" }
+marker_cut      = { fg = "#E5432B", bg = "#E5432B" }
+marker_marked   = { fg = "#5EF1F5", bg = "#5EF1F5" }
+marker_selected = { fg = "#E8C547", bg = "#E8C547" }
+marker_symbol   = "│"
+
+# Count
+count_copied   = { fg = "#060A14", bg = "#34D399" }
+count_cut      = { fg = "#060A14", bg = "#E5432B" }
+count_selected = { fg = "#060A14", bg = "#E8C547" }
+
+# Border
+border_symbol = "│"
+border_style  = { fg = "#254F5D" }
+
+# Highlighting of the preview pane
+syntect_theme = "@HOME@/.config/bat/themes/GitS.tmTheme"
+
+
+[tabs]
+active   = { fg = "#060A14", bg = "#2ED3D7", bold = true }
+inactive = { fg = "#596977", bg = "#0C1A33" }
+
+# flat, no powerline arrows
+sep_inner = { open = "", close = "" }
+sep_outer = { open = "", close = "" }
+
+
+[mode]
+normal_main = { fg = "#060A14", bg = "#2ED3D7", bold = true }
+normal_alt  = { fg = "#2ED3D7", bg = "#0C1A33" }
+
+select_main = { fg = "#060A14", bg = "#E8C547", bold = true }
+select_alt  = { fg = "#E8C547", bg = "#0C1A33" }
+
+unset_main = { fg = "#060A14", bg = "#E5432B", bold = true }
+unset_alt  = { fg = "#E5432B", bg = "#0C1A33" }
+
+
+# hovered file: solid cyan block with dark text
+[indicator]
+parent  = { fg = "#C8F4FF", bg = "#254F5D" }
+current = { fg = "#060A14", bg = "#2ED3D7", bold = true }
+preview = { underline = true }
+padding = { open = "", close = "" }
+
+
+[status]
+overall   = { bg = "#060A14" }
+sep_left  = { open = "", close = "" }
+sep_right = { open = "", close = "" }
+
+# Permissions
+perm_sep   = { fg = "#254F5D" }
+perm_type  = { fg = "#34D399" }
+perm_read  = { fg = "#E8C547" }
+perm_write = { fg = "#E5432B" }
+perm_exec  = { fg = "#5EF1F5" }
+
+# Progress
+progress_label  = { fg = "#C8F4FF", bold = true }
+progress_normal = { fg = "#2ED3D7", bg = "#0C1A33" }
+progress_error  = { fg = "#060A14", bg = "#E5432B" }
+
+
+[which]
+border          = { fg = "#2ED3D7" }
+cols            = 3
+mask            = { bg = "#0A1226" }
+cand            = { fg = "#5EF1F5" }
+rest            = { fg = "#596977" }
+desc            = { fg = "#A99CF5" }
+separator       = "  "
+separator_style = { fg = "#254F5D" }
+
+
+[confirm]
+border     = { fg = "#2ED3D7" }
+title      = { fg = "#5EF1F5", bold = true }
+body       = { fg = "#C8F4FF" }
+list       = { fg = "#9FC5D6" }
+btn_yes    = { fg = "#060A14", bg = "#2ED3D7", bold = true }
+btn_no     = { fg = "#9FC5D6" }
+btn_labels = [ "  [Y]es  ", "  (N)o  " ]
+
+
+[spot]
+border = { fg = "#2ED3D7" }
+title  = { fg = "#5EF1F5", bold = true }
+
+# Table
+tbl_col  = { fg = "#2ED3D7" }
+tbl_cell = { fg = "#E8C547", reversed = true }
+
+
+[notify]
+title_info  = { fg = "#34D399" }
+title_warn  = { fg = "#E8C547" }
+title_error = { fg = "#E5432B" }
+
+
+[pick]
+border   = { fg = "#2ED3D7" }
+active   = { fg = "#060A14", bg = "#2ED3D7", bold = true }
+inactive = { fg = "#9FC5D6" }
+
+
+[input]
+border   = { fg = "#2ED3D7" }
+title    = { fg = "#5EF1F5" }
+value    = { fg = "#C8F4FF" }
+selected = { bg = "#254F5D" }
+
+
+[cmp]
+border   = { fg = "#2ED3D7" }
+active   = { fg = "#060A14", bg = "#2ED3D7", bold = true }
+inactive = { fg = "#9FC5D6" }
+
+
+[tasks]
+border  = { fg = "#2ED3D7" }
+title   = { fg = "#5EF1F5" }
+hovered = { fg = "#060A14", bg = "#2ED3D7", bold = true }
+
+
+[help]
+border  = { fg = "#2ED3D7" }
+chord   = { fg = "#5EF1F5" }
+action  = { fg = "#C8F4FF" }
+hovered = { fg = "#060A14", bg = "#2ED3D7", bold = true }
+
+
+[filetype]
+rules = [
+	# Image
+	{ mime = "**/image/*", fg = "#E8C547" },
+	# Media
+	{ mime = "**/{audio,video}/*", fg = "#A99CF5" },
+	# Archive
+	{ mime = "**/application/{zip,rar,7z*,tar,gzip,xz,zstd,bzip*,lzma,compress,archive,cpio,arj,xar,ms-cab*}", fg = "#FF7A5C" },
+	# Document
+	{ mime = "**/application/{pdf,doc,rtf}", fg = "#5EF1F5" },
+	# Virtual file system
+	{ mime = "vfs/{absent,stale}", fg = "#596977" },
+	# Special file
+	{ url = "*", is = "orphan", bg = "#E5432B" },
+	{ url = "*", is = "exec"  , fg = "#34D399" },
+	# Dummy file
+	{ url = "*", is = "dummy", bg = "#E5432B" },
+	{ url = "*/", is = "dummy", bg = "#E5432B" },
+	# Fallback: directories in blue, so the cyan cursor stands out from them
+	{ url = "*/", fg = "#459BF1" }
+]

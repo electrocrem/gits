@@ -1,0 +1,17 @@
+// System info shown next to the Lain banner (used by banner.zsh, not the main fastfetch config)
+{
+  "logo": null,
+  "display": { "pipe": true, "separator": ": " },
+  "modules": [
+    "os",
+    "kernel",
+    "uptime",
+    { "type": "packages", "format": "{pacman}" },
+    "shell",
+    "terminal",
+    { "type": "cpu", "format": "{cores-logical} threads @ {freq-max}" },
+    "gpu",
+    "memory",
+    "disk"
+  ]
+}

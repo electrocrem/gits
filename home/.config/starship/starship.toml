@@ -1,0 +1,125 @@
+# Ghost in the Shell prompt: two lines, thin frame, colours come from the terminal palette (kitty theme).
+#
+#   ┌─[ ~/projects/section9 ]─[  main ✚2 ⇡1 ]─[ 󰉋 4   12  󰋊 702G ]─[ py 3.13 ]
+#   └─▶                                                          [ 14:02:11 ]
+"$schema" = 'https://starship.rs/config-schema.json'
+
+add_newline = true
+command_timeout = 400
+scan_timeout = 30
+
+format = """
+[┌─](bright-black)$username$hostname$directory$git_branch$git_state$git_status$custom$python$nodejs$rust$golang$docker_context$nix_shell$cmd_duration$jobs$status
+[└─](bright-black)$character"""
+
+right_format = '$time'
+
+[character]
+success_symbol = '[▶](bold cyan)'
+error_symbol = '[▶](bold red)'
+vimcmd_symbol = '[◀](bold yellow)'
+
+[username]
+show_always = false
+format = '[─\[ ](bright-black)[$user]($style)'
+style_user = 'bold cyan'
+style_root = 'bold red'
+
+[hostname]
+ssh_only = true
+format = '[@$hostname]($style)[ \]](bright-black)'
+style = 'bold cyan'
+
+[directory]
+format = '[─\[ ](bright-black)[$path]($style)[$read_only]($read_only_style)[ \]](bright-black)'
+style = 'bold cyan'
+read_only = ' 󰌾'
+read_only_style = 'bold red'
+truncation_length = 4
+truncation_symbol = '…/'
+truncate_to_repo = false
+home_symbol = '~'
+
+# [ branch ] then [ status ]: two brackets so a clean repo never leaves one dangling
+[git_branch]
+format = '[─\[ ](bright-black)[$symbol$branch(:$remote_branch)]($style)[ \]](bright-black)'
+symbol = ' '
+style = 'bold purple'
+
+[git_status]
+format = '([─\[ ](bright-black)[$all_status$ahead_behind]($style)[\]](bright-black))'
+style = 'bold yellow'
+conflicted = '⚔$count '
+ahead = '⇡$count '
+behind = '⇣$count '
+diverged = '⇕⇡$ahead_count⇣$behind_count '
+untracked = '?$count '
+stashed = '󰆓$count '
+modified = '✎$count '
+staged = '✚$count '
+renamed = '»$count '
+deleted = '✘$count '
+
+[git_state]
+format = '[─\[ ](bright-black)[$state( $progress_current/$progress_total)]($style)[ \]](bright-black)'
+style = 'bold red'
+
+# current directory: number of folders / files / free space on this filesystem
+[custom.dirinfo]
+command = '~/.config/starship/dirinfo.sh'
+when = 'true'
+shell = ['sh']
+format = '[─\[ ](bright-black)[$output]($style)[ \]](bright-black)'
+style = 'dimmed cyan'
+
+[python]
+format = '[─\[ ](bright-black)[${symbol}${version}(\($virtualenv\))]($style)[ \]](bright-black)'
+symbol = ' '
+style = 'yellow'
+
+[nodejs]
+format = '[─\[ ](bright-black)[${symbol}${version}]($style)[ \]](bright-black)'
+symbol = ' '
+style = 'green'
+
+[rust]
+format = '[─\[ ](bright-black)[${symbol}${version}]($style)[ \]](bright-black)'
+symbol = ' '
+style = 'red'
+
+[golang]
+format = '[─\[ ](bright-black)[${symbol}${version}]($style)[ \]](bright-black)'
+symbol = ' '
+style = 'cyan'
+
+[docker_context]
+format = '[─\[ ](bright-black)[${symbol}${context}]($style)[ \]](bright-black)'
+symbol = ' '
+style = 'blue'
+only_with_files = true
+
+[nix_shell]
+format = '[─\[ ](bright-black)[$symbol$state]($style)[ \]](bright-black)'
+symbol = ' '
+
+[cmd_duration]
+min_time = 2000
+format = '[─\[ ](bright-black)[󱎫 $duration]($style)[ \]](bright-black)'
+style = 'bold yellow'
+
+[jobs]
+symbol = '⚙'
+number_threshold = 1
+format = '[─\[ ](bright-black)[$symbol$number]($style)[ \]](bright-black)'
+style = 'bold blue'
+
+[status]
+disabled = false
+format = '[─\[ ](bright-black)[✘ $status]($style)[ \]](bright-black)'
+style = 'bold red'
+
+[time]
+disabled = false
+time_format = '%H:%M:%S'
+format = '[\[ ](bright-black)[$time]($style)[ \]](bright-black)'
+style = 'dimmed cyan'

@@ -1,0 +1,110 @@
+# gits-hyde — Ghost in the Shell for HyDE
+
+A complete *Ghost in the Shell* desktop for [HyDE](https://github.com/HyDE-Project/HyDE) on Hyprland: navy + cyan
+phosphor palette, square corners, thin frames, kanji tags. One installer, one uninstaller, every replaced file backed up.
+[Русская версия](README.ru.md)
+
+| Area | What you get |
+|---|---|
+| HyDE theme | `Ghost in the Shell`: palette, Hyprland look (sharp corners, cyan borders, blur), kitty, rofi, waybar colours, animation preset `gits` |
+| Waybar | its own layout + style, GPU/CPU modules, language, notification counter, HyDE **workflow switcher**, crash watchdog |
+| Desktop widgets | GTK4 layer-shell cards: clock, calendar, media player, weather, **network**, battery, CPU/RAM/SSD, history graph, to-do |
+| Lock / login / boot | hyprlock layout, SDDM (Qt6) theme, Plymouth + GRUB themes |
+| Launchers | rofi launcher (search prompt, square), wlogout, dunst, **notification action menu** |
+| Terminal | kitty banner + fastfetch, starship prompt, fzf, bat, btop, lazygit, tmux, yazi themes, `GitS-Cursors` (drawn with cairo) |
+| Editors and apps | Neovim (LazyVim) colourscheme, VS Code / Code-OSS theme, Zen browser chrome, Logseq theme, Qt/KDE (Dolphin) via Kvantum, Telegram theme builder |
+| Ops | `gits-doctor` health report, login-race guards, [pitfalls](docs/PITFALLS.md) written down |
+
+## Requirements
+
+* Arch-based distro with **HyDE** installed, Hyprland with the **Lua config** (`~/.config/hypr/hyprland.lua`, 0.55+).
+  Developed on CachyOS + Hyprland 0.56.
+* Packages: see [`packages.txt`](packages.txt). `./install.sh --deps` installs them. AUR: `bibata-cursor-theme`
+  (the cursor builder reuses its alias links).
+
+## Install
+
+```bash
+git clone https://github.com/<you>/gits-hyde.git
+cd gits-hyde
+./install.sh --dry-run          # look at what would happen
+./install.sh                    # user-level install, no sudo
+./install.sh --apply            # ... and switch HyDE to the theme now
+./install.sh --system           # SDDM + Plymouth + GRUB themes (sudo)
+```
+
+Options: `--deps` (pacman), `--login-guards` (blind-login guard for hybrid AMD/NVIDIA laptops), `--telegram` (build the
+Telegram theme into `~/Downloads`), `--fix-grub` (see below), `--dry-run`.
+
+Without `--apply` the installer only prints the three commands that switch your live session:
+
+```bash
+hyde-shell theme.switch.sh -s "Ghost in the Shell"
+hyde-shell waybar.py --set ghost-in-the-shell
+hyde-shell animations --set gits
+```
+
+**Warning:** switching sets the cursor theme live. GTK apps (waybar, Zen) can segfault on that; the bar watchdog revives
+waybar within seconds. Close the browser first, or apply and then log out and in once.
+
+Afterwards run `gits-doctor` (read-only): it checks the session, units, hooks, theme files, the boot chain and Zen.
+
+### What the installer touches
+
+* Copies `home/` into `$HOME` (`@HOME@` becomes your home directory). Anything that already exists and differs is
+  moved to `~/.local/share/gits-hyde/backup/<time>/`.
+* Appends marked blocks (`>>> gits-hyde:… >>>`) to **your** `hyprland.lua` (one `dofile` line), `~/.config/zsh/user.zsh`
+  and `~/.config/nvim/lua/config/options.lua`. Nothing else in those files is changed.
+* Recolours `~/.config/kdeglobals` accents, registers the VS Code theme, installs Zen styles into the default
+  profile, swaps the stylesheet of the Logseq *Nord* theme plugin (originals are kept).
+* `--system` copies the SDDM theme to `/usr/share/sddm/themes`, writes `/etc/sddm.conf.d/zz-gits.conf`, builds and
+  installs the Plymouth/GRUB themes (`home/.local/share/gits-boot`, it can `--revert`).
+
+### GRUB "sparse file not allowed" screen
+
+If GRUB prints `error: commands/loadenv.c:check_blocklists:289:sparse file not allowed. Press any key to continue`
+on every boot (btrfs root + `GRUB_SAVEDEFAULT=true`), run `./install.sh --fix-grub`. GRUB will then always boot the
+first entry instead of the last chosen one. Details in [docs/PITFALLS.md](docs/PITFALLS.md).
+
+## Uninstall
+
+```bash
+./uninstall.sh            # restores backups, deletes what was created, removes the appended blocks
+```
+
+System-level pieces are left alone; the commands to revert them are printed at the end.
+
+## Layout
+
+```
+install.sh / uninstall.sh   installer and its inverse
+packages.txt                pacman packages needed on top of HyDE
+home/                       mirror of $HOME (config files, scripts, extensions)
+assets/                     pictures (wallpapers, lock/boot art, banner) — see NOTICE.md
+zen/  logseq/               browser and notes-app styles (installed by tools/post.py)
+tools/export.py             refresh this repo from your live $HOME (maintainers)
+tools/make-assets.py        generates original placeholder artwork when assets/ is incomplete
+tools/post.py               idempotent edits: kdeglobals, Logseq, VS Code, Zen
+docs/PITFALLS.md            what broke and why
+```
+
+## Updating this repo from a live system
+
+```bash
+tools/export.py --check     # what differs between $HOME and the repo
+tools/export.py             # copy it over (explicit manifest, no images except assets/, no backups/caches)
+```
+
+## Notes
+
+* Tested end to end on the author's machine (CachyOS, HyDE, Hyprland 0.56 Lua config, AMD + NVIDIA laptop). The
+  installer's file handling (backups, idempotency, uninstall round trip) is tested against a throw-away `$HOME`.
+  Boot-time pieces (Plymouth/GRUB) cannot be exercised without a reboot.
+* Logseq: only the route through an installed theme plugin is tested. On a fresh Logseq copy
+  `logseq/gits.css` to `<graph>/logseq/custom.css`.
+* Widget location/weather: `GITS_WEATHER_LOCATION="Berlin"` (default: by IP, `off` disables the request).
+
+## License
+
+Code and configs: MIT, see [LICENSE](LICENSE). The pictures in `assets/` and third-party files are **not** covered by it,
+see [NOTICE.md](NOTICE.md).

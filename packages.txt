@@ -1,0 +1,32 @@
+# Packages this setup needs on top of HyDE (Arch / CachyOS repos). One per line, comments after #.
+# HyDE itself brings hyprland, waybar, rofi, dunst, kitty, wlogout, hyprlock, hypridle, zsh.
+
+# fonts
+ttf-jetbrains-mono-nerd   # every UI text; the Nerd glyphs draw the bar icons
+noto-fonts-cjk            # the kanji tags (時計, 電池, ...)
+
+# desktop widgets (gits-widgets) and waybar modules
+gtk4-layer-shell
+python-gobject
+python-psutil
+python-cairo
+python-pillow             # asset generator, boot/telegram builders
+playerctl
+socat
+jq
+grim
+
+# terminal
+starship
+fastfetch
+bat
+btop
+lazygit
+tmux
+yazi
+fzf
+neovim
+
+# Qt look (Dolphin and friends)
+kvantum
+qt6ct

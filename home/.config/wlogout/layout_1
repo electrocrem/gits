@@ -1,0 +1,41 @@
+{
+    "label": "lock",
+    "action": "lockscreen.sh",
+    "text": "󰌾  LOCK",
+    "keybind": "l"
+}
+
+{
+    "label": "logout",
+    "action": "hyprctl dispatch 'hl.dsp.exit()'",
+    "text": "󰍃  LOGOUT",
+    "keybind": "e"
+}
+
+{
+    "label": "suspend",
+    "action": "lockscreen.sh & disown && systemctl suspend",
+    "text": "󰤄  SLEEP",
+    "keybind": "u"
+}
+
+{
+    "label": "shutdown",
+    "action": "systemctl poweroff",
+    "text": "󰐥  SHUTDOWN",
+    "keybind": "s"
+}
+
+{
+    "label": "hibernate",
+    "action": "systemctl hibernate",
+    "text": "󰋊  HIBERNATE",
+    "keybind": "h"
+}
+
+{
+    "label": "reboot",
+    "action": "systemctl reboot",
+    "text": "󰜉  REBOOT",
+    "keybind": "r"
+}

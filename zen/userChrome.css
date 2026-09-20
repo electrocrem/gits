@@ -1,0 +1,229 @@
+/*
+ * Ghost in the Shell for Zen.
+ * CRT cyan on navy-black, square corners, thin frames, the red "eye" only as the selected-tab marker.
+ * Palette = ~/.config/hyde/themes/Ghost in the Shell/kitty.theme (same as the terminal, waybar, rofi, nvim).
+ * Zen derives its colours from --zen-primary-color, so setting that plus the surfaces below is enough;
+ * the rest is shape (no rounding), fonts and the tab/urlbar frames.
+ */
+
+:root {
+  --gits-bg: #060a14;
+  --gits-bg-alt: #0a1226;
+  --gits-surface: #0c1a33;
+  --gits-line: #242f41;
+  --gits-fg: #c8f4ff;
+  --gits-dim: #9fc5d6;
+  --gits-muted: #596977;
+  --gits-cyan: #2ed3d7;
+  --gits-cyan-hi: #5ef1f5;
+  --gits-cyan-lo: #254f5d;
+  --gits-hover: rgba(46, 211, 215, 0.14);
+  --gits-red: #e5432b;
+}
+
+:root,
+:host(:is(.anonymous-content-host, notification-message)) {
+  /* Zen palette: everything it computes (borders, hovers, selected tab...) starts from these */
+  --zen-primary-color: var(--gits-cyan) !important;
+  --zen-branding-dark: var(--gits-bg) !important;
+  --zen-main-browser-background: var(--gits-bg) !important;
+  --zen-main-browser-background-toolbar: var(--gits-bg) !important;
+  --zen-colors-primary: var(--gits-surface) !important;
+  --zen-colors-secondary: var(--gits-cyan-lo) !important;
+  --zen-colors-tertiary: var(--gits-bg) !important;
+  --zen-colors-hover-bg: var(--gits-hover) !important;
+  --zen-colors-primary-foreground: var(--gits-cyan-hi) !important;
+  --zen-colors-border: rgba(46, 211, 215, 0.4) !important;
+  --zen-colors-border-contrast: rgba(46, 211, 215, 0.2) !important;
+  --zen-colors-input-bg: var(--gits-bg-alt) !important;
+  --zen-dialog-background: var(--gits-bg-alt) !important;
+  --zen-urlbar-background: var(--gits-bg-alt) !important;
+  --zen-toolbar-element-bg: var(--gits-bg-alt) !important;
+  --zen-toolbar-element-bg-hover: var(--gits-hover) !important;
+  --zen-input-border-color: var(--gits-cyan-lo) !important;
+  --zen-appcontent-border: 1px solid rgba(46, 211, 215, 0.45) !important;
+
+  /* text */
+  --toolbar-color: var(--gits-fg) !important;
+  --toolbox-textcolor: var(--gits-fg) !important;
+  --toolbar-field-color: var(--gits-fg) !important;
+  --tab-selected-textcolor: var(--gits-bg) !important;
+  --link-color: var(--gits-cyan-hi) !important;
+  --link-color-hover: var(--gits-white, #ddf9ff) !important;
+
+  /* square, like the terminal frames */
+  --zen-border-radius: 0px !important;
+  --zen-native-inner-radius: 0px !important;
+  --zen-element-separation: 4px !important;
+  --zen-big-shadow: none !important;
+  --zen-squircle-value: 1 !important;
+  --border-radius-small: 0px !important;
+  --border-radius-medium: 0px !important;
+  --border-radius-large: 0px !important;
+  --toolbarbutton-border-radius: 0px !important;
+  --urlbar-icon-border-radius: 0px !important;
+  --urlbar-inner-border-radius: 0px !important;
+  --button-border-radius: 0px !important;
+  --arrowpanel-border-radius: 0px !important;
+  --panel-border-radius: 0px !important;
+
+  /* popups, panels, menus */
+  --arrowpanel-background: var(--gits-bg-alt) !important;
+  --arrowpanel-color: var(--gits-fg) !important;
+  --arrowpanel-border-color: var(--gits-cyan-lo) !important;
+  --panel-background: var(--gits-bg-alt) !important;
+  --panel-color: var(--gits-fg) !important;
+  --panel-border-color: var(--gits-cyan-lo) !important;
+  --panel-shadow: none !important;
+  --panel-shadow-margin: 0px !important;
+  --menuitem-hover-background-color: var(--gits-hover) !important;
+  --panel-item-hover-bgcolor: var(--gits-hover) !important;
+  --panel-item-active-bgcolor: rgba(46, 211, 215, 0.24) !important;
+  --toolbarbutton-hover-background: var(--gits-hover) !important;
+  --toolbarbutton-active-background: rgba(46, 211, 215, 0.24) !important;
+  --toolbarbutton-background-color-hover: var(--gits-hover) !important;
+  --toolbarbutton-background-color-active: rgba(46, 211, 215, 0.24) !important;
+  --urlbar-box-hover-bgcolor: var(--gits-hover) !important;
+  --urlbar-box-active-bgcolor: rgba(46, 211, 215, 0.24) !important;
+  --focus-outline-color: var(--gits-cyan) !important;
+}
+
+/* the window background is painted by these layers, and Zen sets its variables on them (per workspace),
+   so :root alone is not enough: flat navy-black, no workspace gradient, no grain */
+.zen-browser-generic-background,
+#zen-browser-background,
+#zen-browser-background-toolbar {
+  --zen-main-browser-background: var(--gits-bg) !important;
+  --zen-main-browser-background-old: var(--gits-bg) !important;
+  --zen-main-browser-background-toolbar: var(--gits-bg) !important;
+  --zen-main-browser-background-toolbar-old: var(--gits-bg) !important;
+  --zen-background-opacity: 1 !important;
+}
+
+.zen-browser-generic-background .zen-browser-grain {
+  display: none !important;
+}
+
+/* JetBrainsMono Nerd Font everywhere in the browser UI (same as waybar / kitty) */
+#main-window,
+#main-window * {
+  font-family: "JetBrainsMono Nerd Font", "Noto Sans CJK JP", monospace !important;
+}
+
+/* no pills anywhere in the UI: sidebar, buttons, popups (favicons and page content are left alone) */
+#navigator-toolbox *:not(image),
+#zen-tabs-wrapper *:not(image),
+#urlbar *:not(image),
+#urlbar-results *:not(image),
+panel,
+panel *:not(image),
+menupopup,
+menupopup *:not(image),
+findbar,
+findbar *:not(image) {
+  border-radius: 0 !important;
+}
+
+/* ── tabs (vertical sidebar): selected tab is the "active tab" from kitty, with the red eye on its edge ── */
+.tabbrowser-tab .tab-background {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.tabbrowser-tab:not([visuallyselected], [multiselected]):hover .tab-background {
+  background: var(--gits-hover) !important;
+}
+
+.tabbrowser-tab[visuallyselected] .tab-background,
+.tabbrowser-tab[multiselected] .tab-background {
+  background: var(--gits-cyan) !important;
+  box-shadow: inset 3px 0 0 var(--gits-red) !important;
+  border: none !important;
+}
+
+.tabbrowser-tab[visuallyselected],
+.tabbrowser-tab[visuallyselected] .tab-label,
+.tabbrowser-tab[visuallyselected] .tab-close-button,
+.tabbrowser-tab[visuallyselected] .tab-reset-pin-button,
+.tabbrowser-tab[visuallyselected] .tab-secondary-label {
+  color: var(--gits-bg) !important;
+  fill: var(--gits-bg) !important;
+}
+
+.tabbrowser-tab .tab-label {
+  font-weight: 600;
+}
+
+/* ── URL bar: one thin square frame, brighter when you type ── */
+#urlbar,
+.urlbar,
+.urlbar-input-container,
+#urlbar-input-container {
+  border-radius: 0 !important;
+}
+
+.urlbar-background {
+  background: var(--gits-bg-alt) !important;
+  border: 1px solid var(--gits-cyan-lo) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+#urlbar:hover:not([breakout-extend]) .urlbar-background {
+  border-color: rgba(46, 211, 215, 0.6) !important;
+}
+
+#urlbar[focused="true"] > .urlbar-background,
+#urlbar[open] > .urlbar-background,
+#urlbar[breakout-extend] > .urlbar-background {
+  border-color: var(--gits-cyan) !important;
+}
+
+#urlbar-input,
+#urlbar .urlbar-input {
+  color: var(--gits-fg) !important;
+}
+
+/* dropdown results: selected row = solid cyan with dark text */
+.urlbarView-row[selected] > .urlbarView-row-inner,
+.urlbarView-row[selected] {
+  background: var(--gits-cyan) !important;
+  color: var(--gits-bg) !important;
+  border-radius: 0 !important;
+}
+
+.urlbarView-row[selected] * {
+  color: var(--gits-bg) !important;
+  fill: var(--gits-bg) !important;
+}
+
+/* ── page frame: thin cyan line around the content, like waybar's bottom line ── */
+#tabbrowser-tabpanels,
+#zen-appcontent-wrapper,
+.browserContainer {
+  border-radius: 0 !important;
+}
+
+#tabbrowser-tabbox #tabbrowser-tabpanels .browserSidebarContainer:not(.zen-glance-overlay) {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  border: 1px solid rgba(46, 211, 215, 0.45) !important;
+}
+
+/* find bar, notifications, toasts */
+findbar,
+.notificationbox-stack notification-message,
+#zen-toast-container .zen-toast {
+  background: var(--gits-bg-alt) !important;
+  color: var(--gits-fg) !important;
+  border-radius: 0 !important;
+  border: 1px solid var(--gits-cyan-lo) !important;
+}
+
+/* focus ring / text selection inside the UI */
+::selection {
+  background: var(--gits-cyan-lo);
+  color: var(--gits-white, #ddf9ff);
+}
+

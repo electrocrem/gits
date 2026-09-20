@@ -1,0 +1,118 @@
+/**
+ * ROFI Layout
+ *
+ * Notification action menu (dunst: click a popup -> context menu), Ghost in the Shell.
+ * Replaces HyDE's notification.rasi, which paints a pastel "Notification" bell picture behind the list.
+ * ~/.config/rofi/themes wins over ~/.local/share/rofi/themes.
+ *
+ * dunst hands rofi lines like "#Reply (Telegram) [226,inline-reply]". Rofi shows only the readable part and still
+ * returns the whole line: the separator splits at the leading "#" and at " [", column 2 is what you see.
+ */
+
+configuration {
+    modi:                        "drun";
+    show-icons:                  false;
+    drun-display-format:         "{name}";
+    display-columns:             "2";
+    display-column-separator:    "^#|\\s\\[[^\\]]*\\]$";
+    font:                        "JetBrainsMono Nerd Font 10";
+}
+
+@theme "~/.config/rofi/theme.rasi"
+
+window {
+    enabled:                     true;
+    fullscreen:                  false;
+    width:                       30em;
+    transparency:                "real";
+    cursor:                      "default";
+    padding:                     0em;
+    border:                      1px;
+    border-radius:               0em;
+    border-color:                @main-br;
+    background-color:            @main-bg;
+}
+mainbox {
+    enabled:                     true;
+    spacing:                     0em;
+    padding:                     0em;
+    orientation:                 vertical;
+    children:                    [ "hud" , "listview" ];
+    background-color:            transparent;
+}
+
+// Header //
+hud {
+    expand:                      false;
+    orientation:                 horizontal;
+    padding:                     0.9em 1.2em;
+    border:                      0px 0px 1px 0px;
+    border-color:                @separatorcolor;
+    background-color:            @main-ex;
+    children:                    [ "textbox-title" , "textbox-tag" ];
+}
+textbox-title {
+    expand:                      true;
+    content:                     "󰂚  NOTIFICATION";
+    font:                        "JetBrainsMono Nerd Font Bold 10";
+    vertical-align:              0.5;
+    background-color:            transparent;
+    text-color:                  @main-fg;
+}
+textbox-tag {
+    expand:                      false;
+    content:                     "// 通知";
+    vertical-align:              0.5;
+    background-color:            transparent;
+    text-color:                  #596977;
+}
+
+// Actions //
+listview {
+    enabled:                     true;
+    expand:                      false;
+    spacing:                     0em;
+    padding:                     0.4em 0em;
+    columns:                     1;
+    lines:                       6;
+    cycle:                       true;
+    dynamic:                     true;
+    scrollbar:                   false;
+    layout:                      vertical;
+    fixed-height:                false;
+    fixed-columns:               true;
+    cursor:                      "default";
+    background-color:            transparent;
+}
+element {
+    enabled:                     true;
+    spacing:                     1em;
+    padding:                     0.8em 1.2em;
+    cursor:                      pointer;
+    background-color:            transparent;
+    text-color:                  @main-fg;
+    border-radius:               0em;
+}
+element normal.normal, element alternate.normal, element selected.normal {
+    border-radius:               0em;
+}
+element selected.normal {
+    background-color:            @select-bg;
+    text-color:                  @select-fg;
+}
+element-icon {
+    enabled:                     false;
+}
+element-text {
+    vertical-align:              0.5;
+    horizontal-align:            0.0;
+    cursor:                      inherit;
+    background-color:            transparent;
+    text-color:                  inherit;
+}
+
+error-message {
+    text-color:                  @main-fg;
+    background-color:            @main-bg;
+    padding:                     1em;
+}

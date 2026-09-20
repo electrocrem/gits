@@ -1,0 +1,68 @@
+$HOME/.config/hypr/themes/theme.conf|> $HOME/.config/hypr/themes/colors.conf
+
+$GTK_THEME=Wallbash-Gtk
+$ICON_THEME=Tela-circle-grey
+$CURSOR_THEME=GitS-Cursors
+$COLOR_SCHEME=prefer-dark
+$CURSOR_SIZE=22
+$CODE_THEME=Ghost in the Shell
+
+exec = gsettings set org.gnome.desktop.interface icon-theme '$ICON_THEME'
+exec = gsettings set org.gnome.desktop.interface gtk-theme '$GTK_THEME'
+exec = gsettings set org.gnome.desktop.interface color-scheme '$COLOR_SCHEME'
+exec = Hyde cursor theme '$CURSOR_THEME' size $CURSOR_SIZE
+exec = Hyde code theme '$CODE_THEME'
+
+# Ghost in the Shell: sharp corners, thin cyan phosphor borders, no glow overload
+general {
+    border_size = 1
+    col.inactive_border = rgba(2ed3d733)
+    col.active_border = rgba(2ed3d7ff) rgba(398ff0ff) 90deg
+    resize_on_border = yes
+    gaps_in = 3
+    gaps_out = 6
+}
+
+decoration {
+    rounding = 0
+    active_opacity = 0.96
+    inactive_opacity = 0.90
+
+    blur {
+        enabled = yes
+        size = 4
+        passes = 3
+        ignore_opacity = true
+        new_optimizations = true
+        xray = false
+        noise = 0.04
+        popups = true
+    }
+
+    dim_inactive = true
+    dim_strength = 0.12
+
+    shadow {
+        enabled = true
+        range = 14
+        scale = 1
+        render_power = 4
+        color = rgba(2ed3d755)
+        color_inactive = rgba(00000088)
+    }
+}
+
+group {
+    col.border_inactive = rgba(2ed3d733)
+    col.border_active = rgba(2ed3d7ff) rgba(398ff0ff) 90deg
+
+    groupbar {
+      col.active = rgba(2ed3d7ff)
+      col.inactive = rgba(0c1a33ff)
+      font_family = JetBrainsMono NFM
+      font_size = 10
+      text_color = rgba(ddf9ffff)
+    }
+}
+
+blurls = waybar

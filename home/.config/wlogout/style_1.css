@@ -1,0 +1,45 @@
+/* Ghost in the Shell: one slim monochrome strip, glyph + label, brighter with a solid rule on hover.
+   Colours come from the waybar theme.css; ${mgn} is the launcher's horizontal margin. */
+* {
+    background-image: none;
+    font-family: "JetBrainsMono Nerd Font", "Noto Sans CJK JP", monospace;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+@import "$HOME/.config/waybar/theme.css";
+
+window {
+    background-color: rgba(6, 10, 20, 0.35);
+}
+
+button {
+    color: alpha(@main-fg, 0.85);
+    background-color: @bar-bg;
+    outline-style: none;
+    border: none;
+    border-top: 1px solid alpha(@main-fg, 0.55);
+    border-bottom: 1px solid alpha(@main-fg, 0.55);
+    border-radius: 0;
+    box-shadow: none;
+    text-shadow: none;
+    margin: 350px 0;
+    padding: 0 0 28px 0;
+    letter-spacing: 2px;
+}
+
+button:hover,
+button:focus {
+    background-color: alpha(@main-fg, 0.14);
+    color: @main-fg;
+    border-top-color: @main-fg;
+    border-bottom-color: @main-fg;
+}
+
+/* thin dividers between entries, outer edges close the strip */
+#lock      { margin-left: ${mgn}px;  border-left: 1px solid alpha(@main-fg, 0.55); }
+#logout,
+#suspend,
+#shutdown,
+#hibernate { border-left: 1px solid alpha(@main-fg, 0.28); }
+#reboot    { margin-right: ${mgn}px; border-left: 1px solid alpha(@main-fg, 0.28); border-right: 1px solid alpha(@main-fg, 0.55); }

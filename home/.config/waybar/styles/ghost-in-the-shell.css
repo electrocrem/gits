@@ -1,0 +1,133 @@
+/* Ghost in the Shell: one solid monochrome strip, colours come from theme.css (@main-fg on @bar-bg) */
+
+* {
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    text-shadow: none;
+    min-height: 0;
+    margin: 0;
+    font-family: "JetBrainsMono Nerd Font", "Noto Sans CJK JP", monospace;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+window#waybar {
+    background: @bar-bg;
+    color: @main-fg;
+    border-bottom: 1px solid alpha(@main-fg, 0.55);
+}
+
+tooltip {
+    background: @main-bg;
+    border: 1px solid @main-fg;
+}
+tooltip label { color: @main-fg; padding: 2px 4px; }
+
+/* every module: same colour, same padding, thin divider instead of a gap */
+#workspaces,
+#window,
+#clock,
+#custom-gits-player,
+#custom-gits-cpu,
+#custom-gits-gpu,
+#memory,
+#network,
+#bluetooth,
+#pulseaudio,
+#custom-gits-lang,
+#custom-gits-mode,
+#custom-gits-notify,
+#battery,
+#tray,
+#custom-gits-power {
+    background: transparent;
+    color: @main-fg;
+    padding: 0 7px;
+}
+
+#custom-gits-player,
+#custom-gits-cpu,
+#custom-gits-gpu,
+#memory,
+#network,
+#bluetooth,
+#pulseaudio,
+#custom-gits-lang,
+#custom-gits-mode,
+#custom-gits-notify,
+#battery,
+#tray,
+#custom-gits-power {
+    border-left: 1px solid alpha(@main-fg, 0.28);
+}
+
+/* workspaces: kanji, active one is inverted */
+#workspaces { padding: 0; }
+#workspaces button {
+    background: transparent;
+    color: alpha(@main-fg, 0.5);
+    padding: 0 8px;
+    min-width: 0;
+}
+#workspaces button.active {
+    background: @wb-act-bg;
+    color: @wb-act-fg;
+}
+#workspaces button:hover {
+    background: @wb-hvr-bg;
+    color: @wb-hvr-fg;
+}
+#workspaces button.urgent { background: alpha(@main-fg, 0.35); color: @main-fg; }
+
+#window { color: alpha(@main-fg, 0.75); }
+
+#clock { letter-spacing: 1px; }
+
+/* music player */
+#custom-gits-player.playing { color: @main-fg; }
+#custom-gits-player.paused  { color: alpha(@main-fg, 0.65); }
+#custom-gits-player.idle    { color: alpha(@main-fg, 0.4); }
+
+/* notifications: dim when empty, inverted in do-not-disturb */
+#custom-gits-notify.none   { color: alpha(@main-fg, 0.5); }
+#custom-gits-notify.unread { color: @main-fg; }
+#custom-gits-notify.dnd,
+#custom-gits-notify.off    { background: @main-fg; color: @main-bg; }
+
+/* operating mode: plain in Default, inverted in any other mode so a forgotten "gaming" is obvious */
+#custom-gits-mode.default { color: alpha(@main-fg, 0.75); }
+#custom-gits-mode.editing,
+#custom-gits-mode.gaming,
+#custom-gits-mode.powersaver,
+#custom-gits-mode.snappy { background: @main-fg; color: @main-bg; }
+
+/* warnings are shown by inversion / blinking, never by another colour */
+#battery.warning:not(.charging),
+#custom-gits-cpu.warning,
+#custom-gits-gpu.warning { background: alpha(@main-fg, 0.25); }
+#battery.critical:not(.charging),
+#custom-gits-cpu.critical,
+#custom-gits-gpu.critical {
+    background: @main-fg;
+    color: @main-bg;
+    animation: gits-blink 1s steps(2, start) infinite;
+}
+@keyframes gits-blink { to { background: transparent; color: @main-fg; } }
+
+#pulseaudio.muted, #network.disconnected { color: alpha(@main-fg, 0.5); }
+
+/* bluetooth: dim when off, normal when on, bright + counter when connected */
+#bluetooth.off, #bluetooth.disabled { color: alpha(@main-fg, 0.4); }
+#bluetooth.on { color: alpha(@main-fg, 0.8); }
+#bluetooth.connected { color: @main-fg; }
+
+/* hover feedback for clickable modules */
+#custom-gits-player:hover, #custom-gits-cpu:hover, #custom-gits-gpu:hover, #memory:hover, #network:hover, #bluetooth:hover,
+#pulseaudio:hover, #custom-gits-lang:hover, #custom-gits-mode:hover, #custom-gits-notify:hover, #custom-gits-power:hover {
+    background: @wb-hvr-bg;
+    color: @wb-hvr-fg;
+}
+
+#tray > .passive { opacity: 0.5; }
+#tray image { -gtk-icon-style: symbolic; }
