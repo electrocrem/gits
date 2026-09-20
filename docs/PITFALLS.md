@@ -120,7 +120,7 @@ aliases (including links to links) to the `scalable` directories too. `kiconfind
   `RGB` terminal feature). fastfetch without a logo aligns values with `\e[7G` (jumps into the picture): rebuild the lines.
 * **`tmux new-session && exit`, not `exec tmux`:** a broken tmux config with `exec` leaves a window that closes at once.
   One session per kitty window needs `detach-on-destroy on`, otherwise closing one session throws its client into another.
-* **A charge limit makes HyDE's battery notifier spam.** At the limit (98%) the status flaps and it posts a critical
+* **The battery status flaps near full and HyDE's notifier spams.** Around 98% (the ASUS charge limit itself was 100%) the status flips between Full / Not charging / Discharging and it posts a critical
   "Battery Full" plus phantom "Charger Plug Out". A dunst rule with `skip_display` + `history_ignore` hides them
   (`dunstrc.d/70-gits-battery.conf`); the real low-battery warnings stay.
 * **Animation presets:** `borderangle` with style `loop` redraws every frame while it runs, hence the neon border is opt-in.
