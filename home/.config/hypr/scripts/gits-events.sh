@@ -20,6 +20,7 @@ while sleep "${GITS_EVENTS_POLL:-2}"; do
         now=$(cat "$ac" 2>/dev/null)
         if [[ -n $now && $now != "$last_ac" ]]; then
             [[ $now == 1 ]] && gits-sound plug || gits-sound unplug
+            command -v gits-idle >/dev/null && gits-idle apply >/dev/null 2>&1   # AC and battery have their own sleep timers
             last_ac=$now
         fi
     fi

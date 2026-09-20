@@ -54,6 +54,11 @@ end)
 hl.bind("SUPER + I", hl.dsp.exec_cmd("gits-settings"), {description = "[GitS] all settings"})
 hl.bind("SUPER + SHIFT + L", hl.dsp.exec_cmd("hyde-shell layouts --select"), {description = "[GitS] select tiling layout"})
 
+-- Sleep / lock / screen-off timers per power source (gits-idle writes hypridle.conf; also re-applied on plug/unplug)
+hl.on("hyprland.start", function()
+    hl.exec_cmd("sh -c 'sleep 6; command -v gits-idle >/dev/null && gits-idle apply'")
+end)
+
 -- Popups under the bar (gits-panel): control panel and player
 hl.bind("SUPER + SHIFT + C", hl.dsp.exec_cmd("gits-panel control"), {description = "[GitS] control panel"})
 hl.bind("SUPER + SHIFT + M", hl.dsp.exec_cmd("gits-panel media"), {description = "[GitS] player popup"})

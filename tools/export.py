@@ -74,6 +74,7 @@ MANIFEST = [
     (".local/bin/gits-sessions", None),
     (".local/bin/gits-rog", None),
     (".local/bin/gits-settings", None),
+    (".local/bin/gits-idle", None),
     (".local/bin/gits-touchpad", None),
     (".local/share/gits-sounds/build.py", None),
     (".local/share/gits-snap/setup.sh", None),

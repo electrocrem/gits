@@ -155,3 +155,6 @@ aliases (including links to links) to the `scalable` directories too. `kiconfind
   togglesplit".** `gits-layout-toggle` picks the right message for the active layout.
 * **dunst patterns are POSIX regular expressions:** no `(?i)`, no `\\.` escapes in the config (use `[.]`).
 * **Hyprland does not reload a `dofile`d file on its own:** after editing `gits.lua` run `hyprctl reload`.
+* **HyDE's hypridle.conf turned the screen off with `hyprctl dispatch dpms off`, which does not exist in the Lua config** ("')' expected near 'off'"): the
+  screen-off stage never worked. The working form is `hyprctl dispatch 'hl.dsp.dpms({ action = "off" })'`; `gits-idle` generates it. Never start a
+  second hypridle to test a config: its lock and suspend actions really run.

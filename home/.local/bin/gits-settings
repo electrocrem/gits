@@ -18,6 +18,7 @@ entries=$(cat <<'ROWS'
 󰌾  Lock screen layout	hyde-shell hyprlock.sh --select
 󰌌  Key bindings	hyde-shell keybinds_hint
 󰢮  ROG Control Center	gits-rog
+󰤄  Sleep and power timers (dim / lock / screen off / sleep)	gits-idle menu
 󰁹  Power profile	$HOME/.config/waybar/scripts/gits-perf.sh menu
 󰍽  Touchpad on / off	gits-touchpad toggle
 󰈙  HyDE config file	xdg-open $HOME/.config/hyde/config.toml

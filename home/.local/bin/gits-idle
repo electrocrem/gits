@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+# gits-idle: sleep / lock / screen-off timers for hypridle, separately for AC power and battery.
+#   gits-idle menu               pick a timer in a menu (Super+I -> Sleep & power timers, the panel's SLEEP TIMERS button)
+#   gits-idle show               print the timers (minutes, 0 = never)
+#   gits-idle set ac|bat dim|lock|off|sleep MINUTES
+#   gits-idle apply              write the profile of the current power source into ~/.config/hypr/hypridle.conf and restart
+#                                hypridle if that changed anything (run at login and on every plug / unplug by gits-events.sh)
+# Stages, in order: dim the screen -> lock -> screen off -> suspend. Changing one keeps the order (earlier stages are pulled down
+# to it, later ones up). The listeners between the "gits-idle" markers are generated; the rest of hypridle.conf is left alone.
+# NOTE: HyDE's own file used `hyprctl dispatch dpms off`, which does not exist in the Lua config ("')' expected"): the screen-off
+# stage never worked. The generated one uses hl.dsp.dpms.
+conf=${GITS_IDLE_CONF:-$HOME/.config/hypr/hypridle.conf}
+state=${XDG_STATE_HOME:-$HOME/.local/state}/gits-idle/settings
+stages=(dim lock off sleep)
+declare -A label=([dim]="Dim screen" [lock]="Lock" [off]="Screen off" [sleep]="Sleep")
+declare -A val=([ac.dim]=1 [ac.lock]=2 [ac.off]=5 [ac.sleep]=8 [bat.dim]=1 [bat.lock]=2 [bat.off]=5 [bat.sleep]=8)  # = HyDE's old timers
+[[ -r $state ]] && while IFS== read -r k v; do [[ $k =~ ^(ac|bat)\.(dim|lock|off|sleep)$ && $v =~ ^[0-9]+$ ]] && val[$k]=$v; done <"$state"
+
+save() { mkdir -p "$(dirname "$state")"; for k in "${!val[@]}"; do echo "$k=${val[$k]}"; done | sort >"$state"; }
+source_now() {
+    local d online
+    for d in /sys/class/power_supply/*; do
+        [[ $(cat "$d/type" 2>/dev/null) == Mains ]] && { online=$(cat "$d/online" 2>/dev/null); break; }
+    done
+    [[ ${online:-1} == 1 ]] && echo ac || echo bat
+}
+fmt() { (($1 == 0)) && echo "never" || echo "$1 min"; }
+
+set_value() {  # profile stage minutes: keep dim <= lock <= off <= sleep (0 = never is left alone)
+    local p=$1 s=$2 m=$3 i idx
+    for i in "${!stages[@]}"; do [[ ${stages[i]} == "$s" ]] && idx=$i; done
+    [[ -n $idx ]] || { echo "unknown stage $s" >&2; return 1; }
+    val[$p.$s]=$m
+    if ((m > 0)); then
+        for i in "${!stages[@]}"; do
+            local o=${stages[i]} cur=${val[$p.${stages[i]}]}
+            ((cur == 0)) && continue
+            ((i < idx && cur > m)) && val[$p.$o]=$m
+            ((i > idx && cur < m)) && val[$p.$o]=$m
+        done
+    fi
+}
+
+generate() {  # profile -> hypridle listener text
+    local p=$1
+    echo "# >>> gits-idle ($p profile, generated: change it with 'gits-idle menu')"
+    ((${val[$p.dim]} > 0)) && printf 'listener {\n    timeout = %d\n    on-timeout = brightnessctl -s && brightnessctl s 1%%\n    on-resume = brightnessctl -r\n}\n' $((${val[$p.dim]} * 60))
+    ((${val[$p.lock]} > 0)) && printf 'listener {\n    timeout = %d\n    on-timeout = loginctl lock-session\n}\n' $((${val[$p.lock]} * 60))
+    ((${val[$p.off]} > 0)) && printf 'listener {\n    timeout = %d\n    on-timeout = hyprctl dispatch '"'"'hl.dsp.dpms({ action = "off" })'"'"'\n    on-resume = hyprctl dispatch '"'"'hl.dsp.dpms({ action = "on" })'"'"'\n}\n' $((${val[$p.off]} * 60))
+    ((${val[$p.sleep]} > 0)) && printf 'listener {\n    timeout = %d\n    on-timeout = systemctl suspend\n}\n' $((${val[$p.sleep]} * 60))
+    echo "# <<< gits-idle"
+}
+
+apply() {
+    [[ -f $conf ]] || { echo "no $conf" >&2; return 1; }
+    local p new; p=$(source_now)
+    [[ -e $conf.bak-pre-gits-idle ]] || cp -a "$conf" "$conf.bak-pre-gits-idle"
+    new=$(GEN="$(generate "$p")" python3 - "$conf" <<'PY'
+import os, re, sys
+text = open(sys.argv[1]).read()
+gen = os.environ["GEN"]
+if "# >>> gits-idle" in text:
+    text = re.sub(r"# >>> gits-idle.*?# <<< gits-idle", lambda m: gen, text, flags=re.S)
+else:
+    # first run: drop HyDE's four timer listeners (their comment line + block) and put ours before the custom listeners
+    text = re.sub(r"# // --- Listener:[^\n]*\n(?:#[^\n]*\n)*listener \{.*?\n\}\n", "", text, flags=re.S)
+    mark = "# // --- Custom listeners ---"
+    text = text.replace(mark, gen + "\n" + mark, 1) if mark in text else text.rstrip("\n") + "\n\n" + gen + "\n"
+sys.stdout.write(text)
+PY
+)
+    if [[ $new != "$(cat "$conf")" ]]; then
+        printf '%s\n' "$new" >"$conf"
+        [[ -n ${GITS_IDLE_NO_RESTART:-} ]] || systemctl --user restart hyde-Hyprland-idle.service 2>/dev/null
+        echo "applied the $p profile"
+    fi
+}
+
+say() { notify-send -a "HyDE Notify" -t 2500 -i "$2" "Power timers" "$1"; }
+
+menu() {
+    local rows=() keys=() p s
+    for p in ac bat; do
+        for s in "${stages[@]}"; do
+            local icon="󰚥" name="AC power"; [[ $p == bat ]] && { icon="󰁹"; name="Battery"; }
+            rows+=("$(printf '%s  %-9s %-11s %s' "$icon" "$name" "${label[$s]}" "$(fmt "${val[$p.$s]}")")"); keys+=("$p.$s")
+        done
+    done
+    rows+=("󰤄  Sleep now"); keys+=("now")
+    local now; now=$(source_now)
+    local idx; idx=$(printf '%s\n' "${rows[@]}" | gits-menu "󰤄  POWER TIMERS" "// now on: ${now/bat/battery}" -format i) || return 0
+    local k=${keys[idx]}
+    [[ $k == now ]] && { systemctl suspend; return 0; }
+    p=${k%%.*}; s=${k#*.}
+    local opts=(0 1 2 3 5 10 15 20 30 45 60) o lines=() cur=${val[$k]}
+    for o in "${opts[@]}"; do
+        local mark="  "; ((o == cur)) && mark="● "
+        lines+=("$mark$(fmt "$o")")
+    done
+    local pick; pick=$(printf '%s\n' "${lines[@]}" | gits-menu "󰤄  ${label[$s]}" "// ${p/bat/battery}" -format i) || return 0
+    set_value "$p" "$s" "${opts[pick]}"; save
+    [[ $(source_now) == "$p" ]] && apply
+    say "${label[$s]} on ${p/bat/battery}: $(fmt "${opts[pick]}")" "preferences-system-power-management"
+}
+
+case ${1:-menu} in
+    menu) menu ;;
+    show) for p in ac bat; do for s in "${stages[@]}"; do printf '%s.%s=%s\n' "$p" "$s" "${val[$p.$s]}"; done; done ;;
+    set) [[ $2 =~ ^(ac|bat)$ && $4 =~ ^[0-9]+$ ]] || { echo "usage: gits-idle set ac|bat dim|lock|off|sleep MINUTES" >&2; exit 2; }
+         set_value "$2" "$3" "$4" && save && [[ $(source_now) == "$2" ]] && apply ;;
+    apply) apply ;;
+    *) echo "usage: gits-idle [menu|show|set ...|apply]" >&2; exit 2 ;;
+esac
