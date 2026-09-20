@@ -467,11 +467,11 @@ class Panel(Popup):
             b.connect("clicked", lambda *_, c=cmd: self._later(c))
             wide.append(b)
         root.append(wide)
-        # session: lock / sleep run at once, the destructive three ask twice
+        # session: lock / sleep / logout run at once, reboot and power off ask twice
         sess = Gtk.Box(spacing=6, homogeneous=True)
         sess.append(self._action("󰌾", "LOCK", lambda: self._later("loginctl lock-session")))
         sess.append(self._action("󰤄", "SLEEP", lambda: self._later("systemctl suspend")))
-        sess.append(self._action("󰍃", "LOGOUT", lambda: self._later("gits-exit"), confirm=True))
+        sess.append(self._action("󰍃", "LOGOUT", lambda: self._later("gits-exit")))
         sess.append(self._action("󰜉", "REBOOT", lambda: self._later("systemctl reboot"), confirm=True))
         sess.append(self._action("󰐥", "OFF", lambda: self._later("systemctl poweroff"), confirm=True))
         root.append(sess)
