@@ -27,7 +27,8 @@ import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Gdk", "4.0")
 gi.require_version("Gtk4LayerShell", "1.0")
-from gi.repository import Gdk, GLib, GLibUnix, Gtk, Pango  # noqa: E402
+gi.require_version("GdkPixbuf", "2.0")
+from gi.repository import Gdk, GdkPixbuf, GLib, GLibUnix, Gtk, Pango  # noqa: E402
 from gi.repository import Gtk4LayerShell as LS  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -126,6 +127,25 @@ def get_kbd():
         return None
 
 
+def get_touchpad():
+    return sh(["gits-touchpad", "status"]) != "off"
+
+
+GLITCH_FLAG = STATE + "/gits-widgets/no-glitch"
+
+
+def get_glitch():
+    return not os.path.exists(GLITCH_FLAG)
+
+
+def set_glitch():
+    if os.path.exists(GLITCH_FLAG):
+        os.remove(GLITCH_FLAG)
+    else:
+        os.makedirs(os.path.dirname(GLITCH_FLAG), exist_ok=True)
+        open(GLITCH_FLAG, "w").close()
+
+
 def get_volume():
     m = re.search(r"([0-9.]+)(\s+\[MUTED\])?", sh(["wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@"]))
     return (round(float(m.group(1)) * 100), bool(m.group(2))) if m else (0, False)
@@ -182,6 +202,8 @@ class Tile(Gtk.Button):
         self.l_state.set_text("ON" if on else "OFF")
 
     def _click(self, *_):
+        if os.environ.get("GITS_PANEL_DEBUG"):
+            open(os.environ["GITS_PANEL_DEBUG"], "a").write("tile-click\n")
         self.setter()
         # refresh from the real state a moment later (the command needs time to take effect)
         GLib.timeout_add(350, lambda: threading.Thread(target=lambda: GLib.idle_add(self.show_state, self.getter()),
@@ -213,7 +235,7 @@ class Catcher(Gtk.Window):
     """Invisible full-screen click catcher on the TOP layer (under the popups, above windows and the bar).
     A click anywhere outside the popup lands here and calls `on_click`. Keyboard focus stays with the popup (Escape works)."""
 
-    def __init__(self, monitor, on_click):
+    def __init__(self, monitor, on_click, keyboard=False):
         super().__init__()
         self.set_decorated(False)
         self.add_css_class("catcher")
@@ -223,54 +245,81 @@ class Catcher(Gtk.Window):
         for edge in (LS.Edge.TOP, LS.Edge.BOTTOM, LS.Edge.LEFT, LS.Edge.RIGHT):
             LS.set_anchor(self, edge, True)
         LS.set_exclusive_zone(self, -1)  # cover the bar too: a click on the bar button then closes the popup (= toggle)
-        LS.set_keyboard_mode(self, LS.KeyboardMode.NONE)
+        LS.set_keyboard_mode(self, LS.KeyboardMode.EXCLUSIVE if keyboard else LS.KeyboardMode.NONE)
         if monitor is not None:
             LS.set_monitor(self, monitor)
+        if keyboard:  # the catcher owns the keyboard: Escape closes the popup above it
+            key = Gtk.EventControllerKey()
+            key.connect("key-pressed", lambda _c, kv, *_: (on_click(), True)[1] if kv == Gdk.KEY_Escape else False)
+            self.add_controller(key)
         for button in (0,):  # any mouse button
             g = Gtk.GestureClick()
             g.set_button(button)
-            g.connect("pressed", lambda *_: on_click())
+            g.connect("pressed", lambda *_: (open(os.environ["GITS_PANEL_DEBUG"], "a").write("catcher-click\n") if os.environ.get("GITS_PANEL_DEBUG") else None, on_click()))
             self.add_controller(g)
         self.set_child(Gtk.Box())
 
 
 class Popup(Gtk.Window):
-    """Layer-shell popup under the bar: closes on Escape or focus loss. `left` = None anchors it to the right edge,
-    otherwise it sits `left` px from the left edge (the media popup opens under the cursor, i.e. under the bar module)."""
+    """A popup as ONE fullscreen, transparent, keyboard-exclusive layer surface that holds the visible card.
+
+    Why fullscreen: Hyprland routes ALL input to an exclusive-keyboard layer surface, so a separate click catcher below the
+    popup never sees a click, and a popup that only covers its own rectangle never sees clicks outside it. As one big surface it
+    gets every click: outside the card = close (this also makes a click on the bar button a toggle), Escape = close.
+    `left` = None puts the card at the right edge (control panel, notifications), else `left` px from the left edge (media)."""
+    CARD_W = 300
+    TOP = 58  # below the bar (the surface ignores the bar's exclusive zone, so the bar height is part of the margin)
 
     def __init__(self, monitor, left=None):
         super().__init__()
         self.set_decorated(False)
-        self.set_resizable(False)
-        self.set_default_size(300, -1)
         self.add_css_class("panel-win")
+        self.left = left
         LS.init_for_window(self)
         LS.set_namespace(self, "gits-panel")
         LS.set_layer(self, LS.Layer.OVERLAY)
-        LS.set_anchor(self, LS.Edge.TOP, True)
-        if left is None:
-            LS.set_anchor(self, LS.Edge.RIGHT, True)
-            LS.set_margin(self, LS.Edge.RIGHT, 8)
-        else:
-            LS.set_anchor(self, LS.Edge.LEFT, True)
-            LS.set_margin(self, LS.Edge.LEFT, left)
-        LS.set_margin(self, LS.Edge.TOP, 34)
+        for edge in (LS.Edge.TOP, LS.Edge.BOTTOM, LS.Edge.LEFT, LS.Edge.RIGHT):
+            LS.set_anchor(self, edge, True)
+        LS.set_exclusive_zone(self, -1)
         LS.set_keyboard_mode(self, LS.KeyboardMode.EXCLUSIVE)
         if monitor is not None:
             LS.set_monitor(self, monitor)
-        self.armed = False
+        self.card = None
         key = Gtk.EventControllerKey()
         key.connect("key-pressed", lambda _c, kv, *_: (self.close(), True)[1] if kv == Gdk.KEY_Escape else False)
         self.add_controller(key)
-        self.connect("notify::is-active", self._focus_changed)
-        GLib.timeout_add(1500, self._arm)  # focus loss before the first focus must not close it
+        click = Gtk.GestureClick()
+        click.set_button(0)
+        click.connect("pressed", self._pressed)
+        self.add_controller(click)
+        if os.environ.get("GITS_PANEL_DEBUG"):
+            GLib.timeout_add(1200, lambda: (open(os.environ["GITS_PANEL_DEBUG"], "a").write(
+                f"card {self.card.get_width()}x{self.card.get_height()}\n"), False)[1])
 
-    def _arm(self):
-        self.armed = True
-        return False
+    def set_child(self, card):
+        """Called by the subclasses with their card: place it in the corner of the fullscreen surface."""
+        self.card = card
+        card.set_size_request(self.CARD_W, -1)
+        card.set_valign(Gtk.Align.START)
+        card.set_margin_top(self.TOP)
+        if self.left is None:
+            card.set_halign(Gtk.Align.END)
+            card.set_margin_end(8)
+        else:
+            card.set_halign(Gtk.Align.START)
+            card.set_margin_start(self.left)
+        wrap = Gtk.Box()
+        wrap.append(card)
+        super().set_child(wrap)
 
-    def _focus_changed(self, *_):
-        if self.armed and not self.is_active():
+    def _pressed(self, gesture, n, x, y):
+        if self.card is None:
+            return
+        ok, rect = self.card.compute_bounds(self)
+        if os.environ.get("GITS_PANEL_DEBUG"):
+            open(os.environ["GITS_PANEL_DEBUG"], "a").write(f"pressed {x:.0f},{y:.0f} card={rect.get_x():.0f},{rect.get_y():.0f} {rect.get_width():.0f}x{rect.get_height():.0f}\n")
+        inside = ok and rect.get_x() <= x <= rect.get_x() + rect.get_width() and rect.get_y() <= y <= rect.get_y() + rect.get_height()
+        if not inside:
             self.close()
 
     def header(self, title):
@@ -306,7 +355,10 @@ class Panel(Popup):
         plane = Tile("󰀝", "AIRPLANE", get_airplane, lambda: fire(["rfkill", "unblock" if get_airplane() else "block", "all"]))
         game = Tile("󰊗", "GAME", get_game, lambda: fire(["hyde-shell", "workflows", "--set", "01-default" if get_game() else "gaming"]))
         self.tiles = [wifi, bt, dnd, night, snd, wid, awake, plane, game]
-        for row in (self.tiles[:3], self.tiles[3:6], self.tiles[6:]):
+        pad = Tile("󰍽", "TOUCHPAD", get_touchpad, lambda: fire(["gits-touchpad", "toggle"]))
+        glitch = Tile("󰘨", "GLITCH", get_glitch, set_glitch)
+        self.tiles += [pad, glitch]
+        for row in (self.tiles[:3], self.tiles[3:6], self.tiles[6:9], self.tiles[9:]):
             r = Gtk.Box(spacing=6, homogeneous=True)
             for t in row:
                 r.append(t)
@@ -325,7 +377,8 @@ class Panel(Popup):
         # tools: close the panel first (it must not end up in the screenshot), then run
         tools = Gtk.Box(spacing=6, homogeneous=True)
         for icon, name, cmd in (("󰄀", "SHOT", "hyde-shell screenshot s"), ("󰗊", "OCR", "hyde-shell screenshot sc"),
-                                ("󰈊", "PICK", "hyprpicker -an"), ("󰅍", "CLIP", "hyde-shell cliphist -c")):
+                                ("󰈊", "PICK", "hyprpicker -an"), ("󰅍", "CLIP", "hyde-shell cliphist -c"),
+                                ("󰢮", "ROG", "gits-rog")):
             tools.append(self._action(icon, name, lambda c=cmd: self._later(c)))
         root.append(tools)
         # session: lock / sleep run at once, the destructive three ask twice
@@ -438,7 +491,7 @@ class Panel(Popup):
         if DEMO:
             st = {"WI-FI": True, "BLUETOOTH": True, "SILENT": False, "NIGHT": False, "SOUNDS": True, "WIDGETS": True}
             vol, bri, prof, lim, kbd = (46, False), 82, "balanced", 80, (2, 3)
-            st.update({"AWAKE": False, "AIRPLANE": False, "GAME": False})
+            st.update({"AWAKE": False, "AIRPLANE": False, "GAME": False, "TOUCHPAD": True, "GLITCH": True})
         else:
             vol, bri, prof, lim, kbd = get_volume(), get_brightness(), get_profile(), get_charge_limit(), get_kbd()
         GLib.idle_add(self._apply, st, vol, bri, prof, lim, kbd, battery_line() or ("󰁹 98%  full  0.0 W" if DEMO else ""))
@@ -473,12 +526,48 @@ def fmt_time(sec):
     return f"{sec // 3600}:{sec % 3600 // 60:02d}:{sec % 60:02d}" if sec >= 3600 else f"{sec // 60}:{sec % 60:02d}"
 
 
+class CoverArea(Gtk.DrawingArea):
+    """Album art in a fixed square, scaled to cover and centre-cropped. A Gtk.Picture reports the picture's own size as its
+    natural size, so a big or oddly shaped cover used to stretch the whole popup; this widget never asks for more than `size`."""
+
+    def __init__(self, width, height):
+        super().__init__()
+        self.size = max(width, height)
+        self.pix = None
+        self.set_content_width(width)
+        self.set_content_height(height)
+        self.set_hexpand(False)
+        self.set_vexpand(False)
+        self.set_halign(Gtk.Align.CENTER)
+        self.set_draw_func(self._draw)
+
+    def set_path(self, path):
+        try:  # decode at most 2x the display size: enough for a sharp crop, cheap for a 4000 px cover
+            self.pix = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, self.size * 2, self.size * 2, True) if path else None
+        except GLib.Error:
+            self.pix = None
+        self.queue_draw()
+
+    def _draw(self, area, cr, w, h):
+        if self.pix is None:
+            return
+        pw, ph = self.pix.get_width(), self.pix.get_height()
+        k = max(w / pw, h / ph)
+        cr.rectangle(0, 0, w, h)
+        cr.clip()
+        cr.translate((w - pw * k) / 2, (h - ph * k) / 2)
+        cr.scale(k, k)
+        Gdk.cairo_set_source_pixbuf(cr, self.pix, 0, 0)
+        cr.paint()
+
+
 class MediaPopup(Popup):
     """Player popup (MPRIS through playerctl): cover, title, seek bar, transport, shuffle/repeat, player volume."""
     CACHE = os.path.join(os.environ.get("XDG_CACHE_HOME", HOME + "/.cache"), "gits-widgets", "art")
 
     def __init__(self, monitor, left):
         super().__init__(monitor, left)
+        self.CARD_W = 304
         self.quiet = False
         self.art_key = None
         self.length = 0.0
@@ -488,10 +577,7 @@ class MediaPopup(Popup):
         head = self.header("MEDIA.LINK // 音")
         root.append(head)
 
-        self.cover = Gtk.Picture()
-        self.cover.set_content_fit(Gtk.ContentFit.COVER)
-        self.cover.set_can_shrink(True)
-        self.cover.set_size_request(250, 250)
+        self.cover = CoverArea(274, 250)  # fills the card's inner width (304 - padding - frame), fixed height
         self.cover.add_css_class("cover")
         frame = Gtk.Box()
         frame.add_css_class("cover-frame")
@@ -591,7 +677,7 @@ class MediaPopup(Popup):
 
     def _fetch(self):
         if DEMO:
-            data = ["Playing", "Lain Iwakura", "Serial Experiments Lain - Duvet", "", str(232 * 10**6), str(84 * 10**6),
+            data = ["Playing", "Lain Iwakura", "Serial Experiments Lain - Duvet", ("file://" + os.environ["GITS_PANEL_ART"]) if os.environ.get("GITS_PANEL_ART") else "", str(232 * 10**6), str(84 * 10**6),
                     "spotify", "On", "None", "0.62"]
         else:
             fmt = "\t".join(["{{status}}", "{{artist}}", "{{title}}", "{{mpris:artUrl}}", "{{mpris:length}}", "{{position}}",
@@ -608,7 +694,7 @@ class MediaPopup(Popup):
         if d is None:
             self.title.set_text("NO PLAYER")
             self.artist.set_text("start something to play")
-            self.cover.set_paintable(None)
+            self.cover.set_path(None)
             self.art_key = None
             return
         status, artist, title, art, length, pos, name, shuf, loop, vol = d
@@ -642,7 +728,7 @@ class MediaPopup(Popup):
 
     def _load_art(self, url):
         if not url:
-            self.cover.set_paintable(None)
+            self.cover.set_path(None)
             return
         if url.startswith("file://"):
             self._set_cover(urllib.parse.unquote(url[7:]))
@@ -667,10 +753,7 @@ class MediaPopup(Popup):
         threading.Thread(target=work, daemon=True).start()
 
     def _set_cover(self, path):
-        try:
-            self.cover.set_paintable(Gdk.Texture.new_from_filename(path))
-        except GLib.Error:
-            self.cover.set_paintable(None)
+        self.cover.set_path(path)
 
 
 
@@ -698,7 +781,7 @@ class NotifyPopup(Popup):
 
     def __init__(self, monitor):
         super().__init__(monitor)
-        self.set_default_size(340, -1)
+        self.CARD_W = 340
         root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         root.add_css_class("panel")
         root.append(self.header("NOTIFY // 通知"))
@@ -846,9 +929,7 @@ def main():
         win = MediaPopup(mon, max(8, min(cx - 150, width - 308)))
     else:
         win = Panel(mon)
-    catcher = Catcher(mon, win.close)
-    catcher.present()  # before the popup: it has to exist (and be mapped) underneath
-    win.connect("close-request", lambda *_: (catcher.close(), loop.quit(), False)[2])
+    win.connect("close-request", lambda *_: (loop.quit(), False)[1])
     win.present()
     for sig in (2, 15):
         GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, sig, lambda: (loop.quit(), False)[1])

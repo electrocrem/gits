@@ -73,6 +73,8 @@ MANIFEST = [
     (".local/bin/gits-catcher", None),
     (".local/bin/gits-layout-toggle", None),
     (".local/bin/gits-sessions", None),
+    (".local/bin/gits-rog", None),
+    (".local/bin/gits-touchpad", None),
     (".local/share/gits-sounds/build.py", None),
     (".local/share/gits-snap/setup.sh", None),
     (".vscode-oss/extensions/gits.ghost-in-the-shell-1.0.0", None),

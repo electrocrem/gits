@@ -34,6 +34,7 @@ KINDS = {  # kind -> (title, kanji, icon by state)
     "brightness": ("BRIGHTNESS", "輝度", "󰃞", "󰃟", "󰃠", "󰃞"),
     "mic": ("MICROPHONE", "録音", "󰍬", "󰍬", "󰍬", "󰍭"),
     "kbd": ("KEYBOARD", "鍵盤", "󰌌", "󰌌", "󰌌", "󰌌"),
+    "touchpad": ("TOUCHPAD", "触摸", "󰍽", "󰍽", "󰍽", "󰍽"),
 }
 KBD_LEVELS = ["OFF", "LOW", "MED", "HIGH"]
 
@@ -142,7 +143,7 @@ class Osd(Gtk.Window):
             cr.set_source_rgba(*rgba(c, alpha))
             cr.rectangle(bx + i * (sw + gap), by, sw, bh)
             cr.fill()
-        label = "MUTED" if self.muted else (self.label or f"{self.pct}%")
+        label = self.label or ("MUTED" if self.muted else f"{self.pct}%")
         text(cr, label, w - 14, 43, 17 if not (self.muted or self.label) else 13, RED if self.muted else FG, bold=True, align="right")
 
 
@@ -194,7 +195,8 @@ class Daemon:
             parts = ln.split()
             if len(parts) >= 2 and parts[0] in KINDS:
                 try:
-                    self.win.show_state(parts[0], int(float(parts[1])), len(parts) > 2 and parts[2] in ("1", "muted"))
+                    self.win.show_state(parts[0], int(float(parts[1])), len(parts) > 2 and parts[2] in ("1", "muted"),
+                                        label=parts[3] if len(parts) > 3 else None)
                 except ValueError:
                     pass
         return True

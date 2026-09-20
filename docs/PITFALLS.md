@@ -127,11 +127,19 @@ aliases (including links to links) to the `scalable` directories too. `kiconfind
 
 ## Popups, OSD, layouts (round 6c)
 
-* **An exclusive-keyboard layer popup never loses focus.** `KeyboardMode.EXCLUSIVE` keeps the keyboard with the popup even
-  when you click another window, so `notify::is-active` never fires and clicking away did nothing (only Esc closed it).
-  The popups now put an invisible full-screen catcher on the TOP layer under them (covers the bar too, so clicking the bar
-  button again closes the popup = toggle). `gits-layer-watch.sh` does the same for every rofi layer by listening to
-  Hyprland's `openlayer>>rofi` / `closelayer>>rofi` events.
+* **Hyprland sends ALL input to an exclusive-keyboard layer surface.** A popup with `KeyboardMode.EXCLUSIVE` gets no clicks
+  outside its own rectangle, and a separate click catcher below it never sees one either (tested with a virtual uinput mouse);
+  `notify::is-active` never fires for layer surfaces, so "close on focus loss" was dead code too. The popups are therefore one
+  fullscreen transparent exclusive surface that draws the card in the corner: click outside the card = close (a click on the
+  bar button too, i.e. a toggle), Escape = close. Rofi menus (also exclusive) get an invisible catcher from
+  `gits-layer-watch.sh` (Hyprland `openlayer>>rofi` events): unverified for rofi, the standalone catcher does receive clicks.
+* **Testing input without a compositor tool:** `/dev/uinput` is writable for the session user. A virtual mouse (EV_REL + BTN_LEFT)
+  moves the pointer and clicks; `hyprctl dispatch 'hl.dsp.cursor.move({x=..,y=..})'` warps it first. A virtual keyboard
+  injects keys such as KEY_PROG1. Nudge the pointer a little before clicking, or the click lands on the previous surface.
+* **Gtk.Picture stretches its container:** its natural size is the picture's size, so an oddly shaped cover made the media popup
+  huge. The cover is now a fixed-size drawing area with centre-crop.
+* **`hl.device({ name = ..., enabled = false })` (via `hyprctl eval`) disables one input device at runtime** (checked on a virtual
+  mouse); `hyprctl reload` restores it. `hyprctl eval` runs arbitrary Hyprland Lua.
 * **`python3` re-execs itself with LD_PRELOAD (gtk4-layer-shell):** the process command line becomes `/usr/bin/python3 ...`,
   so `pgrep -f '^python3 ...'` never matches. A launcher that trusted it started a new OSD daemon on every volume key press
   (50 of them). Match the script path instead, and prefer `$!` of the first launch.

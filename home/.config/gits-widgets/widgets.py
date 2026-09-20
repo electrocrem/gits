@@ -952,7 +952,7 @@ class GlitchLayer(Gtk.Window):
         return b is not None and b.power_plugged is False
 
     def _maybe_burst(self):
-        if not self._on_battery():
+        if not self._on_battery() and not os.path.exists(os.path.join(STATE_DIR, "no-glitch")):
             self.frames = 7
             GLib.timeout_add(45, self._frame)
         GLib.timeout_add(int(random.uniform(20, 50) * 1000), self._maybe_burst)

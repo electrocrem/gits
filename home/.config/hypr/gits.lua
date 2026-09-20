@@ -40,6 +40,16 @@ end)
 -- (only a description), so this replaces it: dwindle -> toggle split, master -> rotate the master area (gits-layout-toggle).
 hl.bind("SUPER + J", hl.dsp.exec_cmd("gits-layout-toggle"), {description = "[Layout Management] toggle split / rotate master (by layout)"})
 
+-- M4 / ROG key (KEY_PROG1 = XF86Launch1): ROG Control Center, as Armoury Crate on Windows (gits-rog toggles the window)
+hl.bind("XF86Launch1", hl.dsp.exec_cmd("gits-rog"), {description = "[GitS] ROG Control Center (M4 / ROG key)"})
+
+-- Touchpad off/on: the touchpad key and Super+Ctrl+T (gits-touchpad; runtime only, a new session starts with it on)
+hl.bind("XF86TouchpadToggle", hl.dsp.exec_cmd("gits-touchpad toggle"), {description = "[GitS] toggle touchpad"})
+hl.bind("SUPER + CTRL + T", hl.dsp.exec_cmd("gits-touchpad toggle"), {description = "[GitS] toggle touchpad"})
+hl.on("hyprland.start", function()
+    hl.exec_cmd("rm -f " .. (os.getenv("XDG_STATE_HOME") or (home .. "/.local/state")) .. "/gits-touchpad/off")
+end)
+
 -- Popups under the bar (gits-panel): control panel and player
 hl.bind("SUPER + SHIFT + C", hl.dsp.exec_cmd("gits-panel control"), {description = "[GitS] control panel"})
 hl.bind("SUPER + SHIFT + M", hl.dsp.exec_cmd("gits-panel media"), {description = "[GitS] player popup"})

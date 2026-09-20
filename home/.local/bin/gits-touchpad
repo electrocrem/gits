@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# gits-touchpad [toggle|on|off|status]: switch the laptop touchpad off/on from the keyboard (Super+Ctrl+T, the touchpad key).
+# Uses Hyprland's per-device `enabled` (hl.device via hyprctl eval), so mice and the keyboard are untouched. Runtime only:
+# `hyprctl reload` or a new session brings the touchpad back (state file is cleared at login by gits.lua's hook).
+state=${XDG_STATE_HOME:-$HOME/.local/state}/gits-touchpad/off
+name=$(hyprctl devices -j 2>/dev/null | jq -r '[.mice[] | select(.name | test("touchpad"; "i"))][0].name // empty')
+[[ -n $name ]] || { notify-send -a "GitS" "No touchpad found"; exit 1; }
+apply() { hyprctl eval "hl.device({ name = \"$name\", enabled = $1 })" >/dev/null; }
+case ${1:-toggle} in
+    status) [[ -e $state ]] && echo off || echo on; exit 0 ;;
+    on)  want=on ;;
+    off) want=off ;;
+    toggle) [[ -e $state ]] && want=on || want=off ;;
+    *) echo "usage: gits-touchpad [toggle|on|off|status]" >&2; exit 2 ;;
+esac
+mkdir -p "$(dirname "$state")"
+if [[ $want == off ]]; then apply false; touch "$state"; gits-osd touchpad 0 1 OFF
+else apply true; rm -f "$state"; gits-osd touchpad 100 0 ON; fi
