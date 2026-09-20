@@ -14,7 +14,7 @@ Logseq, Qt/Dolphin (Kvantum), сборщик темы Telegram, а также `g
 ## Установка
 
 ```bash
-git clone https://github.com/<you>/gits-hyde.git && cd gits-hyde
+git clone https://github.com/electrocrem/gits-hyde.git && cd gits-hyde
 ./install.sh --dry-run          # посмотреть, что будет сделано
 ./install.sh                    # установка на уровне пользователя, без sudo
 ./install.sh --apply            # ... и сразу переключить HyDE на тему

@@ -25,7 +25,7 @@ phosphor palette, square corners, thin frames, kanji tags. One installer, one un
 ## Install
 
 ```bash
-git clone https://github.com/<you>/gits-hyde.git
+git clone https://github.com/electrocrem/gits-hyde.git
 cd gits-hyde
 ./install.sh --dry-run          # look at what would happen
 ./install.sh                    # user-level install, no sudo
