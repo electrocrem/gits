@@ -18,6 +18,7 @@ entries=$(cat <<'ROWS'
 󰆍  Tiling layout (dwindle / master / monocle / scrolling)	gits-layout select
 󰓅  Workflow (default / gaming / editing / powersaver)	gits-workflow select
 󱂬  Window animations	gits-anim select
+󰸉  Wallpaper (pick; GIFs too)	gits-wall --pick
 󰌌  Key bindings	gits-panel keys
 󰢮  ROG Control Center	gits-rog
 󰤄  Sleep and power timers (dim / lock / screen off / sleep)	gits-idle menu

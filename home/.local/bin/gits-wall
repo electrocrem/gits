@@ -1,7 +1,39 @@
 #!/usr/bin/env bash
-# gits-wall [FILE]: put a wallpaper on every output with awww (default: ~/.local/share/gits/wallpapers/gits_smoke.png). The awww daemon is
-# gits-wallpaper.service; this waits for it. The lock screen and the login screen have their own pictures.
-f=${1:-$HOME/.local/share/gits/wallpapers/gits_smoke.png}
-[[ -r $f ]] || { echo "no wallpaper at $f" >&2; exit 1; }
-for _ in {1..40}; do awww query >/dev/null 2>&1 && break; sleep 0.25; done
-exec awww img "$f" --transition-type none
+# gits-wall [FILE | --pick | --list | --default]: the wallpaper, on every output, with awww (PNG, JPEG, WebP and animated GIF).
+#   gits-wall FILE      show FILE and remember it (the choice is applied again at every login)
+#   gits-wall --pick    choose from a menu (the wallpaper folders below), fade to the new one
+#   gits-wall --list    print the pictures the menu would offer
+#   gits-wall --default forget the choice and go back to gits_smoke.png
+#   gits-wall           apply the remembered wallpaper (this is what gits-wallpaper.service runs at login)
+# Folders searched: ~/.local/share/gits/wallpapers and ~/Pictures/wallpapers (add more with GITS_WALL_DIRS="dir:dir").
+# An animated GIF is cheap (measured with a 1920x1200 loop of 24 frames: about 2% of one core and ~20 MB in awww-daemon), but it is drawn all the time.
+# The lock screen and the login screen have their own pictures.
+default=$HOME/.local/share/gits/wallpapers/gits_smoke.png
+state=${XDG_STATE_HOME:-$HOME/.local/state}/gits/wallpaper
+IFS=: read -ra dirs <<<"$HOME/.local/share/gits/wallpapers:$HOME/Pictures/wallpapers:${GITS_WALL_DIRS:-}"
+
+list() { for d in "${dirs[@]}"; do [[ -d $d ]] && find "$d" -maxdepth 2 -type f \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.webp' -o -iname '*.gif' \) -print; done | sort -u; }
+
+apply() {  # apply FILE [transition]
+    [[ -r $1 ]] || { echo "no wallpaper at $1" >&2; return 1; }
+    for _ in {1..40}; do awww query >/dev/null 2>&1 && break; sleep 0.25; done
+    awww img "$1" --transition-type "${2:-none}"
+}
+
+case ${1:-} in
+    --list) list ;;
+    --default) rm -f "$state"; apply "$default" fade ;;
+    --pick)
+        mapfile -t files < <(list)
+        ((${#files[@]})) || { echo "no pictures found in: ${dirs[*]}" >&2; exit 1; }
+        rows=(); for f in "${files[@]}"; do rows+=("$(basename "$f")   ${f%/*}"); done
+        idx=$(printf '%s\n' "${rows[@]}" | gits-menu "󰸉  WALLPAPER" "// 壁紙" -format i) || exit 0
+        f=${files[idx]}
+        apply "$f" fade && { mkdir -p "$(dirname "$state")"; printf '%s\n' "$f" >"$state"; } ;;
+    "")
+        f=$default; [[ -r $state ]] && read -r saved <"$state" && [[ -r $saved ]] && f=$saved
+        apply "$f" ;;
+    *)
+        f=$(realpath -- "$1" 2>/dev/null) || f=$1
+        apply "$f" fade && { mkdir -p "$(dirname "$state")"; printf '%s\n' "$f" >"$state"; } ;;
+esac
