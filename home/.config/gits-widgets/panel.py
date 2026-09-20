@@ -46,9 +46,9 @@ STATE = os.environ.get("XDG_STATE_HOME", HOME + "/.local/state")
 DEMO = os.environ.get("GITS_PANEL_DEMO") == "1"  # screenshot mode: fixed made-up state, no commands executed
 
 
-def sh(cmd, timeout=4):
-    """Run a command (list), return stdout ('' on any failure)."""
-    if DEMO:
+def sh(cmd, timeout=4, real=False):
+    """Run a command (list), return stdout ('' on any failure). Screenshot mode returns '' unless the data is not personal (real=True)."""
+    if DEMO and not real:
         return ""
     try:
         return subprocess.run(cmd, capture_output=True, text=True, errors="replace", timeout=timeout).stdout.strip()
@@ -526,7 +526,7 @@ class Panel(Popup):
     def _health(self):
         """gits-doctor -q takes ~1 s: run it off the UI thread and show the totals as a coloured chip."""
         if DEMO:
-            out = "\x1b[0m50 ok, 1 warn, 0 fail"
+            out = "\x1b[0m47 ok, 0 warn, 0 fail"
         else:
             out = sh(["gits-doctor", "-q"], timeout=20)
         import re
@@ -1271,7 +1271,7 @@ class NotePopup(Popup):
             lb.set_ellipsize(Pango.EllipsizeMode.END)
             lb.set_max_width_chars(60)
             root.append(lb)
-        self.l_path = label(self.path.replace(HOME, "~"), "foot")
+        self.l_path = label("~/notes/inbox.md" if DEMO else self.path.replace(HOME, "~"), "foot")
         root.append(self.l_path)
         self.set_child(root)
         GLib.idle_add(lambda: (self.entry.grab_focus(), False)[1])
@@ -1366,6 +1366,16 @@ class Item:
         self.match, self.act, self.weight, self.ident = match or title, act, weight, ident
 
 
+# screenshot mode (GITS_PANEL_DEMO=1): nothing personal from the clipboard, the windows or the project list
+DEMO_CLIPS = ["sudo pacman -S --needed hyprland waybar dunst kitty", "https://github.com/electrocrem/gits",
+              "meeting moved: Section 9 sync on Friday 15:00", "[[ binary data 118 KiB png 1920x1200 ]]", "#2ed3d7",
+              "git commit -m \"Installer: hook user.zsh into .zshrc\"", "ssh -L 8080:localhost:80 puppet-master"]
+DEMO_WINDOWS = [("Neovim - install.sh", "kitty", "1"), ("Ghost in the Shell - Zen", "zen", "2"), ("Section 9 // chat", "org.telegram.desktop", "3"),
+                ("btop", "kitty", "1"), ("Steam", "steam", "5"), ("Dolphin - Downloads", "org.kde.dolphin", "4")]
+DEMO_PROJECTS = [("gits", "~/gits", "git"), ("puppet-master", "~/src/puppet-master", "git"), ("tachikoma", "~/src/tachikoma", "godot"),
+                 ("laughing-man", "~/src/laughing-man", "git")]
+
+
 class LauncherPopup(Popup):
     """Command palette: apps (with icons, most used first), settings, projects, open windows, notes, a calculator and a web search
     in one field. mode "clip" is the clipboard history (cliphist) instead. Enter runs, Up/Down select, Esc / click outside close."""
@@ -1412,7 +1422,7 @@ class LauncherPopup(Popup):
         self.set_child(root)
         import time as _t
         _t0 = _t.time()
-        self.usage = self._load_usage()
+        self.usage = {} if DEMO else self._load_usage()
         self.items = self._gather()
         _t1 = _t.time()
         self._refresh()
@@ -1435,12 +1445,17 @@ class LauncherPopup(Popup):
     def _gather(self):
         items = []
         if self.mode == "clip":
-            for ln in sh(["cliphist", "list"], timeout=3).splitlines()[:80]:
+            rows = [f"{i}\t{t}" for i, t in enumerate(DEMO_CLIPS, 1)] if DEMO else sh(["cliphist", "list"], timeout=3).splitlines()[:80]
+            for ln in rows:
                 cid, _, text = ln.partition("\t")
                 binary = text.startswith("[[ binary data")
                 items.append(Item("clip", text.replace("[[ binary data ", "image ").rstrip(" ]]") if binary else " ".join(text.split())[:110],
                                   "image" if binary else f"{len(text)} chars", glyph="󰋩" if binary else "󰅍",
                                   match=text, act=("clip", cid), ident=cid))
+            return items
+        if self.mode == "windows" and DEMO:
+            for i, (t, c, ws) in enumerate(DEMO_WINDOWS):
+                items.append(Item("win", t, f"{c} · workspace {ws}", glyph="󰖯", match=f"{t} {c}", act=("win", str(i)), ident=str(i)))
             return items
         if self.mode == "windows":
             try:
@@ -1469,7 +1484,7 @@ class LauncherPopup(Popup):
         if self.mode == "keys":
             names = {64: "SUPER", 4: "CTRL", 8: "ALT", 1: "SHIFT"}
             try:
-                binds = json.loads(sh(["hyprctl", "binds", "-j"]) or "[]")
+                binds = json.loads(sh(["hyprctl", "binds", "-j"], real=True) or "[]")
             except ValueError:
                 binds = []
             for b in binds:
@@ -1489,16 +1504,19 @@ class LauncherPopup(Popup):
             gen = a.get_generic_name() if hasattr(a, "get_generic_name") else ""
             items.append(Item("app", a.get_name(), a.get_description() or gen or "", icon=a.get_icon(), glyph="󰀻",
                               match=f"{a.get_name()} {gen or ''} {kw}", act=("app", a.get_id() or ""), ident=a.get_id()))
-        for row in sh(["gits-settings", "--list"], timeout=3).splitlines():
+        for row in sh(["gits-settings", "--list"], timeout=3, real=True).splitlines():
             lab, _, cmd = row.partition("\t")
             m = re.match(r"^(\S)\s+(.*)$", lab)
             items.append(Item("set", m.group(2) if m else lab, "settings", glyph=m.group(1) if m else "󰒓", act=("sh", cmd), weight=0.9))
-        for row in sh(["gits-project", "--tsv"], timeout=4).splitlines():
+        prj_rows = [f"{n}\t{d.replace('~', HOME)}\t{k}" for n, d, k in DEMO_PROJECTS] if DEMO else sh(["gits-project", "--tsv"], timeout=4).splitlines()
+        for row in prj_rows:
             name, _, rest = row.partition("\t")
             d, _, kind = rest.partition("\t")
             items.append(Item("prj", name, d.replace(HOME, "~"), glyph="󰊗" if kind == "godot" else "", match=f"{name} {d}", act=("prj", d), weight=0.95))
         try:
-            for c in json.loads(sh(["hyprctl", "clients", "-j"]) or "[]"):
+            cls = [{"mapped": True, "title": t, "class": c, "address": str(i)} for i, (t, c, _) in enumerate(DEMO_WINDOWS)] if DEMO \
+                else json.loads(sh(["hyprctl", "clients", "-j"]) or "[]")
+            for c in cls:
                 if c.get("mapped") and c.get("title"):
                     items.append(Item("win", c["title"][:80], c.get("class", ""), glyph="󰖯", match=f"{c['title']} {c.get('class', '')}",
                                       act=("win", c["address"]), weight=1.1))

@@ -13,20 +13,50 @@ Logseq, Qt/Dolphin (Kvantum), сборщик темы Telegram, а также `g
 
 ## Галерея
 
-![Рабочий стол](docs/img/desktop.jpg)
+![Попапы один за другим: лаунчер, буфер обмена, горячие клавиши, плеер, микшер](docs/img/demo.gif)
 
+![Рабочий стол](docs/img/desktop.jpg)
+Рабочий стол с виджетами (демо-данные, без личного).
+
+![Тайлинг](docs/img/tiling.jpg)
+Тайлинг с зазорами и неоновыми рамками: баннер kitty, yazi и Neovim рядом.
+
+![Панель](docs/img/bar.jpg)
+Панель: воркспейсы, часы, плеер, нагрузка и температура, Wi-Fi, Bluetooth, громкость, раскладка, режим, счётчик уведомлений, батарея, трей, кнопка питания.
+
+### Лаунчер и быстрые инструменты
+| | |
+|---|---|
+| ![Лаунчер](docs/img/launcher.jpg) лаунчер (Super+A): приложения, настройки, проекты, окна, заметки, калькулятор и веб-поиск в одном поле | ![Калькулятор](docs/img/calculator.jpg) калькулятор в том же поле: `sqrt(1764) * 2`, `2^10`; Enter копирует результат |
+| ![Буфер обмена](docs/img/clipboard.jpg) история буфера обмена (Super+V): текст и картинки | ![Окна](docs/img/windows.jpg) переключатель окон (Super+Tab) |
+| ![Эмодзи](docs/img/emoji.jpg) эмодзи и символы (Super+запятая): поиск по названию, Enter копирует | ![Клавиши](docs/img/keys.jpg) все горячие клавиши с описанием (Super+/) |
+| ![Заметка](docs/img/note.jpg) быстрая заметка (Super+N) в `~/notes/inbox.md` | ![Фокус](docs/img/focus.jpg) таймер фокуса (Super+F): помодоро со счётчиком в панели |
+
+### Панели и меню
 | | |
 |---|---|
 | ![Панель управления](docs/img/control-panel.jpg) панель управления (кнопка питания, Super+Shift+C) | ![Плеер](docs/img/player.jpg) плеер (Super+Shift+M) |
 | ![Микшер](docs/img/mixer.jpg) микшер (Super+Alt+V) | ![Уведомления](docs/img/notifications.jpg) центр уведомлений (Super+Shift+N) |
+| ![Wi-Fi](docs/img/wifi.jpg) меню Wi-Fi (клик по иконке в панели) | ![Bluetooth](docs/img/bluetooth.jpg) меню Bluetooth (клик по иконке в панели) |
 | ![Настройки](docs/img/settings-menu.jpg) все настройки (Super+I) | ![OSD](docs/img/osd.jpg) OSD громкости, яркости, подсветки, тачпада |
-| ![Терминал](docs/img/terminal.jpg) баннер терминала | ![Заставка Neovim](docs/img/nvim-dashboard.jpg) заставка Neovim |
-| ![Neovim](docs/img/nvim.jpg) Neovim | ![Лаунчер](docs/img/launcher.jpg) лаунчер |
-| ![wlogout](docs/img/wlogout.jpg) меню выключения | ![SDDM](docs/img/sddm.jpg) экран входа SDDM |
-| ![Dolphin](docs/img/dolphin.jpg) Dolphin с циановыми папками | ![Logseq](docs/img/logseq.jpg) Logseq |
+| ![Всплывающие уведомления](docs/img/notification-popups.jpg) всплывающие уведомления (dunst) | ![Меню выключения](docs/img/wlogout.jpg) меню выключения (wlogout) |
 
-Окна открываются эффектом «сканирования»: яркая линия проявляет карточку сверху вниз. Экран блокировки, Plymouth и GRUB не показаны: их нельзя безопасно
-снять на живой сессии. `tools/screenshots.sh` переснимает картинки выше на пустом воркспейсе с демо-данными.
+### Терминал и инструменты
+| | |
+|---|---|
+| ![Терминал](docs/img/terminal.jpg) баннер терминала + fastfetch, промпт starship | ![gits-doctor](docs/img/doctor.jpg) отчёт `gits-doctor` |
+| ![Заставка Neovim](docs/img/nvim-dashboard.jpg) заставка Neovim | ![Neovim](docs/img/nvim.jpg) Neovim (LazyVim) |
+| ![tmux](docs/img/tmux.jpg) tmux с баннером в панели | ![lazygit](docs/img/lazygit.jpg) lazygit |
+| ![yazi](docs/img/yazi.jpg) yazi | ![btop](docs/img/btop.jpg) btop |
+
+### Приложения и вход
+| | |
+|---|---|
+| ![Dolphin](docs/img/dolphin.jpg) Dolphin с циановыми папками | ![VS Code](docs/img/vscode.jpg) тема VS Code / Code-OSS |
+| ![SDDM](docs/img/sddm.jpg) экран входа SDDM |  |
+
+Экран блокировки, Plymouth, GRUB, а также темы Zen, Logseq и Telegram не показаны: их нельзя безопасно и надёжно снять на живой сессии
+(Logseq откроет ваши заметки). Картинки и GIF пересобирает `tools/screenshots.sh` на пустом воркспейсе с демо-данными.
 
 ## Установка
 

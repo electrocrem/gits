@@ -28,22 +28,52 @@ thin frames, kanji tags. Nothing else is needed: no dotfiles framework, no theme
 
 ## Gallery
 
+![Popups opening one after another: launcher, clipboard, key bindings, player, mixer](docs/img/demo.gif)
+
 ![Desktop](docs/img/desktop.jpg)
 **Desktop:** waybar, widgets (clock, calendar, player, weather, network, battery, load, audio spectrum, to-do). Demo data, no personal info.
 
+![Tiling](docs/img/tiling.jpg)
+**Tiling** with gaps and neon borders: kitty banner, yazi and Neovim side by side.
+
+![Bar](docs/img/bar.jpg)
+**Bar:** workspaces, clock, player, load and temperature, Wi-Fi, Bluetooth, volume, layout, workflow mode, notification counter, battery, tray, power button.
+
+### Launcher and quick tools
+| | |
+|---|---|
+| ![Launcher](docs/img/launcher.jpg) **Launcher** (Super+A): apps (with icons, most used first), settings, projects, windows, notes, calculator, web search in one field | ![Calculator](docs/img/calculator.jpg) **Calculator** in the same field: `sqrt(1764) * 2`, `2^10`, `pi * 3`; Enter copies the result |
+| ![Clipboard](docs/img/clipboard.jpg) **Clipboard history** (Super+V): text and images | ![Window switcher](docs/img/windows.jpg) **Window switcher** (Super+Tab), most recent first |
+| ![Emoji](docs/img/emoji.jpg) **Emoji and symbol picker** (Super+comma): search by name, Enter copies | ![Key bindings](docs/img/keys.jpg) **Key bindings** (Super+slash): every bind with its description, searchable |
+| ![Quick note](docs/img/note.jpg) **Quick note** (Super+N) into `~/notes/inbox.md`; Super+Shift+O lists the latest | ![Focus timer](docs/img/focus.jpg) **Focus timer** (Super+F): pomodoro with a counter on the bar |
+
+### Panels and menus
 | | |
 |---|---|
 | ![Control panel](docs/img/control-panel.jpg) **Control panel** (the power button, Super+Shift+C): toggles, sliders, power profile, charge limit, tools, session, health chip | ![Player](docs/img/player.jpg) **Player popup** (Super+Shift+M) |
-| ![Mixer](docs/img/mixer.jpg) **Sound mixer** (Super+Alt+V): master, outputs, one slider per app | ![Notifications](docs/img/notifications.jpg) **Notification centre** (Super+Shift+N) |
+| ![Mixer](docs/img/mixer.jpg) **Sound mixer** (Super+Alt+V): master, outputs, one slider per app | ![Notification centre](docs/img/notifications.jpg) **Notification centre** (Super+Shift+N) |
+| ![Wi-Fi](docs/img/wifi.jpg) **Wi-Fi menu** (click on the bar icon) | ![Bluetooth](docs/img/bluetooth.jpg) **Bluetooth menu** (click on the bar icon) |
 | ![Settings](docs/img/settings-menu.jpg) **All settings** (Super+I) | ![OSD](docs/img/osd.jpg) **On-screen display** for volume, brightness, keyboard backlight, touchpad |
-| ![Terminal](docs/img/terminal.jpg) **Terminal:** kitty banner + fastfetch | ![Neovim dashboard](docs/img/nvim-dashboard.jpg) **Neovim dashboard** |
-| ![Neovim](docs/img/nvim.jpg) **Neovim** (LazyVim) colourscheme, lualine, bufferline | ![Launcher](docs/img/launcher.jpg) **launcher** |
-| ![wlogout](docs/img/wlogout.jpg) **wlogout** power menu | ![SDDM](docs/img/sddm.jpg) **SDDM** login (Qt6) |
-| ![Dolphin](docs/img/dolphin.jpg) **Dolphin** (Kvantum) with `GitS-Icons` cyan folders | ![Logseq](docs/img/logseq.jpg) **Logseq** |
+| ![Notification popups](docs/img/notification-popups.jpg) **Notification popups** (dunst): normal, critical and phone notifications | ![Power menu](docs/img/wlogout.jpg) **Power menu** (wlogout) |
 
-The popups open with a scan-line "power-on" effect (a bright line uncovers the card from the top). The lock screen (hyprlock), Plymouth and GRUB themes are not
-pictured: they cannot be screenshotted safely on a live session. `tools/screenshots.sh` regenerates the pictures above on an empty workspace with the
-widgets and popups in their demo modes.
+### Terminal and tools
+| | |
+|---|---|
+| ![Terminal](docs/img/terminal.jpg) **Terminal:** kitty banner + fastfetch, starship prompt | ![gits-doctor](docs/img/doctor.jpg) **`gits-doctor`** health report |
+| ![Neovim dashboard](docs/img/nvim-dashboard.jpg) **Neovim dashboard** | ![Neovim](docs/img/nvim.jpg) **Neovim** (LazyVim): colourscheme, lualine, bufferline |
+| ![tmux](docs/img/tmux.jpg) **tmux** themed, with the banner inside a pane | ![lazygit](docs/img/lazygit.jpg) **lazygit** |
+| ![yazi](docs/img/yazi.jpg) **yazi** | ![btop](docs/img/btop.jpg) **btop** |
+
+### Apps and login
+| | |
+|---|---|
+| ![Dolphin](docs/img/dolphin.jpg) **Dolphin** (Kvantum) with `GitS-Icons` cyan folders | ![VS Code](docs/img/vscode.jpg) **VS Code / Code-OSS** theme |
+| ![SDDM](docs/img/sddm.jpg) **SDDM** login (Qt6) |  |
+
+The popups open with a scan-line "power-on" effect (a bright line uncovers the card from the top). The lock screen (hyprlock), Plymouth and GRUB themes,
+and the Zen, Logseq and Telegram themes are not pictured: they cannot be screenshotted safely or reliably on a live session (Logseq would open your own notes).
+`tools/screenshots.sh` regenerates the pictures and the GIF on an empty workspace with the widgets and popups in their demo modes; it refuses to shoot
+the bar while a player is playing, so the title of your music never ends up in a picture.
 
 ## Requirements
 
@@ -118,7 +148,7 @@ docs/PALETTE.md             the colours
 
 ```bash
 tools/export.py --check     # what differs between $HOME and the repo
-tools/screenshots.sh        # retake docs/img on an empty workspace (demo data, ~1 minute, do not touch the mouse)
+tools/screenshots.sh        # retake docs/img + the demo GIF on an empty workspace (demo data, a few minutes, do not touch the mouse; ONLY="player mixer" retakes some)
 tools/export.py             # copy it over (explicit manifest, no images except assets/, no backups/caches)
 ```
 

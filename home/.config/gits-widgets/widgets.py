@@ -415,6 +415,9 @@ class MediaCard(Card):
         cr.fill()
 
     def query(self):
+        if DEMO:   # a made-up track (cover from GITS_WIDGETS_ART) so the screenshots show the card in use
+            art = os.environ.get("GITS_WIDGETS_ART", "")
+            return ["Playing", "Lain Iwakura", "Serial Experiments Lain - Duvet", ("file://" + art) if art else "", "232000000", "84000000"]
         fmt = "\t".join(["{{status}}", "{{artist}}", "{{title}}", "{{mpris:artUrl}}", "{{mpris:length}}",
                          "{{position}}"])
         try:
