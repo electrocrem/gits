@@ -247,6 +247,7 @@ class Popup(Gtk.Window):
         self.add_css_class("panel-win")
         self.left = left
         self.center = center
+        self.hcenter = False   # centred horizontally under the bar (the media popup), instead of hugging a corner
         LS.init_for_window(self)
         LS.set_namespace(self, "gits-panel")
         LS.set_layer(self, LS.Layer.OVERLAY)
@@ -294,6 +295,8 @@ class Popup(Gtk.Window):
         if self.center:
             stack.set_halign(Gtk.Align.CENTER)
             stack.set_margin_top(110)
+        elif self.hcenter:
+            stack.set_halign(Gtk.Align.CENTER)
         elif self.left is None:
             stack.set_halign(Gtk.Align.END)
             stack.set_margin_end(8)
@@ -672,8 +675,9 @@ class MediaPopup(Popup):
     """Player popup (MPRIS through playerctl): cover, title, seek bar, transport, shuffle/repeat, player volume."""
     CACHE = os.path.join(os.environ.get("XDG_CACHE_HOME", HOME + "/.cache"), "gits-widgets", "art")
 
-    def __init__(self, monitor, left):
-        super().__init__(monitor, left)
+    def __init__(self, monitor):
+        super().__init__(monitor)
+        self.hcenter = True   # opened from the bar or by Super+Shift+M: always in the middle, never wherever the pointer happens to be
         self.CARD_W = 304
         self.quiet = False
         self.art_key = None
@@ -1272,9 +1276,7 @@ def main():
         width = mon.get_geometry().width if mon else 1280
         win = MixerPopup(mon, max(8, min(cx - 170, width - 348)))
     elif mode == "media":
-        cx = int(sh(["hyprctl", "cursorpos"]).split(",")[0] or 640) if not DEMO else 700  # logical px: under the clicked bar module
-        width = mon.get_geometry().width if mon else 1280
-        win = MediaPopup(mon, max(8, min(cx - 150, width - 308)))
+        win = MediaPopup(mon)
     else:
         win = Panel(mon)
     win.connect("close-request", lambda *_: (loop.quit(), False)[1])
