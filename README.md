@@ -26,16 +26,22 @@ phosphor palette, square corners, thin frames, kanji tags. One installer, one un
 
 ## Gallery
 
+![Desktop](docs/img/desktop.jpg)
+**Desktop:** waybar, widgets (clock, calendar, player, weather, network, battery, load, audio spectrum, to-do). Demo data, no personal info.
+
 | | |
 |---|---|
-| ![Desktop](docs/img/desktop.jpg) **Desktop:** waybar, widgets (clock, calendar, player, weather, network, battery, load, to-do) | ![Launcher](docs/img/launcher.jpg) **rofi launcher** with a search prompt |
-| ![Notification menu](docs/img/notification-menu.jpg) **Notification actions** (click a popup) | ![wlogout](docs/img/wlogout.jpg) **wlogout** power menu |
-| ![Terminal](docs/img/terminal.jpg) **Terminal:** kitty banner + fastfetch | ![Neovim](docs/img/nvim.jpg) **Neovim** (LazyVim) colourscheme, lualine, bufferline |
-| ![Neovim dashboard](docs/img/nvim-dashboard.jpg) **Neovim dashboard** | ![SDDM](docs/img/sddm.jpg) **SDDM** login (Qt6) |
+| ![Control panel](docs/img/control-panel.jpg) **Control panel** (the power button, Super+Shift+C): toggles, sliders, power profile, charge limit, tools, session, health chip | ![Player](docs/img/player.jpg) **Player popup** (Super+Shift+M) |
+| ![Mixer](docs/img/mixer.jpg) **Sound mixer** (Super+Alt+V): master, outputs, one slider per app | ![Notifications](docs/img/notifications.jpg) **Notification centre** (Super+Shift+N) |
+| ![Settings](docs/img/settings-menu.jpg) **All settings** (Super+I) | ![OSD](docs/img/osd.jpg) **On-screen display** for volume, brightness, keyboard backlight, touchpad |
+| ![Terminal](docs/img/terminal.jpg) **Terminal:** kitty banner + fastfetch | ![Neovim dashboard](docs/img/nvim-dashboard.jpg) **Neovim dashboard** |
+| ![Neovim](docs/img/nvim.jpg) **Neovim** (LazyVim) colourscheme, lualine, bufferline | ![Launcher](docs/img/launcher.jpg) **rofi launcher** with a search prompt |
+| ![wlogout](docs/img/wlogout.jpg) **wlogout** power menu | ![SDDM](docs/img/sddm.jpg) **SDDM** login (Qt6) |
 | ![Dolphin](docs/img/dolphin.jpg) **Dolphin** (Kvantum) with `GitS-Icons` cyan folders | ![Logseq](docs/img/logseq.jpg) **Logseq** |
 
-The lock screen (hyprlock), Plymouth and GRUB themes are not pictured: they cannot be screenshotted safely on a live session.
-The widgets can run in a screenshot-safe demo mode: `GITS_WIDGETS_DEMO=1 GITS_WEATHER_LOCATION=Tokyo ~/.config/gits-widgets/run.sh restart`.
+The popups open with a scan-line "power-on" effect (a bright line uncovers the card from the top). The lock screen (hyprlock), Plymouth and GRUB themes are not
+pictured: they cannot be screenshotted safely on a live session. `tools/screenshots.sh` regenerates the pictures above on an empty workspace with the
+widgets and popups in their demo modes.
 
 ## Requirements
 
@@ -114,6 +120,7 @@ docs/PITFALLS.md            what broke and why
 
 ```bash
 tools/export.py --check     # what differs between $HOME and the repo
+tools/screenshots.sh        # retake docs/img on an empty workspace (demo data, ~1 minute, do not touch the mouse)
 tools/export.py             # copy it over (explicit manifest, no images except assets/, no backups/caches)
 ```
 

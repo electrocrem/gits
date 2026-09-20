@@ -17,13 +17,16 @@ Logseq, Qt/Dolphin (Kvantum), сборщик темы Telegram, а также `g
 
 | | |
 |---|---|
-| ![Лаунчер](docs/img/launcher.jpg) rofi-лаунчер | ![Меню уведомлений](docs/img/notification-menu.jpg) меню действий уведомления |
+| ![Панель управления](docs/img/control-panel.jpg) панель управления (кнопка питания, Super+Shift+C) | ![Плеер](docs/img/player.jpg) плеер (Super+Shift+M) |
+| ![Микшер](docs/img/mixer.jpg) микшер (Super+Alt+V) | ![Уведомления](docs/img/notifications.jpg) центр уведомлений (Super+Shift+N) |
+| ![Настройки](docs/img/settings-menu.jpg) все настройки (Super+I) | ![OSD](docs/img/osd.jpg) OSD громкости, яркости, подсветки, тачпада |
+| ![Терминал](docs/img/terminal.jpg) баннер терминала | ![Заставка Neovim](docs/img/nvim-dashboard.jpg) заставка Neovim |
+| ![Neovim](docs/img/nvim.jpg) Neovim | ![Лаунчер](docs/img/launcher.jpg) rofi-лаунчер |
 | ![wlogout](docs/img/wlogout.jpg) меню выключения | ![SDDM](docs/img/sddm.jpg) экран входа SDDM |
-| ![Терминал](docs/img/terminal.jpg) баннер терминала | ![Neovim](docs/img/nvim.jpg) Neovim |
 | ![Dolphin](docs/img/dolphin.jpg) Dolphin с циановыми папками | ![Logseq](docs/img/logseq.jpg) Logseq |
 
-Экран блокировки, Plymouth и GRUB не показаны: их нельзя безопасно снять на живой сессии. Виджеты умеют «демо-режим» для скриншотов без
-личных данных: `GITS_WIDGETS_DEMO=1 GITS_WEATHER_LOCATION=Tokyo ~/.config/gits-widgets/run.sh restart`.
+Окна открываются эффектом «сканирования»: яркая линия проявляет карточку сверху вниз. Экран блокировки, Plymouth и GRUB не показаны: их нельзя безопасно
+снять на живой сессии. `tools/screenshots.sh` переснимает картинки выше на пустом воркспейсе с демо-данными.
 
 ## Установка
 

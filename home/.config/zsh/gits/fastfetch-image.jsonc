@@ -1,6 +1,6 @@
 // Info column next to the image banner (used by banner.zsh in image mode, not the main fastfetch config)
 {
-  "display": { "separator": " │ ", "color": { "keys": "blue", "separator": "blue" }, "key": { "width": 7 } },
+  "display": { "separator": " │ ", "color": { "keys": "blue", "separator": "blue" }, "key": { "width": 10 } },
   "modules": [
     { "type": "custom", "format": "\u001b[34m┌─[ \u001b[94mSECTION 9 // NAVI-00\u001b[34m ]" },
     { "type": "custom", "format": "\u001b[34m│" },
