@@ -87,3 +87,23 @@ aliases (including links to links) to the `scalable` directories too. `kiconfind
   `dunstctl history` with synthetic messages instead of looking at the screen.
 * Never `pkill -f <script name>` from a tool shell: it matches (and kills) the calling shell. Use the `[g]its`
   bracket trick or `pgrep -x`.
+
+## Menus, sounds, power (round 6)
+
+* **XDG autostart never runs in a HyDE session.** `xdg-autostart.target` is not started, so `~/.config/autostart/*.desktop`
+  (e.g. ROG Control Center) do nothing. Starting the target would launch every autostart file at once; `gits.lua`
+  starts the one wanted app by hand instead.
+* **dunst rule patterns are regular expressions.** `summary = "*"` is invalid ("Invalid preceding regular expression"
+  in the journal, one warning per popup); use `".*"`. Scripts of *all* matching rules run, not only the last one.
+* **rofi `-theme-str`:** several statements in one argument swallow the strings (`content: "A"; } tag { content: "B"`
+  ends up as the text). Pass one `-theme-str` per statement. `-auto-select` with `-filter` returns nothing here, so
+  menus are tested by their generated lines, not by scripted picking. Menus map rows to data with `-format i`
+  instead of parsing the visible text (long rows get ellipsised).
+* **ASUS: asusd already switches the power profile on plug/unplug** (AC and battery profiles, shown by
+  `asusctl profile get`). A second switcher would fight it, so the bar module only shows the profile and lets you
+  override it until the next plug event.
+* **The bar must fit the panel width.** On a 1920x1200 panel at scale 1.5 that is 1280 logical px; waybar reports
+  "Bar configured (width: 1312)" when the modules need more and the last ones are cut off. Every added module needs
+  a matching diet elsewhere (the power-profile module is icon-only for that reason).
+* **Audio spectrum without cava:** `parec -d <default sink>.monitor` (mono s16le) + numpy FFT in a thread. The
+  card re-checks the default sink every 4 s (headphones on/off) and only animates while sound plays.

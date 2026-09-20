@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# gits-sound <notify|login|lock|unlock|plug|unplug|error>   plays a Ghost in the Shell UI sound (detached, quiet).
+#   gits-sound off|on|toggle   mute / unmute all of them (state file, survives reboots)
+# Sounds live in ~/.local/share/gits-sounds (rebuild: python3 build.py there). Same sound at most every 0.8 s.
+dir=${GITS_SOUNDS_DIR:-$HOME/.local/share/gits-sounds}
+state=${XDG_STATE_HOME:-$HOME/.local/state}/gits-sounds
+mkdir -p "$state"
+case ${1:-} in
+    off) touch "$state/off"; exit 0 ;;
+    on) rm -f "$state/off"; exit 0 ;;
+    toggle) if [[ -e $state/off ]]; then rm -f "$state/off"; echo on; else touch "$state/off"; echo off; fi; exit 0 ;;
+    "") echo "usage: gits-sound <name>|on|off|toggle" >&2; exit 2 ;;
+esac
+[[ -e $state/off ]] && exit 0
+wav=$dir/$1.wav
+[[ -r $wav ]] || exit 1
+stamp=$state/last-$1
+now=$(date +%s%N)
+last=$(cat "$stamp" 2>/dev/null || echo 0)
+(( now - last < 800000000 )) && exit 0
+echo "$now" >"$stamp"
+setsid -f pw-play --volume "${GITS_SOUND_VOLUME:-0.6}" "$wav" >/dev/null 2>&1

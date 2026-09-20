@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# gits-wifi: Wi-Fi menu (NetworkManager) in the Ghost in the Shell rofi style.
+#   Pick a network: known ones connect at once, open ones connect, secured new ones ask for the password.
+#   The connected network disconnects when picked again. Top rows: radio on/off, rescan, nmtui.
+#   GITS_WIFI_LIST=1 prints the menu lines instead of showing them (for testing).
+ICON_ON="󰖩" ICON_OFF="󰖪"
+bars() { local s=$1; ((s >= 75)) && echo "▂▄▆█" || { ((s >= 50)) && echo "▂▄▆ " || { ((s >= 25)) && echo "▂▄  " || echo "▂   "; }; }; }
+say() { notify-send -a "Wi-Fi" -u low -t 4000 -i network-wireless "$1" "${2:-}"; }
+
+radio=$(nmcli radio wifi)
+lines=(); ssids=(); secs=()   # parallel to the rows: SSID / needs-password of network rows (empty for actions)
+if [[ $radio == enabled ]]; then
+    lines+=("$ICON_OFF  Turn Wi-Fi off" "󰑐  Rescan networks"); ssids+=("" ""); secs+=("" "")
+    declare -A seen=()
+    known=$(nmcli -t -f NAME connection show 2>/dev/null)
+    while IFS= read -r row; do   # IN-USE:SIGNAL:SECURITY:SSID (SSID last: it may contain ':')
+        use=${row%%:*}; row=${row#*:}
+        sig=${row%%:*}; row=${row#*:}
+        sec=${row%%:*}; ssid=${row#*:}
+        [[ -z $ssid || -n ${seen[$ssid]:-} ]] && continue
+        seen[$ssid]=1
+        mark="  "; [[ $use == '*' ]] && mark="● "
+        lock=" "; [[ -n $sec && $sec != -- ]] && lock="󰌾"
+        saved=""; grep -qxF -- "$ssid" <<<"$known" && saved="  [saved]"
+        lines+=("$(printf '%s%s  %-30.30s %3s%%  %s%s' "$mark" "$(bars "$sig")" "$ssid" "$sig" "$lock" "$saved")")
+        ssids+=("$ssid"); secs+=("$([[ -n $sec && $sec != -- ]] && echo 1)")
+    done < <(nmcli -t --escape no -f IN-USE,SIGNAL,SECURITY,SSID device wifi list --rescan no 2>/dev/null | sort -t: -k1,1r -k2,2nr)
+else
+    lines+=("$ICON_ON  Turn Wi-Fi on"); ssids+=(""); secs+=("")
+fi
+lines+=("󰛳  Advanced settings (nmtui)"); ssids+=(""); secs+=("")
+
+if [[ -n ${GITS_WIFI_LIST:-} ]]; then printf '%s\n' "${lines[@]}"; exit 0; fi
+[[ $radio == enabled ]] && nmcli device wifi rescan >/dev/null 2>&1 &   # fresh list next time
+
+idx=$(printf '%s\n' "${lines[@]}" | gits-menu "󰖩  WI-FI" "// 無線" -format i) || exit 0
+pick=${lines[idx]} ssid=${ssids[idx]}
+case $pick in
+    *"Turn Wi-Fi off"*) nmcli radio wifi off; say "Wi-Fi off"; exit 0 ;;
+    *"Turn Wi-Fi on"*)  nmcli radio wifi on; say "Wi-Fi on"; exit 0 ;;
+    *Rescan*)           nmcli device wifi rescan >/dev/null 2>&1; sleep 2; exec "$0" ;;
+    *nmtui*)            exec kitty --class gits-nmtui -e nmtui ;;
+esac
+if [[ $pick == "● "* ]]; then
+    nmcli connection down id "$ssid" >/dev/null 2>&1 && say "Disconnected" "$ssid"
+elif grep -qxF -- "$ssid" <(nmcli -t -f NAME connection show); then
+    if out=$(nmcli --wait 20 connection up id "$ssid" 2>&1); then say "Connected" "$ssid"; else say "Connection failed" "${out##*: }"; fi
+elif [[ -n ${secs[idx]} ]]; then
+    pw=$(rofi -dmenu -password -no-custom false -theme "$HOME/.config/rofi/themes/gits-menu.rasi" -p "//" \
+        -theme-str "textbox-title { content: \"󰌾  PASSWORD\"; }" -theme-str "textbox-tag { content: \"// $ssid\"; }" -theme-str "listview { enabled: false; }" -theme-str "entry { placeholder: \"password_\"; }" </dev/null) || exit 0
+    if out=$(nmcli --wait 30 device wifi connect "$ssid" password "$pw" 2>&1); then say "Connected" "$ssid"; else say "Connection failed" "${out##*: }"; fi
+else
+    if out=$(nmcli --wait 30 device wifi connect "$ssid" 2>&1); then say "Connected" "$ssid"; else say "Connection failed" "${out##*: }"; fi
+fi

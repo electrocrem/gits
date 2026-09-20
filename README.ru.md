@@ -7,9 +7,9 @@
 ## Что внутри
 
 Тема HyDE, waybar (свой макет, переключатель workflow, watchdog), виджеты рабочего стола (часы, календарь, плеер, погода,
-сеть, батарея, нагрузка, to-do), hyprlock, темы SDDM / Plymouth / GRUB, rofi-лаунчер и меню действий уведомлений, dunst,
+сеть, батарея, нагрузка, to-do, визуализатор звука, редкие глитчи на обоях), hyprlock, темы SDDM / Plymouth / GRUB, rofi-лаунчер и меню (действия уведомлений, Wi-Fi, Bluetooth, профиль питания), звуки интерфейса, dunst,
 wlogout, терминал (баннер, starship, fzf, bat, btop, lazygit, tmux, yazi), курсор `GitS-Cursors`, Neovim, VS Code, Zen,
-Logseq, Qt/Dolphin (Kvantum), сборщик темы Telegram, а также `gits-doctor` — отчёт о состоянии системы.
+Logseq, Qt/Dolphin (Kvantum), сборщик темы Telegram, а также `gits-doctor` — отчёт о состоянии системы и опциональная настройка снапшотов btrfs.
 
 ## Галерея
 

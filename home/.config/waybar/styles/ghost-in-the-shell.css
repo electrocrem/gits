@@ -31,6 +31,7 @@ tooltip label { color: @main-fg; padding: 2px 4px; }
 #custom-gits-player,
 #custom-gits-cpu,
 #custom-gits-gpu,
+#custom-gits-perf,
 #memory,
 #network,
 #bluetooth,
@@ -49,6 +50,7 @@ tooltip label { color: @main-fg; padding: 2px 4px; }
 #custom-gits-player,
 #custom-gits-cpu,
 #custom-gits-gpu,
+#custom-gits-perf,
 #memory,
 #network,
 #bluetooth,
@@ -123,7 +125,7 @@ tooltip label { color: @main-fg; padding: 2px 4px; }
 #bluetooth.connected { color: @main-fg; }
 
 /* hover feedback for clickable modules */
-#custom-gits-player:hover, #custom-gits-cpu:hover, #custom-gits-gpu:hover, #memory:hover, #network:hover, #bluetooth:hover,
+#custom-gits-player:hover, #custom-gits-cpu:hover, #custom-gits-gpu:hover, #custom-gits-perf:hover, #memory:hover, #network:hover, #bluetooth:hover,
 #pulseaudio:hover, #custom-gits-lang:hover, #custom-gits-mode:hover, #custom-gits-notify:hover, #custom-gits-power:hover {
     background: @wb-hvr-bg;
     color: @wb-hvr-fg;

@@ -8,13 +8,14 @@ phosphor palette, square corners, thin frames, kanji tags. One installer, one un
 |---|---|
 | HyDE theme | `Ghost in the Shell`: palette, Hyprland look (sharp corners, cyan borders, blur), kitty, rofi, waybar colours, animation preset `gits` |
 | Waybar | its own layout + style, GPU/CPU modules, language, notification counter, HyDE **workflow switcher**, crash watchdog |
-| Desktop widgets | GTK4 layer-shell cards: clock, calendar, media player, weather, **network**, battery, CPU/RAM/SSD, history graph, to-do |
+| Desktop widgets | GTK4 layer-shell cards: clock, calendar, media player, weather, network, battery, CPU/RAM/SSD, history graph, to-do, **audio spectrum** (LED bars from the default sink, no cava), rare wallpaper glitch bursts (on AC only, `GITS_WIDGETS_GLITCH=0` disables) |
 | Lock / login / boot | hyprlock layout, SDDM (Qt6) theme, Plymouth + GRUB themes |
-| Launchers | rofi launcher (search prompt, square), wlogout, dunst, **notification action menu** |
+| Launchers | rofi launcher (search prompt, square), wlogout, dunst, notification action menu, **Wi-Fi menu** (`gits-wifi`, bar click), **Bluetooth menu** (`gits-bt`), **power-profile menu** (bar module) |
+| Sounds | short synthesised terminal blips: notification, login, lock/unlock, charger plug/unplug (`gits-sound`, mute with `gits-sound off`) |
 | Icons | `GitS-Icons`: Tela-circle-grey with cyan folders (built at install time) |
 | Terminal | kitty banner + fastfetch, starship prompt, fzf, bat, btop, lazygit, tmux, yazi themes, `GitS-Cursors` (drawn with cairo) |
 | Editors and apps | Neovim (LazyVim) colourscheme, VS Code / Code-OSS theme, Zen browser chrome, Logseq theme, Qt/KDE (Dolphin) via Kvantum, Telegram theme builder |
-| Ops | `gits-doctor` health report, login-race guards, [pitfalls](docs/PITFALLS.md) written down |
+| Ops | `gits-doctor` health report, login-race guards, optional btrfs snapshot setup (`home/.local/share/gits-snap/setup.sh`: snapper timeline + GRUB entries), [pitfalls](docs/PITFALLS.md) written down |
 
 ## Gallery
 

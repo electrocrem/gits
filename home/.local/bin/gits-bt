@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# gits-bt: Bluetooth menu (bluetoothctl) in the Ghost in the Shell rofi style.
+#   Pick a device: connected ones disconnect, paired ones connect, new ones are paired + trusted + connected.
+#   Top rows: adapter power on/off and an 8 s scan. GITS_BT_LIST=1 prints the menu lines (for testing).
+say() { notify-send -a "Bluetooth" -u low -t 4000 -i bluetooth "$1" "${2:-}"; }
+icon() {  # device class/icon name -> glyph
+    case $1 in
+        audio-headset|audio-headphones) echo "󰋋" ;; audio-card|audio-speakers) echo "󰓃" ;;
+        input-keyboard) echo "󰌌" ;; input-mouse) echo "󰍽" ;; input-gaming) echo "󰊴" ;;
+        phone) echo "󰏲" ;; computer) echo "󰌢" ;; *) echo "󰂯" ;;
+    esac
+}
+powered=$(bluetoothctl show 2>/dev/null | sed -n 's/^\s*Powered: //p')
+lines=(); macs=()   # macs[i] = address of menu row i (empty for the action rows)
+if [[ $powered == yes ]]; then
+    lines+=("󰂲  Turn Bluetooth off" "󰂰  Scan for devices (8 s)"); macs+=("" "")
+    while read -r _ mac name; do
+        [[ -z $mac ]] && continue
+        info=$(bluetoothctl info "$mac" 2>/dev/null)
+        conn=$(sed -n 's/^\s*Connected: //p' <<<"$info"); paired=$(sed -n 's/^\s*Paired: //p' <<<"$info")
+        ic=$(sed -n 's/^\s*Icon: //p' <<<"$info")
+        bat=$(sed -n 's/.*Battery Percentage: 0x[0-9a-f]* (\([0-9]*\))/\1/p' <<<"$info")
+        mark="  "; state=""
+        [[ $conn == yes ]] && { mark="● "; state="connected${bat:+ · $bat%}"; } || { [[ $paired == yes ]] && state="paired" || state="new"; }
+        lines+=("$(printf '%s%s  %-26.26s  %s' "$mark" "$(icon "$ic")" "$name" "$state")"); macs+=("$mac")
+    done < <(bluetoothctl devices | sort -t' ' -k3)
+else
+    lines+=("󰂯  Turn Bluetooth on"); macs+=("")
+fi
+lines+=("󰒓  Advanced settings (blueman)"); macs+=("")
+if [[ -n ${GITS_BT_LIST:-} ]]; then printf '%s\n' "${lines[@]}"; exit 0; fi
+
+idx=$(printf '%s\n' "${lines[@]}" | gits-menu "󰂯  BLUETOOTH" "// 青歯" -format i) || exit 0
+pick=${lines[idx]} mac=${macs[idx]}
+case $pick in
+    *"Turn Bluetooth off"*) bluetoothctl power off >/dev/null; say "Bluetooth off"; exit 0 ;;
+    *"Turn Bluetooth on"*)  rfkill unblock bluetooth 2>/dev/null; bluetoothctl power on >/dev/null; say "Bluetooth on"; exit 0 ;;
+    *"Scan for"*)           say "Scanning…" "8 seconds"; bluetoothctl --timeout 8 scan on >/dev/null 2>&1; exec "$0" ;;
+    *blueman*)              exec blueman-manager ;;
+esac
+[[ -n $mac ]] || exit 1
+name=$(bluetoothctl info "$mac" | sed -n 's/^\s*Name: //p')
+if [[ $pick == "● "* ]]; then
+    bluetoothctl disconnect "$mac" >/dev/null 2>&1 && say "Disconnected" "$name"
+else
+    if [[ $(bluetoothctl info "$mac" | sed -n 's/^\s*Paired: //p') != yes ]]; then
+        bluetoothctl pair "$mac" >/dev/null 2>&1 && bluetoothctl trust "$mac" >/dev/null 2>&1
+    fi
+    if bluetoothctl connect "$mac" >/dev/null 2>&1; then say "Connected" "$name"; else say "Connection failed" "$name"; fi
+fi

@@ -66,6 +66,16 @@ if [[ -d $HOME/.logseq/plugins-backup/nord-theme ]]; then
     run rmdir "$HOME/.logseq/plugins-backup" 2>/dev/null || true
 fi
 
+# things the installer generated from scripts (not tracked as placed files)
+for d in "$HOME/.local/share/icons/GitS-Icons" "$HOME/.local/share/icons/GitS-Cursors"; do
+    [[ -d $d ]] && { echo "delete   $d"; run rm -rf "$d"; }
+done
+if compgen -G "$HOME/.local/share/gits-sounds/*.wav" >/dev/null; then
+    echo "delete   generated UI sounds"
+    run rm -f "$HOME"/.local/share/gits-sounds/*.wav
+    run rmdir "$HOME/.local/share/gits-sounds" 2>/dev/null || true
+fi
+
 # files that were created by the blocks' host (nothing to restore) and are now empty
 for f in "$HOME/.config/hypr/hyprland.lua" "$HOME/.config/zsh/user.zsh" "$HOME/.config/nvim/lua/config/options.lua" "$HOME/.config/kded6rc"; do
     [[ -f $f && ! -s $f ]] && run rm -f "$f"

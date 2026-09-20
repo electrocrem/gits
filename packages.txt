@@ -10,6 +10,7 @@ gtk4-layer-shell
 python-gobject
 python-psutil
 python-cairo
+python-numpy             # audio spectrum card, UI sound synthesis
 python-pillow             # asset generator, boot/telegram builders
 playerctl
 socat
@@ -30,3 +31,13 @@ neovim
 # Qt look (Dolphin and friends)
 kvantum
 qt6ct
+
+# menus, sounds, power (optional: each feature simply does nothing without its tool)
+networkmanager            # gits-wifi
+bluez-utils               # gits-bt (bluetoothctl)
+libpulse                  # parec: the spectrum card records the default sink's monitor
+pipewire-audio            # pw-play: UI sounds
+power-profiles-daemon     # waybar power-profile module
+snapper                   # optional: btrfs snapshots, see home/.local/share/gits-snap/setup.sh
+snap-pac
+grub-btrfs

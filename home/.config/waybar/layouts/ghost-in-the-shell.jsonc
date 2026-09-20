@@ -23,6 +23,7 @@
         "custom/gits-player",
         "custom/gits-cpu",
         "custom/gits-gpu",
+        "custom/gits-perf",
         "memory#gits",
         "network#gits",
         "bluetooth#gits",
@@ -96,6 +97,19 @@
         "on-click": "hyde-shell system.monitor"
     },
 
+    // Power profile (power-profiles-daemon; asusd switches it on plug/unplug): click = menu, scroll = cycle.
+    // Refreshed by signal 9 (sent by scripts/gits-perf.sh) plus a poll for changes made elsewhere (Fn key, ROG Control Center).
+    "custom/gits-perf": {
+        "exec": "$XDG_CONFIG_HOME/waybar/scripts/gits-perf.sh",
+        "return-type": "json",
+        "interval": 10,
+        "signal": 9,
+        "tooltip": true,
+        "on-click": "$XDG_CONFIG_HOME/waybar/scripts/gits-perf.sh menu",
+        "on-scroll-up": "$XDG_CONFIG_HOME/waybar/scripts/gits-perf.sh prev",
+        "on-scroll-down": "$XDG_CONFIG_HOME/waybar/scripts/gits-perf.sh next"
+    },
+
     "memory#gits": {
         "interval": 5,
         "format": "󰍛 {used:0.1f}G",
@@ -111,7 +125,8 @@
         "tooltip-format-wifi": "{essid}  ({signalStrength}%)\nIP    {ipaddr}/{cidr}\nGW    {gwaddr}\nBAND  {frequency} GHz\nDOWN  {bandwidthDownBytes}\nUP    {bandwidthUpBytes}",
         "tooltip-format-ethernet": "{ifname}\nIP    {ipaddr}/{cidr}\nGW    {gwaddr}\nDOWN  {bandwidthDownBytes}\nUP    {bandwidthUpBytes}",
         "tooltip-format-disconnected": "no network link",
-        "on-click": "nm-connection-editor"
+        "on-click": "gits-wifi",
+        "on-click-right": "nm-connection-editor"
     },
 
     // Bluetooth: dim when off, bright with a device count when connected
@@ -126,7 +141,8 @@
         "tooltip-format-connected": "{controller_alias}  [{status}]\n{num_connections} connected\n──────────────────────\n{device_enumerate}",
         "tooltip-format-enumerate-connected": "{device_alias}",
         "tooltip-format-enumerate-connected-battery": "{device_alias}   {device_battery_percentage}%",
-        "on-click": "blueman-manager",
+        "on-click": "gits-bt",
+        "on-click-middle": "blueman-manager",
         "on-click-right": "bluetoothctl show | grep -q 'Powered: yes' && bluetoothctl power off || bluetoothctl power on"
     },
 

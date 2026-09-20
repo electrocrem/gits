@@ -3,10 +3,11 @@
 
 GTK4 + gtk4-layer-shell, one process, one layer-shell window per card on the BOTTOM layer (above the
 wallpaper, below every window; BACKGROUND would be covered by a later-started wallpaper daemon). Cards: clock, calendar, media player (playerctl), weather (wttr.in),
-battery, CPU/RAM/SSD rings, CPU/RAM history graph, network throughput, to-do list.
+battery, CPU/RAM/SSD rings, CPU/RAM history graph, network throughput, audio spectrum (parec + numpy), to-do list.
 
 Env: GITS_WEATHER_LOCATION  city for wttr.in (default: auto-detect by IP; "off" disables the request)
      GITS_WIDGETS_MONITOR   connector name to place the cards on (default: first eDP, else first monitor)
+     GITS_WIDGETS_GLITCH    0 = no wallpaper glitch bursts (default: on, only while on AC power)
      GITS_WIDGETS_DEMO      1 = screenshot mode: made-up SSID/IP and to-do items, throw-away state and cache dirs
                             (your to-do file and weather cache are neither read nor written)
 """
@@ -18,9 +19,12 @@ import hashlib
 import json
 import math
 import os
+import random
 import re
+import select
 import subprocess
 import threading
+import time
 import sys
 import urllib.parse
 import urllib.request
@@ -41,6 +45,11 @@ os.environ["GTK_THEME"] = "Adwaita:dark"
 import cairo
 import gi
 import psutil
+
+try:
+    import numpy as np
+except ImportError:  # the audio card is skipped
+    np = None
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Gdk", "4.0")
@@ -700,6 +709,285 @@ class GraphCard(Card):
         cr.stroke()
 
 
+# --------------------------------------------------------------------------------------------- audio spectrum
+class Spectrum(threading.Thread):
+    """Records the default sink's monitor with `parec` and turns it into BANDS log-spaced levels (0..1).
+
+    No cava needed: mono s16le -> Hann-windowed FFT (numpy). Follows default-sink changes (headphones on/off).
+    Only reads what is already playing; when nothing plays the stream is just silence and the card goes idle."""
+    RATE, N, BANDS = 44100, 2048, 32
+    HOP = 1024  # samples per read = 23 ms
+
+    def __init__(self):
+        super().__init__(daemon=True)
+        self.bands = np.zeros(self.BANDS)
+        self.db = -90.0
+        self.sink = ""
+        self.last_sound = 0.0  # monotonic time of the last audible frame
+        self._quit = False
+        edges = np.geomspace(45, 15000, self.BANDS + 1) * self.N / self.RATE
+        self._lo = np.maximum(np.floor(edges[:-1]).astype(int), 1)
+        self._hi = np.maximum(np.ceil(edges[1:]).astype(int), self._lo + 1)
+        self._win = np.hanning(self.N)
+        self._tilt = np.linspace(0, 12, self.BANDS)  # music falls ~3 dB/octave: lift the top so it is not always flat
+
+    @staticmethod
+    def default_sink():
+        try:
+            return subprocess.run(["pactl", "get-default-sink"], capture_output=True, text=True, timeout=3).stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            return ""
+
+    def stop(self):
+        self._quit = True
+
+    def run(self):
+        while not self._quit:
+            sink = self.default_sink()
+            if not sink:
+                time.sleep(3)
+                continue
+            self.sink = sink
+            try:
+                proc = subprocess.Popen(
+                    ["parec", "-d", sink + ".monitor", "--format=s16le", f"--rate={self.RATE}", "--channels=1",
+                     "--latency-msec=25"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+            except OSError:
+                time.sleep(5)
+                continue
+            try:
+                self._pump(proc)
+            finally:
+                proc.kill()
+                proc.wait()
+
+    def _pump(self, proc):
+        fd = proc.stdout.fileno()
+        buf = np.zeros(self.N)
+        pending = b""
+        next_check = time.monotonic() + 4
+        while not self._quit and proc.poll() is None:
+            if time.monotonic() > next_check:
+                if self.default_sink() != self.sink:
+                    return
+                next_check = time.monotonic() + 4
+            if not select.select([fd], [], [], 1.0)[0]:
+                continue
+            chunk = os.read(fd, 8192)
+            if not chunk:
+                return
+            pending += chunk
+            need = self.HOP * 2
+            while len(pending) >= need:
+                x = np.frombuffer(pending[:need], dtype="<i2").astype(np.float64) / 32768.0
+                pending = pending[need:]
+                buf = np.concatenate((buf[self.HOP:], x))
+                self._analyse(buf, x)
+
+    def _analyse(self, buf, x):
+        rms = float(np.sqrt(np.mean(x * x)))
+        self.db = 20 * math.log10(rms + 1e-9)
+        if self.db > -70:
+            self.last_sound = time.monotonic()
+        mag = np.abs(np.fft.rfft(buf * self._win)) / (self.N / 4)
+        db = 20 * np.log10(np.array([mag[lo:hi].max() for lo, hi in zip(self._lo, self._hi)]) + 1e-9)
+        self.bands = np.clip((db + self._tilt + 72) / 62, 0, 1)
+
+
+class AudioCard(Card):
+    """LED-style spectrum analyser with peak caps. Animates at 30 fps only while sound plays."""
+    SEG, SGAP = 3, 1  # LED segment height / gap, px
+
+    def __init__(self, app, **kw):
+        super().__init__(app, "AUDIO.SPECTRUM // 音声", **kw)
+        n = Spectrum.BANDS
+        self.spec = None
+        self.level = [0.0] * n
+        self.peak = [0.0] * n
+        self.peak_hold = [0] * n
+        self.demo_t = 0.0
+        self.fast = None  # GLib source id of the 30 fps timer while animating
+        head = Gtk.Box(spacing=12)
+        self.l_src = label("NO SIGNAL", "au-src")
+        self.l_src.set_hexpand(True)
+        self.l_db = label("", "au-db", 1.0)
+        head.append(self.l_src)
+        head.append(self.l_db)
+        self.body.append(head)
+        self.da = self.area(self._draw)
+        self.da.set_vexpand(True)
+        self.body.append(self.da)
+        if not DEMO:
+            self.spec = Spectrum()
+            self.spec.start()
+        GLib.timeout_add(250, self._watch)
+
+    @staticmethod
+    def _name(sink):
+        s = sink.lower()
+        if "bluez" in s:
+            return "BLUETOOTH"
+        if "hdmi" in s or "displayport" in s:
+            return "HDMI"
+        if "usb" in s:
+            return "USB.AUDIO"
+        return "SPEAKERS" if s else "NO SINK"
+
+    def _active(self):
+        if DEMO:
+            return True
+        return self.spec is not None and time.monotonic() - self.spec.last_sound < 2.5
+
+    def _watch(self):
+        """Cheap 4 Hz check: start the fast timer when sound appears, refresh the labels."""
+        active = self._active()
+        if self.spec is not None:
+            self.l_src.set_text(self._name(self.spec.sink) if active else "NO SIGNAL")
+            self.l_db.set_text(f"{self.spec.db:+.0f} dB" if active else "")
+        elif DEMO:
+            self.l_src.set_text("BLUETOOTH")
+            self.l_db.set_text("-14 dB")
+        if (active or any(v > 0.01 for v in self.level) or any(v > 0.01 for v in self.peak)) and self.fast is None:
+            self.fast = GLib.timeout_add(33, self._frame)
+        return True
+
+    def _target(self):
+        if DEMO:  # made-up but plausible: bass hump, wandering mids, sparkly highs
+            self.demo_t += 0.033
+            t = self.demo_t
+            n = Spectrum.BANDS
+            return [max(0.04, min(1.0, 0.72 * math.exp(-((i - 4 - 3 * math.sin(t * 1.3)) / 7) ** 2)
+                                  + 0.28 * abs(math.sin(t * 2.1 + i * 0.55)) * (1 - i / (n * 1.4))
+                                  + 0.12 * abs(math.sin(t * 9 + i * 1.7)))) for i in range(n)]
+        if self.spec is None or not self._active():
+            return [0.0] * Spectrum.BANDS
+        return [float(v) for v in self.spec.bands]
+
+    def _frame(self):
+        target = self._target()
+        moving = False
+        for i, tv in enumerate(target):
+            lv = self.level[i]
+            lv = lv + (tv - lv) * 0.6 if tv > lv else max(tv, lv - 0.045)  # fast attack, slow fall
+            self.level[i] = lv
+            if lv >= self.peak[i]:
+                self.peak[i], self.peak_hold[i] = lv, 12
+            elif self.peak_hold[i] > 0:
+                self.peak_hold[i] -= 1
+            else:
+                self.peak[i] = max(0.0, self.peak[i] - 0.02)
+            moving = moving or lv > 0.01 or self.peak[i] > 0.01
+        self.da.queue_draw()
+        if not moving and not self._active():
+            self.fast = None
+            return False
+        return True
+
+    def _draw(self, area, cr, w, h):
+        n = Spectrum.BANDS
+        gap = 1.5
+        bw = (w - gap * (n - 1)) / n
+        pitch = self.SEG + self.SGAP
+        rows = max(int(h // pitch), 1)
+        y0 = h - rows * pitch + self.SGAP  # snap the bottom to the segment grid
+        cr.set_line_width(1)
+        # faint baseline dots: the card looks alive even when nothing plays
+        for i in range(n):
+            setc(cr, CY, 0.22)
+            cr.rectangle(i * (bw + gap), h - self.SEG, bw, self.SEG)
+        cr.fill()
+        lit = {CY: [], CYB: [], RED: [], FG: []}
+        for i in range(n):
+            x = i * (bw + gap)
+            k = int(self.level[i] * rows)
+            for r in range(k):
+                frac = (r + 1) / rows
+                col = RED if frac > 0.86 else (CYB if frac > 0.55 else CY)
+                lit[col].append((x, h - (r + 1) * pitch + self.SGAP))
+            pk = int(self.peak[i] * rows)
+            if pk > k:
+                lit[FG].append((x, h - pk * pitch + self.SGAP))
+        for col, alpha in ((CY, 0.55), (CYB, 0.85), (RED, 0.95), (FG, 0.9)):
+            for x, y in lit[col]:
+                cr.rectangle(x, y, bw, self.SEG)
+            setc(cr, col, alpha)
+            cr.fill()
+
+    def shutdown(self):
+        if self.spec is not None:
+            self.spec.stop()
+
+
+# --------------------------------------------------------------------------------------------- glitch layer
+class GlitchLayer(Gtk.Window):
+    """Rare, brief "signal loss" bursts over the wallpaper: a fullscreen transparent click-through layer on BOTTOM.
+
+    Every 20-50 s, for ~0.3 s: a few thin horizontal bands with an RGB split. Nothing is drawn (and nothing repaints)
+    in between. Skipped while the laptop runs on battery."""
+
+    def __init__(self, monitor=None):
+        super().__init__()
+        self.set_decorated(False)
+        self.add_css_class("gw")
+        LS.init_for_window(self)
+        LS.set_namespace(self, "gits-glitch")
+        LS.set_layer(self, LS.Layer.BOTTOM)
+        for edge in (LS.Edge.TOP, LS.Edge.BOTTOM, LS.Edge.LEFT, LS.Edge.RIGHT):
+            LS.set_anchor(self, edge, True)
+        LS.set_exclusive_zone(self, -1)  # ignore the bar's reserved area: cover the whole output
+        LS.set_keyboard_mode(self, LS.KeyboardMode.NONE)
+        if monitor is not None:
+            LS.set_monitor(self, monitor)
+        self.bands = []
+        self.frames = 0
+        self.da = Gtk.DrawingArea()
+        self.da.set_draw_func(self._draw)
+        self.set_child(self.da)
+        self.connect("map", lambda *_: self.get_surface().set_input_region(cairo.Region()))  # clicks pass through
+        GLib.timeout_add(int(random.uniform(8, 20) * 1000), self._maybe_burst)
+
+    @staticmethod
+    def _on_battery():
+        b = psutil.sensors_battery()
+        return b is not None and b.power_plugged is False
+
+    def _maybe_burst(self):
+        if not self._on_battery():
+            self.frames = 7
+            GLib.timeout_add(45, self._frame)
+        GLib.timeout_add(int(random.uniform(20, 50) * 1000), self._maybe_burst)
+        return False
+
+    def _frame(self):
+        w, h = self.da.get_width(), self.da.get_height()
+        self.frames -= 1
+        self.bands = []
+        if self.frames > 0 and w > 0 and h > 0:
+            for _ in range(random.randint(3, 8)):
+                bh = random.choice((1, 1, 2, 2, 3, 5, 9, 18, 34))
+                bw = random.uniform(0.15, 1.0) * w
+                self.bands.append((random.uniform(0, w - bw), random.uniform(0, h), bw, bh, random.uniform(3, 14),
+                                   random.random()))
+        self.da.queue_draw()
+        return self.frames > 0
+
+    def _draw(self, area, cr, w, h):
+        cr.set_operator(cairo.OPERATOR_CLEAR)
+        cr.paint()
+        cr.set_operator(cairo.OPERATOR_OVER)
+        for x, y, bw, bh, dx, r in self.bands:
+            setc(cr, RED, 0.16)  # RGB split: red one way, cyan the other, a pale core between
+            cr.rectangle(x - dx, y, bw, bh)
+            cr.fill()
+            setc(cr, CY, 0.22)
+            cr.rectangle(x + dx, y, bw, bh)
+            cr.fill()
+            if r > 0.6:
+                setc(cr, FG, 0.28)
+                cr.rectangle(x, y + bh * 0.35, bw * 0.6, max(1, bh * 0.3))
+                cr.fill()
+
+
 # --------------------------------------------------------------------------------------------- network
 def human_rate(bps):
     for unit, div in (("GB/s", 2**30), ("MB/s", 2**20), ("KB/s", 2**10)):
@@ -961,6 +1249,8 @@ class App:
                                                   Gtk.STYLE_PROVIDER_PRIORITY_USER)
         mon = self.pick_monitor()
         self.stats = Stats()
+        if not DEMO and os.environ.get("GITS_WIDGETS_GLITCH", "1") != "0":
+            self.cards.append(GlitchLayer(mon))  # first: layers of one level stack by creation order, cards go on top
         m, gap, top = 20, 12, 14  # screen margin, gap between cards, distance below the bar
         LW, MW, RW = 220, 236, 264  # left / middle / right column widths
 
@@ -973,6 +1263,9 @@ class App:
         add(ClockCard, m, y, LW, 226)
         y += 226 + gap
         add(CalendarCard, m, y, LW, 236)
+        if np is not None:
+            y += 236 + gap
+            add(AudioCard, m, y, LW, 160)
         x2 = m + LW + gap
         y = top
         add(MediaCard, x2, y, MW, 372)
@@ -1019,6 +1312,8 @@ def main():
     for sig in (2, 15):  # SIGINT, SIGTERM
         GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, sig, lambda: (app.loop.quit(), False)[1])
     app.loop.run()
+    for c in app.cards:
+        getattr(c, "shutdown", lambda: None)()
     return 0
 
 

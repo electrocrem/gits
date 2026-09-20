@@ -31,4 +31,19 @@ hl.on("hyprland.start", function()
     hl.exec_cmd(home .. "/.config/gits-widgets/run.sh start")
 end)
 
+-- UI sounds (login chime, charger plug/unplug, lock/unlock; notifications are a dunst rule): gits-sound, muted by `gits-sound off`
+hl.on("hyprland.start", function()
+    hl.exec_cmd(home .. "/.config/hypr/scripts/gits-events.sh")
+end)
+
+-- ROG Control Center (asusctl's tray app, ASUS laptops): its ~/.config/autostart entry never runs here because nothing
+-- starts xdg-autostart.target in a HyDE session (that would launch every autostart file at once). Start just this one,
+-- after the bar's tray is up, and only if it is installed and not already running.
+hl.on("hyprland.start", function()
+    hl.exec_cmd(
+        "sh -c 'command -v rog-control-center >/dev/null || exit 0; sleep 8; "
+        .. "pgrep -f \"^/usr/bin/rog-control-center\" >/dev/null || exec setsid -f rog-control-center --autostart --background'"
+    )
+end)
+
 -- @BLIND_GUARD@
