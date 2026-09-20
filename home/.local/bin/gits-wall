@@ -6,7 +6,8 @@
 #   gits-wall --default forget the choice and go back to gits_smoke.png
 #   gits-wall           apply the remembered wallpaper (this is what gits-wallpaper.service runs at login)
 # Folders searched: ~/.local/share/gits/wallpapers and ~/Pictures/wallpapers (add more with GITS_WALL_DIRS="dir:dir").
-# An animated GIF is cheap (measured with a 1920x1200 loop of 24 frames: about 2% of one core and ~20 MB in awww-daemon), but it is drawn all the time.
+# An animated GIF is drawn all the time: measured in awww-daemon, a 24-frame loop costs about 2% of one core and ~20 MB, a 68-frame 1280x800 loop
+# about 5% and ~100 MB. Fewer frames and a smaller size make it cheaper.
 # The lock screen and the login screen have their own pictures.
 default=$HOME/.local/share/gits/wallpapers/gits_smoke.png
 state=${XDG_STATE_HOME:-$HOME/.local/state}/gits/wallpaper
