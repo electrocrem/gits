@@ -67,7 +67,7 @@ if [[ -d $HOME/.logseq/plugins-backup/nord-theme ]]; then
 fi
 
 # the session units
-systemctl --user stop gits-session.target 2>/dev/null || true
+[[ -n ${GITS_SKIP_PREFLIGHT:-} ]] || systemctl --user stop gits-session.target 2>/dev/null || true   # tests (roundtrip.sh) run against a throw-away $HOME: never touch the live session
 
 # things the installer generated from scripts (not tracked as placed files)
 for d in "$HOME/.local/share/icons/GitS-Icons" "$HOME/.local/share/icons/GitS-Cursors"; do
@@ -83,7 +83,7 @@ fi
 for f in "$HOME/.config/zsh/user.zsh" "$HOME/.config/nvim/lua/config/options.lua" "$HOME/.config/kded6rc"; do
     [[ -f $f && ! -s $f ]] && run rm -f "$f"
 done
-((DRY)) || systemctl --user daemon-reload 2>/dev/null || true
+((DRY)) || [[ -n ${GITS_SKIP_PREFLIGHT:-} ]] || systemctl --user daemon-reload 2>/dev/null || true
 ((DRY)) || mv "$LIST" "$LIST.uninstalled-$(date +%s)"
 cat <<TXT
 
