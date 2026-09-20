@@ -11,9 +11,23 @@ phosphor palette, square corners, thin frames, kanji tags. One installer, one un
 | Desktop widgets | GTK4 layer-shell cards: clock, calendar, media player, weather, **network**, battery, CPU/RAM/SSD, history graph, to-do |
 | Lock / login / boot | hyprlock layout, SDDM (Qt6) theme, Plymouth + GRUB themes |
 | Launchers | rofi launcher (search prompt, square), wlogout, dunst, **notification action menu** |
+| Icons | `GitS-Icons`: Tela-circle-grey with cyan folders (built at install time) |
 | Terminal | kitty banner + fastfetch, starship prompt, fzf, bat, btop, lazygit, tmux, yazi themes, `GitS-Cursors` (drawn with cairo) |
 | Editors and apps | Neovim (LazyVim) colourscheme, VS Code / Code-OSS theme, Zen browser chrome, Logseq theme, Qt/KDE (Dolphin) via Kvantum, Telegram theme builder |
 | Ops | `gits-doctor` health report, login-race guards, [pitfalls](docs/PITFALLS.md) written down |
+
+## Gallery
+
+| | |
+|---|---|
+| ![Desktop](docs/img/desktop.jpg) **Desktop:** waybar, widgets (clock, calendar, player, weather, network, battery, load, to-do) | ![Launcher](docs/img/launcher.jpg) **rofi launcher** with a search prompt |
+| ![Notification menu](docs/img/notification-menu.jpg) **Notification actions** (click a popup) | ![wlogout](docs/img/wlogout.jpg) **wlogout** power menu |
+| ![Terminal](docs/img/terminal.jpg) **Terminal:** kitty banner + fastfetch | ![Neovim](docs/img/nvim.jpg) **Neovim** (LazyVim) colourscheme, lualine, bufferline |
+| ![Neovim dashboard](docs/img/nvim-dashboard.jpg) **Neovim dashboard** | ![SDDM](docs/img/sddm.jpg) **SDDM** login (Qt6) |
+| ![Dolphin](docs/img/dolphin.jpg) **Dolphin** (Kvantum) with `GitS-Icons` cyan folders | ![Logseq](docs/img/logseq.jpg) **Logseq** |
+
+The lock screen (hyprlock), Plymouth and GRUB themes are not pictured: they cannot be screenshotted safely on a live session.
+The widgets can run in a screenshot-safe demo mode: `GITS_WIDGETS_DEMO=1 GITS_WEATHER_LOCATION=Tokyo ~/.config/gits-widgets/run.sh restart`.
 
 ## Requirements
 

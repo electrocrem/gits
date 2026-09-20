@@ -11,6 +11,20 @@
 wlogout, терминал (баннер, starship, fzf, bat, btop, lazygit, tmux, yazi), курсор `GitS-Cursors`, Neovim, VS Code, Zen,
 Logseq, Qt/Dolphin (Kvantum), сборщик темы Telegram, а также `gits-doctor` — отчёт о состоянии системы.
 
+## Галерея
+
+![Рабочий стол](docs/img/desktop.jpg)
+
+| | |
+|---|---|
+| ![Лаунчер](docs/img/launcher.jpg) rofi-лаунчер | ![Меню уведомлений](docs/img/notification-menu.jpg) меню действий уведомления |
+| ![wlogout](docs/img/wlogout.jpg) меню выключения | ![SDDM](docs/img/sddm.jpg) экран входа SDDM |
+| ![Терминал](docs/img/terminal.jpg) баннер терминала | ![Neovim](docs/img/nvim.jpg) Neovim |
+| ![Dolphin](docs/img/dolphin.jpg) Dolphin с циановыми папками | ![Logseq](docs/img/logseq.jpg) Logseq |
+
+Экран блокировки, Plymouth и GRUB не показаны: их нельзя безопасно снять на живой сессии. Виджеты умеют «демо-режим» для скриншотов без
+личных данных: `GITS_WIDGETS_DEMO=1 GITS_WEATHER_LOCATION=Tokyo ~/.config/gits-widgets/run.sh restart`.
+
 ## Установка
 
 ```bash
