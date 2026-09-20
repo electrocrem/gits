@@ -559,10 +559,10 @@ class Panel(Popup):
             if not confirm:
                 cb()
                 return
-            if state["armed"] is None:  # first click: arm, second within 3 s: do it
+            if state["armed"] is None:  # first click: arm, second within 7 s: do it
                 b.add_css_class("warn")
-                lb.set_text("SURE?")
-                state["armed"] = GLib.timeout_add(3000, disarm)
+                lb.set_text("CONFIRM")
+                state["armed"] = GLib.timeout_add(7000, disarm)
             else:
                 GLib.source_remove(state["armed"])
                 state["armed"] = None
