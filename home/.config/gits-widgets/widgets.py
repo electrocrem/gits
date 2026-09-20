@@ -32,7 +32,8 @@ if os.path.exists(_LS_LIB) and _LS_LIB not in os.environ.get("LD_PRELOAD", ""):
 # small static widgets: never wake the discrete GPU for them
 os.environ.setdefault("GSK_RENDERER", "cairo")
 os.environ.setdefault("GDK_BACKEND", "wayland")
-# the system theme (HyDE's generated "Wallbash-Gtk") makes GTK 4.22 hang while it loads; the cards bring their own CSS
+# the cards bring their own CSS: skip loading the 160 KB generated "Wallbash-Gtk" theme (it also used to hang GTK 4.22 when
+# gtk-4.0/settings.ini had prefer-dark-theme, see docs/PITFALLS.md; fixed system-wide, this stays as a startup saving)
 os.environ["GTK_THEME"] = "Adwaita:dark"
 
 import cairo

@@ -196,8 +196,9 @@ fi
 # ------------------------------------------------------------------ apps
 say "apps"
 if ((DRY)); then
-    echo "   (dry) post.py kdeglobals / logseq / vscode / zen"
+    echo "   (dry) post.py kded / kdeglobals / logseq / vscode / zen"
 else
+    python3 "$REPO/tools/post.py" kded
     python3 "$REPO/tools/post.py" kdeglobals
     python3 "$REPO/tools/post.py" logseq "$REPO/logseq/gits.css"
     python3 "$REPO/tools/post.py" vscode "$HOME/.vscode-oss/extensions/gits.ghost-in-the-shell-1.0.0"

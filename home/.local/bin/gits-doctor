@@ -62,6 +62,15 @@ cur=$(gsettings get org.gnome.desktop.interface cursor-theme 2>/dev/null | tr -d
 kc=$(grep -m1 '^cursorTheme=' "$H/.config/kcminputrc" 2>/dev/null | cut -d= -f2)
 [[ -z $kc || $kc == GitS-Cursors ]] && ok "kcminputrc cursorTheme: ${kc:-unset}" || warn "kcminputrc cursorTheme=$kc: any KDE app (KDE Connect, Dolphin) will push it into GTK settings"
 
+# GTK4 apps hang forever while loading the theme when gtk-4.0/settings.ini (inside the theme dir, ~/.config/gtk-4.0 is a
+# symlink to it) says gtk-application-prefer-dark-theme=true. KDE's kded6 "gtkconfig" module keeps recreating that file.
+g4=$H/.config/gtk-4.0/settings.ini
+if [[ -f $g4 ]] && grep -q 'gtk-application-prefer-dark-theme *= *true' "$g4"; then
+    bad "$g4 has prefer-dark-theme: every GTK4 app will hang at start (rm it; kded6 gtkconfig recreates it)"
+else ok "no GTK4 settings.ini that hangs GTK4 apps"; fi
+if grep -A1 '^\[Module-gtkconfig\]' "$H/.config/kded6rc" 2>/dev/null | grep -q 'autoload=false'; then ok "kded6 gtkconfig module disabled"
+else warn "kded6 gtkconfig module is on: KDE apps rewrite GTK settings (cursor theme, gtk-4.0/settings.ini)"; fi
+
 # ---------------------------------------------------------------- services
 head_ "processes and units"
 if pgrep -x waybar >/dev/null; then ok "waybar running (pid $(pgrep -x waybar | head -1))"

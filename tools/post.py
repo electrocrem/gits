@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Idempotent edits that a plain file copy cannot do.  Used by install.sh.
 
+    post.py kded                  stop kded6 from recreating the GTK settings that hang GTK4 apps
     post.py kdeglobals            recolour KDE/Qt accents (Breeze blue -> cyan) and greys -> navy
     post.py logseq  <gits.css>    make Logseq load the GitS stylesheet (theme plugin route)
     post.py vscode  <ext-dir>     register the theme extension for Code - OSS
@@ -51,6 +52,23 @@ def kdeglobals():
         out.append(ln)
     open(p, "w").write("\n".join(out))
     print(f"kdeglobals: {n} colour lines changed")
+
+
+def kded():
+    """GTK4 apps hang while loading the theme if gtk-4.0/settings.ini says prefer-dark-theme=true (GTK 4.22). The file lives in
+    the theme dir (~/.config/gtk-4.0 is a symlink into it) and KDE's kded6 'gtkconfig' module keeps recreating it."""
+    rc = os.path.join(HOME, ".config/kded6rc")
+    have = open(rc).read() if os.path.exists(rc) else ""
+    if "[Module-gtkconfig]" not in have:
+        backup(rc)
+        with open(rc, "a") as f:
+            f.write(("\n" if have and not have.endswith("\n") else "") + "[Module-gtkconfig]\nautoload=false\n")
+        print("kded: gtkconfig module set to autoload=false (takes effect at the next kded6 start)")
+    ini = os.path.join(HOME, ".config/gtk-4.0/settings.ini")
+    if os.path.isfile(ini) and re.search(r"gtk-application-prefer-dark-theme\s*=\s*true", open(ini).read()):
+        os.makedirs(os.path.join(HOME, ".local/state/gits-hyde"), exist_ok=True)
+        shutil.move(ini, os.path.join(HOME, ".local/state/gits-hyde/gtk4-settings.ini.removed"))
+        print("kded: removed the gtk-4.0/settings.ini that hangs GTK4 apps")
 
 
 def logseq(css):
@@ -131,5 +149,5 @@ def zen(src):
 
 
 cmd = sys.argv[1] if len(sys.argv) > 1 else ""
-{"kdeglobals": kdeglobals, "logseq": lambda: logseq(sys.argv[2]), "vscode": lambda: vscode(sys.argv[2]),
+{"kded": kded, "kdeglobals": kdeglobals, "logseq": lambda: logseq(sys.argv[2]), "vscode": lambda: vscode(sys.argv[2]),
  "zen": lambda: zen(sys.argv[2])}.get(cmd, lambda: sys.exit(__doc__))()

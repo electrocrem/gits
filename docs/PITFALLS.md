@@ -66,9 +66,13 @@ sync with `GitS-Cursors`. `kquitapp6 kded6` makes it segfault (harmless, it rest
   the stylesheet of an installed theme plugin. A third-party theme must define `--lx-gray-01..12` and
   `--lx-accent-*` itself, and use `html:root:root[data-theme="dark"]` to beat Logseq's own `:root[data-theme=dark]`;
   otherwise sidebar text falls back to `--ls-header-button-background` and disappears.
-* **GTK4 apps hang** in this session while GTK loads the generated "Wallbash-Gtk" theme (`gtk_css_provider_load_named`);
-  the desktop widgets force `GTK_THEME=Adwaita:dark`. Root cause not found. `gtk4-layer-shell` must be LD_PRELOADed
-  before GTK loads (widgets.py re-execs itself).
+* **GTK4 apps hang forever at start** (GTK 4.22, generated `Wallbash-Gtk` theme). Cause: `gtk-4.0/settings.ini` inside
+  the theme dir (`~/.config/gtk-4.0` is a symlink into it) contains `gtk-application-prefer-dark-theme=true`; GTK reads
+  it while loading the theme, switches variant, reloads, and recurses (a deep `libgtk-4` stack in `load_from_file`).
+  HyDE's `theme.switch.sh` deletes that file, but KDE's `kded6` "gtkconfig" module recreates it whenever any KDE app
+  starts. Fix: `rm ~/.config/gtk-4.0/settings.ini` and `[Module-gtkconfig] autoload=false` in `~/.config/kded6rc`
+  (`install.sh` does both; `gits-doctor` checks). Found by bisecting a copy of the theme dir, then each key.
+  `gtk4-layer-shell` must still be LD_PRELOADed before GTK loads (widgets.py re-execs itself).
 * **KDE Connect** mirrors phone notifications (and their raw `<b>`/`<br/>` markup) to dunst; they can cover the
   widgets and contain private text.
 * Never `pkill -f <script name>` from a tool shell: it matches (and kills) the calling shell. Use the `[g]its`
