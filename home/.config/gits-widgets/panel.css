@@ -120,3 +120,14 @@ list { background: transparent; }
 .reveal.closing { animation: gits-close 140ms ease-in both; }
 .reveal.slow { animation-duration: 3000ms; }
 .reveal.slow.closing { animation-duration: 1400ms; }
+
+/* launcher / command palette */
+.lrow { padding: 6px 8px; background: transparent; }
+.lrow:hover { background: alpha(#2ED3D7, 0.12); }
+.lrow:selected { background: #2ED3D7; }
+.l-title { font-size: 12px; font-weight: 700; color: #C8F4FF; }
+.l-sub { font-size: 9px; color: #596977; }
+.l-glyph { font-size: 17px; color: #2ED3D7; }
+.l-tag { font-size: 8px; font-weight: 700; letter-spacing: 1px; color: #596977; }
+.lrow:selected .l-title, .lrow:selected .l-glyph { color: #060A14; }
+.lrow:selected .l-sub, .lrow:selected .l-tag { color: #0C1A33; }

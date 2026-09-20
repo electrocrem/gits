@@ -6,8 +6,13 @@ Sliders: volume (wpctl), brightness (brightnessctl). Segments: power profile (po
 limit (asusctl, ASUS only). Closes on Escape or when it loses focus. Everything is read/written through the same CLI
 tools the bar modules use, so the bar and the panel never disagree for long.
 """
+import ast
+import json
+import math
+import operator
 import os
 import re
+import shlex
 import subprocess
 import sys
 import threading
@@ -28,8 +33,12 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Gdk", "4.0")
 gi.require_version("Gtk4LayerShell", "1.0")
 gi.require_version("GdkPixbuf", "2.0")
-from gi.repository import Gdk, GdkPixbuf, GLib, GLibUnix, Gtk, Pango  # noqa: E402
+gi.require_version("Gio", "2.0")
+from gi.repository import Gdk, GdkPixbuf, Gio, GLib, GLibUnix, Gtk, Pango  # noqa: E402
 from gi.repository import Gtk4LayerShell as LS  # noqa: E402
+# gtk4-layer-shell only has to be preloaded into THIS process: every child (bash, git, nmcli, hyprctl...) inherited it and loaded GTK's
+# libraries for nothing, which made each spawned command several times slower
+os.environ.pop("LD_PRELOAD", None)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 HOME = os.path.expanduser("~")
@@ -1295,6 +1304,301 @@ class NotePopup(Popup):
         GLib.timeout_add(380, lambda: (self.dismiss(), False)[1])
 
 
+# ---------------------------------------------------------------------------------------------- launcher / command palette
+def fuzzy(q, text):
+    """Match score of query q in text, 0 = no match: prefix > word start > substring > letters in order."""
+    q, t = q.lower(), text.lower()
+    if not q:
+        return 1.0
+    if t.startswith(q):
+        return 100 - min(len(t) - len(q), 40) * 0.3
+    if any(w.startswith(q) for w in re.split(r"[\s\-_./]+", t) if w):
+        return 80 - min(len(t), 60) * 0.2
+    if q in t:
+        return 60 - min(t.index(q), 30) * 0.5
+    it = iter(t)
+    if len(q) >= 2 and all(c in it for c in q):
+        return 30 - min(len(t), 60) * 0.2
+    return 0.0
+
+
+_BIN = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv,
+        ast.FloorDiv: operator.floordiv, ast.Mod: operator.mod, ast.Pow: operator.pow}
+_FUN = {"sqrt": math.sqrt, "sin": math.sin, "cos": math.cos, "tan": math.tan, "log": math.log10, "ln": math.log,
+        "abs": abs, "round": round}
+_CONST = {"pi": math.pi, "e": math.e}
+
+
+def calc(expr):
+    """A safe pocket calculator: numbers, + - * / // % ** ^ ( ), sqrt sin cos tan log ln abs round, pi e. None if it is not maths."""
+    expr = expr.strip().replace("^", "**").replace(",", ".")
+    if not expr or not re.fullmatch(r"[0-9a-z_+\-*/%().\s]+", expr) or not re.search(r"\d|pi|\be\b", expr):
+        return None
+    if not re.search(r"[+\-*/%]|sqrt|sin|cos|tan|log|ln|abs|round", expr):
+        return None   # a bare number is not worth a row
+
+    def ev(n):
+        if isinstance(n, ast.Expression):
+            return ev(n.body)
+        if isinstance(n, ast.Constant) and isinstance(n.value, (int, float)):
+            return n.value
+        if isinstance(n, ast.Name) and n.id in _CONST:
+            return _CONST[n.id]
+        if isinstance(n, ast.UnaryOp) and isinstance(n.op, (ast.UAdd, ast.USub)):
+            v = ev(n.operand)
+            return v if isinstance(n.op, ast.UAdd) else -v
+        if isinstance(n, ast.BinOp) and type(n.op) in _BIN:
+            a, b = ev(n.left), ev(n.right)
+            if isinstance(n.op, ast.Pow) and abs(b) > 1000:
+                raise ValueError("exponent too large")
+            return _BIN[type(n.op)](a, b)
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id in _FUN and len(n.args) == 1 and not n.keywords:
+            return _FUN[n.func.id](ev(n.args[0]))
+        raise ValueError("not maths")
+    try:
+        v = ev(ast.parse(expr, mode="eval"))
+    except (ValueError, SyntaxError, ZeroDivisionError, OverflowError, TypeError):
+        return None
+    if isinstance(v, float) and v == int(v) and abs(v) < 1e15:
+        v = int(v)
+    return f"{v:.10g}" if isinstance(v, float) else str(v)
+
+
+class Item:
+    def __init__(self, kind, title, sub="", icon=None, glyph="󰀻", match="", act=None, weight=1.0, ident=None):
+        self.kind, self.title, self.sub, self.icon, self.glyph = kind, title, sub, icon, glyph
+        self.match, self.act, self.weight, self.ident = match or title, act, weight, ident
+
+
+class LauncherPopup(Popup):
+    """Command palette: apps (with icons, most used first), settings, projects, open windows, notes, a calculator and a web search
+    in one field. mode "clip" is the clipboard history (cliphist) instead. Enter runs, Up/Down select, Esc / click outside close."""
+    CARD_W = 580
+    USAGE = os.path.join(STATE, "gits-launcher", "usage.json")
+
+    def __init__(self, monitor, mode="launch"):
+        super().__init__(monitor, center=True)
+        self.mode = mode
+        self.dry = os.environ.get("GITS_LAUNCH_DRYRUN")
+        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        root.add_css_class("panel")
+        head = Gtk.Box(spacing=6)
+        head.append(label("CLIPBOARD // 貼付" if mode == "clip" else "LAUNCH // 起動", "m-head"))
+        sp = Gtk.Box()
+        sp.set_hexpand(True)
+        head.append(sp)
+        self.l_hint = label("Enter: run · Esc: close", "m-tag")
+        head.append(self.l_hint)
+        root.append(head)
+        self.entry = Gtk.Entry()
+        self.entry.add_css_class("m-entry")
+        self.entry.set_placeholder_text("search the clipboard history_" if mode == "clip" else "apps, settings, projects, windows, notes... or 2+2_")
+        self.entry.connect("changed", lambda *_: self._refresh())
+        self.entry.connect("activate", lambda *_: self._activate())
+        keys = Gtk.EventControllerKey()
+        keys.connect("key-pressed", self._key)
+        self.entry.add_controller(keys)
+        root.append(self.entry)
+        self.box = Gtk.ListBox()
+        self.box.set_selection_mode(Gtk.SelectionMode.SINGLE)
+        self.box.set_activate_on_single_click(True)
+        self.box.connect("row-activated", lambda _b, row: self._run(row.item))
+        sc = Gtk.ScrolledWindow()
+        sc.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        sc.set_propagate_natural_height(True)
+        sc.set_max_content_height(470)
+        sc.set_child(self.box)
+        root.append(sc)
+        self.set_child(root)
+        import time as _t
+        _t0 = _t.time()
+        self.usage = self._load_usage()
+        self.items = self._gather()
+        _t1 = _t.time()
+        self._refresh()
+        if os.environ.get("GITS_PANEL_DEBUG"):
+            open(os.environ["GITS_PANEL_DEBUG"], "a").write(f"launcher: gather {_t1 - _t0:.2f}s, first list {_t.time() - _t1:.2f}s, {len(self.items)} items\n")
+        GLib.idle_add(lambda: (self.entry.grab_focus(), False)[1])
+        auto = os.environ.get("GITS_PANEL_AUTOTEXT")   # test / screenshot hooks
+        if auto:
+            GLib.timeout_add(900, lambda: (self.entry.set_text(auto), False)[1])
+            if os.environ.get("GITS_PANEL_AUTOENTER"):
+                GLib.timeout_add(1600, lambda: (self._activate(), False)[1])
+
+    # -- data
+    def _load_usage(self):
+        try:
+            return json.load(open(self.USAGE))
+        except (OSError, ValueError):
+            return {}
+
+    def _gather(self):
+        items = []
+        if self.mode == "clip":
+            for ln in sh(["cliphist", "list"], timeout=3).splitlines()[:80]:
+                cid, _, text = ln.partition("\t")
+                binary = text.startswith("[[ binary data")
+                items.append(Item("clip", text.replace("[[ binary data ", "image ").rstrip(" ]]") if binary else " ".join(text.split())[:110],
+                                  "image" if binary else f"{len(text)} chars", glyph="󰋩" if binary else "󰅍",
+                                  match=text, act=("clip", cid), ident=cid))
+            return items
+        for a in Gio.AppInfo.get_all():
+            if not a.should_show():
+                continue
+            kw = " ".join(a.get_keywords() or []) if hasattr(a, "get_keywords") else ""
+            gen = a.get_generic_name() if hasattr(a, "get_generic_name") else ""
+            items.append(Item("app", a.get_name(), a.get_description() or gen or "", icon=a.get_icon(), glyph="󰀻",
+                              match=f"{a.get_name()} {gen or ''} {kw}", act=("app", a.get_id() or ""), ident=a.get_id()))
+        for row in sh(["gits-settings", "--list"], timeout=3).splitlines():
+            lab, _, cmd = row.partition("\t")
+            m = re.match(r"^(\S)\s+(.*)$", lab)
+            items.append(Item("set", m.group(2) if m else lab, "settings", glyph=m.group(1) if m else "󰒓", act=("sh", cmd), weight=0.9))
+        for row in sh(["gits-project", "--tsv"], timeout=4).splitlines():
+            name, _, rest = row.partition("\t")
+            d, _, kind = rest.partition("\t")
+            items.append(Item("prj", name, d.replace(HOME, "~"), glyph="󰊗" if kind == "godot" else "", match=f"{name} {d}", act=("prj", d), weight=0.95))
+        try:
+            for c in json.loads(sh(["hyprctl", "clients", "-j"]) or "[]"):
+                if c.get("mapped") and c.get("title"):
+                    items.append(Item("win", c["title"][:80], c.get("class", ""), glyph="󰖯", match=f"{c['title']} {c.get('class', '')}",
+                                      act=("win", c["address"]), weight=1.1))
+        except ValueError:
+            pass
+        notes = os.environ.get("GITS_NOTES") or os.path.join(HOME, "notes", "inbox.md")
+        try:
+            for ln in [x.rstrip("\n") for x in open(notes, encoding="utf-8") if x.strip()][-40:]:
+                t = re.sub(r"^- \d{4}-\d{2}-\d{2} \d{2}:\d{2} +", "", ln)
+                items.append(Item("note", t[:100], "note (Enter copies it)", glyph="󰎞", act=("copy", t), weight=0.7))
+        except OSError:
+            pass
+        return items
+
+    def _frecency(self, ident):
+        u = self.usage.get(ident or "")
+        if not u:
+            return 1.0
+        import time
+        recent = 0.3 if time.time() - u.get("t", 0) < 3 * 86400 else 0.0
+        return 1.0 + min(math.log1p(u.get("n", 0)), 3.0) * 0.35 + recent
+
+    def _search(self, q):
+        if self.mode == "clip":
+            if not q:
+                return self.items[:12]
+            scored = [(fuzzy(q, it.match), it) for it in self.items]
+            return [it for sc, it in sorted(scored, key=lambda x: -x[0]) if sc > 0][:12]
+        q = q.strip()
+        if not q:
+            apps = [it for it in self.items if it.kind == "app"]
+            used = sorted((it for it in apps if it.ident in self.usage), key=lambda it: -self._frecency(it.ident))[:8]
+            return used or sorted(apps, key=lambda it: it.title.lower())[:8]
+        res = []
+        r = calc(q)
+        if r is not None:
+            res.append((1e6, Item("calc", f"= {r}", q, glyph="󰃬", act=("copy", r))))
+        for it in self.items:
+            sc = fuzzy(q, it.match)
+            if it.kind == "note" and len(q) < 3:
+                sc = 0
+            if sc > 0:
+                res.append((sc * it.weight * (self._frecency(it.ident) if it.kind == "app" else 1.0), it))
+        res = [it for _, it in sorted(res, key=lambda x: -x[0])][:9]
+        res.append(Item("web", f"Search the web for \"{q}\"", "opens the browser", glyph="󰖟", act=("web", q)))
+        return res
+
+    # -- list
+    def _refresh(self):
+        while (c := self.box.get_first_child()) is not None:
+            self.box.remove(c)
+        rows = self._search(self.entry.get_text())
+        tags = {"app": "APP", "set": "SETTINGS", "prj": "PROJECT", "win": "WINDOW", "note": "NOTE", "calc": "CALC", "web": "WEB", "clip": ""}
+        for it in rows:
+            row = Gtk.ListBoxRow()
+            row.add_css_class("lrow")
+            row.item = it
+            h = Gtk.Box(spacing=10)
+            if it.icon is not None:
+                img = Gtk.Image.new_from_gicon(it.icon)
+                img.set_pixel_size(28)
+                h.append(img)
+            else:
+                g = label(it.glyph, "l-glyph", 0.5)
+                g.set_size_request(28, -1)
+                h.append(g)
+            col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+            col.set_hexpand(True)
+            t = label(it.title, "l-title")
+            t.set_ellipsize(Pango.EllipsizeMode.END)
+            t.set_max_width_chars(48)
+            col.append(t)
+            if it.sub:
+                sub = label(it.sub, "l-sub")
+                sub.set_ellipsize(Pango.EllipsizeMode.END)
+                sub.set_max_width_chars(58)
+                col.append(sub)
+            h.append(col)
+            if tags.get(it.kind):
+                h.append(label(tags[it.kind], "l-tag", 1.0))
+            row.set_child(h)
+            self.box.append(row)
+        first = self.box.get_row_at_index(0)
+        if first is not None:
+            self.box.select_row(first)
+
+    def _key(self, _c, kv, state, *_):
+        if kv in (Gdk.KEY_Down, Gdk.KEY_Up) or (state & Gdk.ModifierType.CONTROL_MASK and kv in (Gdk.KEY_n, Gdk.KEY_p)):
+            down = kv in (Gdk.KEY_Down, Gdk.KEY_n)
+            cur = self.box.get_selected_row()
+            i = (cur.get_index() if cur else -1) + (1 if down else -1)
+            n = 0
+            while self.box.get_row_at_index(n) is not None:
+                n += 1
+            if n:
+                row = self.box.get_row_at_index(i % n)
+                self.box.select_row(row)
+                row.grab_focus()
+                self.entry.grab_focus()
+            return True
+        return False
+
+    def _activate(self):
+        row = self.box.get_selected_row()
+        if row is not None:
+            self._run(row.item)
+
+    # -- actions
+    def _run(self, it):
+        kind, arg = it.act
+        cmd = None
+        if kind == "app":
+            u = self.usage.setdefault(it.ident, {"n": 0, "t": 0})
+            import time
+            u["n"], u["t"] = u["n"] + 1, time.time()
+            if not self.dry:
+                os.makedirs(os.path.dirname(self.USAGE), exist_ok=True)
+                json.dump(self.usage, open(self.USAGE, "w"))
+            cmd = ["gtk-launch", arg[:-8] if arg.endswith(".desktop") else arg]
+        elif kind == "sh":
+            cmd = ["bash", "-c", arg]
+        elif kind == "prj":
+            cmd = ["gits-project", "--open", arg]
+        elif kind == "win":
+            cmd = ["hyprctl", "dispatch", f'hl.dsp.focus({{ window = "address:{arg}" }})']
+        elif kind == "copy":
+            cmd = ["bash", "-c", f"printf %s {shlex.quote(arg)} | wl-copy && notify-send -a 'HyDE Notify' -t 2500 'Copied' {shlex.quote(arg[:80])}"]
+        elif kind == "web":
+            import urllib.parse
+            cmd = ["xdg-open", "https://duckduckgo.com/?q=" + urllib.parse.quote_plus(arg)]
+        elif kind == "clip":
+            cmd = ["bash", "-c", f"cliphist decode {shlex.quote(arg)} | wl-copy"]
+        if cmd:
+            if self.dry:
+                open(self.dry, "a").write(f"{kind}\t{it.title}\t{shlex.join(cmd)}\n")
+            else:   # a moment later: the popup still holds the keyboard, a new window would not get focus
+                fire(["sh", "-c", "sleep 0.25; exec " + shlex.join(cmd)])
+        self.dismiss()
+
+
 def main():
     if not LS.is_supported():
         print("gits-panel: no layer-shell support", file=sys.stderr)
@@ -1329,6 +1633,8 @@ def main():
         return 0
     if mode == "notify":
         win = NotifyPopup(mon)
+    elif mode in ("launch", "clip"):
+        win = LauncherPopup(mon, mode)
     elif mode == "note":
         win = NotePopup(mon)
     elif mode == "mixer":

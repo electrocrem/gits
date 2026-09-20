@@ -41,6 +41,7 @@ for r in "${rows[@]}"; do
     [[ -z $r ]] && continue
     labels+=("${r%%$'\t'*}"); cmds+=("${r#*$'\t'}")
 done
+if [[ ${1:-} == --list ]]; then for i in "${!labels[@]}"; do printf '%s\t%s\n' "${labels[i]}" "${cmds[i]}"; done; exit 0; fi
 idx=$(printf '%s\n' "${labels[@]}" | gits-menu "󰒓  SETTINGS" "// 設定" -format i) || exit 0
 cmd=${cmds[idx]}
 setsid -f bash -c "$cmd" </dev/null >/dev/null 2>&1

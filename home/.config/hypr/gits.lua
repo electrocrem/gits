@@ -79,6 +79,11 @@ hl.bind("SUPER + F", hl.dsp.exec_cmd("gits-focus menu"), {description = "[GitS] 
 hl.bind("SUPER + N", hl.dsp.exec_cmd("gits-note add"), {description = "[GitS] quick note"})
 hl.bind("SUPER + SHIFT + O", hl.dsp.exec_cmd("gits-note list"), {description = "[GitS] recent notes"})
 
+-- Our own launcher (command palette: apps with icons, settings, projects, windows, notes, calculator, web) and clipboard history, both GTK
+-- popups that close on Esc / a click outside; they replace HyDE's rofi launcher and clipboard menu on the same keys
+hl.bind("SUPER + A", hl.dsp.exec_cmd("gits-panel launch"), {description = "[GitS] launcher / command palette"})
+hl.bind("SUPER + V", hl.dsp.exec_cmd("gits-panel clip"), {description = "[GitS] clipboard history"})
+
 -- Popups under the bar (gits-panel): control panel and player
 hl.bind("SUPER + SHIFT + C", hl.dsp.exec_cmd("gits-panel control"), {description = "[GitS] control panel"})
 hl.bind("SUPER + SHIFT + M", hl.dsp.exec_cmd("gits-panel media"), {description = "[GitS] player popup"})

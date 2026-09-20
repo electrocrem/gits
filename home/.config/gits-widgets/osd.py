@@ -24,6 +24,9 @@ gi.require_version("Gdk", "4.0")
 gi.require_version("Gtk4LayerShell", "1.0")
 from gi.repository import Gdk, GLib, GLibUnix, Gtk  # noqa: E402
 from gi.repository import Gtk4LayerShell as LS  # noqa: E402
+# gtk4-layer-shell only has to be preloaded into THIS process: every child (bash, git, nmcli, hyprctl...) inherited it and loaded GTK's
+# libraries for nothing, which made each spawned command several times slower
+os.environ.pop("LD_PRELOAD", None)
 
 FIFO = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "gits-osd.fifo")
 FONT = "JetBrainsMono Nerd Font"

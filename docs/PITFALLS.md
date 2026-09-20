@@ -176,3 +176,10 @@ aliases (including links to links) to the `scalable` directories too. `kiconfind
 * **kitty fonts:** HyDE's `kitty/hyde.conf` sets the font and is HyDE-owned; override it in `kitty.conf` after `include hyde.conf` (the installer's block).
 * **hyprsunset reads its profiles from `~/.config/hypr/hyprsunset.conf` and switches by the clock itself**; only its unit needs a restart after a change.
   Profile blocks that contain only comments (HyDE's sample) are dropped by `gits-daynight`.
+* **A preloaded library is inherited by every child process.** The GTK4 apps here re-exec themselves with `LD_PRELOAD=libgtk4-layer-shell.so` (it must be loaded
+  before libwayland). Every `bash`/`git`/`hyprctl` they spawned inherited it and loaded GTK's libraries too: `gits-project --tsv` took 2.9 s from Python but
+  0.07 s from a shell, and the launcher needed 3.6 s to appear. `os.environ.pop("LD_PRELOAD")` right after the imports fixed it (launcher 0.55 s).
+* **`subprocess.run(capture_output=True)` waits for EOF on the pipes:** a `git status` that leaves a background maintenance process behind keeps them
+  open. Give background jobs `</dev/null 2>/dev/null` and do the cheap work before the slow work.
+* **`gits-panel close` followed at once by `gits-panel <same mode>`** was swallowed (the dying popup still looked alive, so the second call toggled it off);
+  `close` now waits until the old process is gone.

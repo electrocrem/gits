@@ -27,10 +27,11 @@ status_of() {
     printf '%s' "${s:-✓}"
 }
 mapfile -t rows < <(list)
+if [[ ${1:-} == --tsv ]]; then for r in "${rows[@]}"; do IFS=$'\t' read -r _ _ name dir <<<"$r"; kind=git; [[ -f $dir/project.godot ]] && kind=godot; printf '%s\t%s\t%s\n' "$name" "$dir" "$kind"; done; exit 0; fi
 labels=(); dirs=(); tmp=$(mktemp -d)
 for i in "${!rows[@]}"; do
     IFS=$'\t' read -r _ _ _ d <<<"${rows[i]}"; dirs+=("$d")
-    ( status_of "$d" >"$tmp/$i" ) &       # all repos at once: the menu waits for the slowest, not the sum
+    ( status_of "$d" >"$tmp/$i" 2>/dev/null </dev/null ) &       # all repos at once: the menu waits for the slowest, not the sum
 done
 wait
 for i in "${!rows[@]}"; do
@@ -39,9 +40,9 @@ for i in "${!rows[@]}"; do
 done
 rm -rf "$tmp"
 if [[ ${1:-} == --list ]]; then printf '%s\n' "${labels[@]}"; exit 0; fi
+open_project() { local d=$1; setsid -f kitty --directory "$d" </dev/null >/dev/null 2>&1; [[ -f $d/project.godot ]] && command -v godot >/dev/null && setsid -f godot --editor --path "$d" </dev/null >/dev/null 2>&1; }
+if [[ ${1:-} == --open ]]; then open_project "${2:?directory}"; exit 0; fi
 ((${#labels[@]})) || { notify-send -a GitS "No projects found" "no git repo or Godot project below $HOME"; exit 1; }
 idx=$(printf '%s\n' "${labels[@]}" | gits-menu $'\U000F024B  PROJECTS' "// 案件" -format i) || exit 0
-d=${dirs[idx]}
-setsid -f kitty --directory "$d" </dev/null >/dev/null 2>&1
-[[ -f $d/project.godot ]] && command -v godot >/dev/null && setsid -f godot --editor --path "$d" </dev/null >/dev/null 2>&1
+open_project "${dirs[idx]}"
 exit 0
