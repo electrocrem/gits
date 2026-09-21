@@ -1,6 +1,6 @@
 """Spectrum of ONE audio stream (the radio's mpv), not of everything the machine plays.
 
-    tap = StreamSpectrum(pid_file)      # pid_file holds the pid of the mpv (gits-radio writes it)
+    tap = StreamSpectrum(pid_file, name)   # pid_file holds the pid of the mpv (gits-radio writes it), name its --audio-client-name
     tap.start()                         # a daemon thread: finds mpv's sink input with pactl, records it with `parec --monitor-stream`
     tap.bands                           # BANDS floats 0..1, low to high pitch; all zero while nothing plays
     tap.beats, tap.kick                 # count of detected beats (it goes up by one per beat) and the strength 0.4..1 of the last one
@@ -31,13 +31,16 @@ def _pactl(*args):
         return None
 
 
-def find_stream(pid):
-    """(sink-input index, monitor source) of the process, None while it is not playing, False if pactl cannot be used."""
+def find_stream(pid, name=None):
+    """(sink-input index, monitor source) of the player, None while it is not playing, False if pactl cannot be used.
+    Found by the process id OR by the client name mpv was started with (--audio-client-name): a stream made through mpv's native PipeWire
+    output has no application.process.id at all, which is what the first version relied on and why it saw nothing on a real setup."""
     inputs = _pactl("list", "sink-inputs")
     if inputs is None:
         return False
     for si in inputs:
-        if str(si.get("properties", {}).get("application.process.id", "")) == str(pid):
+        props = si.get("properties", {})
+        if str(props.get("application.process.id", "")) == str(pid) or (name and props.get("application.name") == name):
             for sink in _pactl("list", "sinks") or []:
                 if sink.get("index") == si.get("sink"):
                     return si["index"], sink["name"] + ".monitor"
@@ -47,9 +50,10 @@ def find_stream(pid):
 class StreamSpectrum(threading.Thread):
     BANDS = 24
 
-    def __init__(self, pid_file):
+    def __init__(self, pid_file, name=None):
         super().__init__(daemon=True)
         self.pid_file = pid_file
+        self.name = name
         self.bands = [0.0] * self.BANDS
         self.error = ""
         self.beats, self.kick = 0, 0.0
@@ -83,7 +87,7 @@ class StreamSpectrum(threading.Thread):
     def run(self):
         while not self._halt.is_set():
             pid = self._pid()
-            found = find_stream(pid) if pid else None
+            found = find_stream(pid, self.name) if pid else None
             if found is False:
                 self.error = "no pactl"
                 return

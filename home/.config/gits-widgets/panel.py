@@ -952,7 +952,7 @@ class RadioPage(ArtMixin, Gtk.Box):
         self.pulse, self.t = 0.0, 0.0   # a beat "kick" (1 -> 0) and the dance clock
         self.seen_beats, self.rings = 0, []   # beats already answered; the shock waves running over the floor (birth time, strength)
         if StreamSpectrum is not None and not DEMO:
-            self.spec = StreamSpectrum(os.path.join(self.RUN, "mpv.pid"))
+            self.spec = StreamSpectrum(os.path.join(self.RUN, "mpv.pid"), self.NAME)
             self.spec.start()
         if dancer is not None and self.LAIN != "off":
             threading.Thread(target=self._load_dancer, daemon=True).start()

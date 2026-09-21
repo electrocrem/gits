@@ -189,3 +189,9 @@ aliases (including links to links) to the `scalable` directories too. `kiconfind
   open. Give background jobs `</dev/null 2>/dev/null` and do the cheap work before the slow work.
 * **`gits-panel close` followed at once by `gits-panel <same mode>`** was swallowed (the dying popup still looked alive, so the second call toggled it off);
   `close` now waits until the old process is gone.
+
+* **A stream made through mpv's native PipeWire output has no `application.process.id`.** The radio popup and the spectrum looked up mpv's sink input by
+  pid (`pactl --format=json list sink-inputs`), which worked in every test (they forced `--audio-device=pulse/...`, a PulseAudio stream that carries the
+  pid) and found nothing on the real setup (mpv picks the `pipewire` output by default): no spectrum, no beats, a Lain that only danced to a fixed
+  rhythm, "no bass". The stream is now found by pid OR by `application.name` (gits-radio starts mpv with `--audio-client-name`), and a test that
+  wants the real path uses `--ao=pipewire --audio-device=pipewire/<null sink>`. Check what `pactl list sink-inputs` really reports before trusting a pid.
