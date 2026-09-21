@@ -927,8 +927,10 @@ class RadioPage(ArtMixin, Gtk.Box):
     API = os.environ.get("GITS_RADIO_API", "https://radio.datamosh.ru/api/nowplaying/datamosh_radio")
     NAME = os.environ.get("GITS_RADIO_NAME", "DATAMOSH")
     LAIN = os.environ.get("GITS_RADIO_LAIN", "holo").lower()
-    STAGE_H = 150      # logical px; also the height of Lain
+    STAGE_H = 150      # logical px
+    SPRITE_H = 116     # Lain: leaves room above her for the jump and the zoom of a beat
     SPEED = float(os.environ.get("GITS_RADIO_LAIN_SPEED", "1") or 1)   # 1 = lively, 0.5 = calm, 1.5 = frantic
+    FLASH = os.environ.get("GITS_RADIO_FLASH", "1") != "0"   # the stage flashing on the beats; 0 = off (for anyone who dislikes flicker)
     SEG, SGAP = 3, 1   # LED segment height / gap of the spectrum, px
     CY, CYB, RED, FG = (0.18, 0.83, 0.84), (0.55, 0.95, 0.97), (0.94, 0.31, 0.31), (0.86, 0.94, 0.96)
 
@@ -1036,7 +1038,7 @@ class RadioPage(ArtMixin, Gtk.Box):
         GLib.timeout_add_seconds(1, self._tick)
 
     def _load_dancer(self):
-        frames = dancer.load(self.STAGE_H, "color" if self.LAIN == "color" else "holo")   # ~1.5 s the first time, cached afterwards
+        frames = dancer.load(self.SPRITE_H, "color" if self.LAIN == "color" else "holo")   # ~1.5 s the first time, cached afterwards
         GLib.idle_add(self._dancer_ready, frames)
 
     def _dancer_ready(self, frames):
@@ -1080,6 +1082,8 @@ class RadioPage(ArtMixin, Gtk.Box):
                 return
             vol = mpv_ipc(self._sock(), ["get_property", "volume"])
             running = vol is not None
+            if os.environ.get("GITS_PANEL_DEBUG_FRAMES"):
+                open(os.environ["GITS_PANEL_DEBUG_FRAMES"], "a").write(f"poll vol={vol!r} sock_exists={os.path.exists(self._sock())} spec={self.spec is not None}\n")
             paused = running and mpv_ipc(self._sock(), ["get_property", "pause"]) is True
             GLib.idle_add(self._apply_state, running, paused, vol)
             if time.monotonic() - self.api_at > 3.0:
@@ -1180,6 +1184,8 @@ class RadioPage(ArtMixin, Gtk.Box):
         elif DEMO and int(self.t / 0.42) != int((self.t - 0.033) / 0.42) and self.running:   # the demo has a steady made-up beat
             self._kick(0.8)
         self.pulse *= 0.86
+        if os.environ.get("GITS_PANEL_DEBUG_FRAMES"):
+            open(os.environ["GITS_PANEL_DEBUG_FRAMES"], "a").write(f"{time.monotonic():.3f} {self.pulse:.3f} {self.energy:.3f} {max(self.level[:4]):.3f}\n")
         if self.running and not self.paused and self.dance:
             self.t += 0.033
             self.phase += 0.033 * self.SPEED * min(30.0, 10.0 + 16.0 * self.energy + 12.0 * self.pulse)   # 10 frames a second at rest, up to 30 on a loud beat
@@ -1202,6 +1208,10 @@ class RadioPage(ArtMixin, Gtk.Box):
         bw = (w - gap * (n - 1)) / n
         pitch = self.SEG + self.SGAP
         rows = max(int(h * 0.55 // pitch), 1)   # the bars are the floor and the backdrop, not the whole stage
+        if self.FLASH and self.running and self.pulse > 0.02:   # the whole stage flashes on a beat: the one thing that cannot be missed
+            cr.rectangle(0, 0, w, h)
+            cr.set_source_rgba(*self.CY, 0.30 * self.pulse ** 1.4)
+            cr.fill()
         for i in range(n):   # faint baseline dots: alive even when silent
             cr.set_source_rgba(*self.CY, 0.22)
             cr.rectangle(i * (bw + gap), h - self.SEG, bw, self.SEG)
@@ -1209,7 +1219,10 @@ class RadioPage(ArtMixin, Gtk.Box):
         lit = {self.CY: [], self.CYB: [], self.RED: [], self.FG: []}
         for i in range(n):
             x = i * (bw + gap)
-            k = int(self.level[i] * rows)
+            lv = self.level[i]
+            if i < 6:   # the bass bars are sustained most of the time: on a beat they punch to the top and fall back between the beats
+                lv = max(lv * (0.55 if self.running else 1.0), self.pulse * (1.0 - 0.09 * i))
+            k = int(lv * rows)
             for r in range(k):
                 frac = (r + 1) / rows
                 lit[self.RED if frac > 0.86 else (self.CYB if frac > 0.55 else self.CY)].append((x, h - (r + 1) * pitch + self.SGAP))
@@ -1225,8 +1238,9 @@ class RadioPage(ArtMixin, Gtk.Box):
             return
         frame = self.dance[int(self.phase) % len(self.dance)]
         fw, fh = frame.get_width() / 2, frame.get_height() / 2
-        sx, sy = 1 - 0.04 * self.pulse, 1 + 0.08 * self.pulse                      # stretches up on every beat
-        hop = 3 * self.energy + 17 * self.pulse                                    # and jumps
+        zoom = 1 + 0.12 * self.pulse                                               # pumps up on every beat
+        sx, sy = zoom * (1 - 0.03 * self.pulse), zoom * (1 + 0.05 * self.pulse)
+        hop = 3 * self.energy + 12 * self.pulse                                    # and jumps
         sway = 6 * math.sin(self.t * 2.4) * (0.35 + self.energy)                   # and rocks from side to side
         x, y = (w - fw * sx) / 2 + sway, h - fh * sy - hop
         alpha = 1.0 if self.running else 0.3
@@ -1234,7 +1248,7 @@ class RadioPage(ArtMixin, Gtk.Box):
         cr.translate(w / 2, h - 4)
         cr.scale(1, 0.16)
         g = cairo.RadialGradient(0, 0, 4, 0, 0, 66)
-        k = (0.30 + 0.45 * self.energy + 0.3 * self.pulse) * (1.0 if self.running else 0.3)
+        k = (0.30 + 0.45 * self.energy + 0.6 * self.pulse) * (1.0 if self.running else 0.3)
         g.add_color_stop_rgba(0, *self.CYB, k)
         g.add_color_stop_rgba(1, *self.CY, 0.0)
         cr.set_source(g)
@@ -1249,10 +1263,10 @@ class RadioPage(ArtMixin, Gtk.Box):
             cr.save()
             cr.translate(w / 2, h - 5)
             cr.scale(1, 0.16)
-            cr.arc(0, 0, 14 + 96 * age, 0, 2 * math.pi)
+            cr.arc(0, 0, 14 + 128 * age, 0, 2 * math.pi)
             cr.restore()   # the path stays an ellipse, the stroke below has a uniform width
-            cr.set_source_rgba(*self.CYB, 0.7 * (1 - age) * (0.55 + 0.45 * st))
-            cr.set_line_width(1.8)
+            cr.set_source_rgba(*self.CYB, 0.95 * (1 - age) * (0.6 + 0.4 * st))
+            cr.set_line_width(2.6)
             cr.stroke()
         cr.save()
         cr.translate(x, y)
