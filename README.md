@@ -91,8 +91,6 @@ snapshot, updates the system, and then runs the repair.
 | ![Dolphin](docs/img/dolphin.jpg) **Dolphin** with cyan folders | ![VS Code](docs/img/vscode.jpg) **VS Code / Code-OSS** |
 | ![SDDM](docs/img/sddm.jpg) **Login screen** (SDDM) | ![Lock screen](docs/img/lock.jpg) **Lock screen**: a dancing Lain, a glitching clock, a blinking cursor |
 
-The boot screens (Plymouth, GRUB) and the Zen, Logseq and Telegram styles are not pictured. All the pictures show demo data, nothing personal.
-
 ## Install
 
 You need an Arch-based system with **Hyprland 0.55 or newer** (developed on CachyOS with Hyprland 0.56). The list of packages is in

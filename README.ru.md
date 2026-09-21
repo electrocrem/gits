@@ -90,8 +90,6 @@ Zen, Logseq и Telegram. А ещё иконки и курсоры под ста�
 | ![Dolphin](docs/img/dolphin.jpg) **Dolphin** с циановыми папками | ![VS Code](docs/img/vscode.jpg) **VS Code / Code-OSS** |
 | ![SDDM](docs/img/sddm.jpg) **Экран входа** (SDDM) | ![Экран блокировки](docs/img/lock.jpg) **Экран блокировки**: танцующая Лейн, «глючащие» часы, мигающий курсор |
 
-Экраны загрузки (Plymouth, GRUB) и стили Zen, Logseq и Telegram на картинках не показаны. Все картинки сняты на демо-данных, ничего личного там нет.
-
 ## Установка
 
 Нужна система на базе Arch и **Hyprland 0.55 или новее** (разработано на CachyOS с Hyprland 0.56). Список пакетов лежит в
