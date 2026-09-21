@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# hyprlock label: the time, and now and then a glitch. gits-lock-clock [ghost]: with `ghost` it prints the time ONLY during a glitch
+# (a second, red, slightly shifted label under the clock gives the colour split). The glitch is a pure function of the 150 ms slot of the
+# clock, so both labels agree without talking to each other. No forks: it runs seven times a second.
+slot=$(( ${EPOCHREALTIME/./} / 150000 ))
+glitch=0
+(( (slot * 2654435761 >> 7) % 27 == 0 )) && glitch=1
+printf -v t '%(%H:%M)T' -1
+if (( glitch )); then
+    chars='01#$%&@=+*'
+    g=""
+    for (( i = 0; i < ${#t}; i++ )); do
+        c=${t:i:1}
+        if [[ $c != : ]] && (( (slot + i * 7) % 3 == 0 )); then c=${chars:(slot * 5 + i * 3) % ${#chars}:1}; fi
+        g+=$c
+    done
+    [[ ${1:-} == ghost ]] && echo "$t" || echo "$g"
+else
+    [[ ${1:-} == ghost ]] && echo " " || echo "$t"
+fi

@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# hyprlock label: the prompt with a blinking block cursor. No forks.
+(( (${EPOCHREALTIME/./} / 500000) % 2 )) && echo "> AUTHENTICATION REQUIRED ▮" || echo "> AUTHENTICATION REQUIRED  "

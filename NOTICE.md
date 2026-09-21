@@ -22,5 +22,5 @@ installer then generates original placeholder wallpapers and a generic ASCII ban
 
 ## Dancing Lain (radio popup)
 
-`home/.config/gits-widgets/lain.gif` is the dance animation from [pryanostnik/lain-dance](https://github.com/pryanostnik/lain-dance) (MIT). The character is
+`assets/lain-dance.gif` (installed as `~/.config/gits-widgets/lain.gif`) is the dance animation from [pryanostnik/lain-dance](https://github.com/pryanostnik/lain-dance) (MIT). The character is
 Lain Iwakura from *Serial Experiments Lain* (Triangle Staff / Pioneer LDC); like the other artwork here it stays under the rights of its owners.

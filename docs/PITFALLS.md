@@ -195,3 +195,12 @@ aliases (including links to links) to the `scalable` directories too. `kiconfind
   pid) and found nothing on the real setup (mpv picks the `pipewire` output by default): no spectrum, no beats, a Lain that only danced to a fixed
   rhythm, "no bass". The stream is now found by pid OR by `application.name` (gits-radio starts mpv with `--audio-client-name`), and a test that
   wants the real path uses `--ao=pipewire --audio-device=pipewire/<null sink>`. Check what `pactl list sink-inputs` really reports before trusting a pid.
+
+* **hyprlock cannot animate a picture, but it refreshes text ten times a second.** An `image` widget's `reload_time` takes whole seconds only (`0.125` is a config
+  error), `0` means "never" (its `reload_cmd` is not run at all: measured by logging every call) and `1` is the fastest, one frame a second. A `label` with
+  `cmd[update:100]` really runs its command 9.9 times a second. So the dancing Lain on the lock screen is braille text frames (`gits-lock-lain`,
+  `~/.local/share/gits-lock/build.py`); the glitching clock, the cursor and the scanner are labels too. Their scripts use only shell builtins
+  (`$EPOCHREALTIME`, `printf '%(%H:%M)T'`): about 30 short processes a second while locked. Test hyprlock ONLY in a nested Hyprland (`tools/lock-shot.sh`).
+* **Spring curves in Hyprland 0.56**: `hl.curve(name, {type = "spring", mass, stiffness, dampening})` and `hl.animation({leaf = ..., spring = name})`. A damping ratio
+  (`dampening / (2 * sqrt(stiffness * mass))`) of 0.22 gives a +23% overshoot on a window opening, 0.34 about +16%; the `cyber` preset uses plain exponential
+  beziers and has none. Measure an animation by recording the screen (`wf-recorder -r 60`) and tracking the window width per frame, never by eye.

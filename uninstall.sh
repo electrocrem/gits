@@ -77,6 +77,11 @@ fi
 for d in "$HOME/.local/share/icons/GitS-Icons" "$HOME/.local/share/icons/GitS-Cursors"; do
     [[ -d $d ]] && { echo "delete   $d"; run rm -rf "$d"; }
 done
+if compgen -G "$HOME/.local/share/gits-lock/lain-*.txt" >/dev/null; then
+    echo "delete   generated lock screen frames"
+    run rm -f "$HOME"/.local/share/gits-lock/lain-*.txt
+    run rmdir "$HOME/.local/share/gits-lock" 2>/dev/null || true
+fi
 if compgen -G "$HOME/.local/share/gits-sounds/*.wav" >/dev/null; then
     echo "delete   generated UI sounds"
     run rm -f "$HOME"/.local/share/gits-sounds/*.wav

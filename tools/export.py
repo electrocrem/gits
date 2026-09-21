@@ -19,6 +19,7 @@ CHECK = "--check" in sys.argv
 MANIFEST = [
     (".config/hypr/hyprland.lua", None),
     (".config/hypr/hyprlock.conf", None),
+    (".config/hypr/hyprlock/static.conf", None),
     (".config/hypr/hypridle.conf", None),
     (".config/hypr/gits", None),
     (".config/hypr/scripts", ["gits-*.sh"]),
@@ -26,7 +27,7 @@ MANIFEST = [
     (".config/waybar/layouts/ghost-in-the-shell.jsonc", None),
     (".config/waybar/styles/ghost-in-the-shell.css", None),
     (".config/waybar/scripts", ["gits-*.sh"]),
-    (".config/gits-widgets", ["widgets.py", "style.css", "run.sh", "panel.py", "panel.css", "osd.py", "spectrum.py", "dancer.py", "lain.gif"]),
+    (".config/gits-widgets", ["widgets.py", "style.css", "run.sh", "panel.py", "panel.css", "osd.py", "spectrum.py", "dancer.py"]),
     (".config/wlogout/layout_1", None),
     (".config/wlogout/style_1.css", None),
     (".config/dunst/dunstrc", None),
@@ -61,6 +62,7 @@ MANIFEST = [
     (".local/share/gits-sddm/ghost-in-the-shell", ["Main.qml", "metadata.desktop", "theme.conf"]),
     (".local/share/gits-boot", ["build.py", "install.sh", "fix-grub-savedefault.sh", "plymouth.script.in"]),
     (".local/share/gits-sounds/build.py", None),
+    (".local/share/gits-lock/build.py", None),
     (".local/share/gits-snap/setup.sh", None),
     (".local/bin", ["gits-*"]),
     (".vscode-oss/extensions/gits.ghost-in-the-shell-1.0.0", None),
@@ -71,6 +73,7 @@ ASSETS = [
     (".local/share/gits/wallpapers/gits_eye.png", "gits_eye.png"),          # lock screen, SDDM, GRUB, Plymouth
     (".local/share/gits/wallpapers/gits_cyborg.jpg", "gits_cyborg.jpg"),
     (".local/share/gits/wallpapers/gits_teal_wires.jpg", "gits_teal_wires.jpg"),
+    (".config/gits-widgets/lain.gif", "lain-dance.gif"),                                          # the dancing Lain of the radio popup and the lock screen (lain-dance, MIT)
     (".config/zsh/gits/art.png", "art.png"),                                                     # terminal banner (kitty graphics)
     (".config/zsh/gits/cyborg.txt", "cyborg.txt"), (".config/zsh/gits/lain.txt", "lain.txt"),
     (".config/zsh/gits/shodan.txt", "shodan.txt"),

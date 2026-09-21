@@ -167,6 +167,7 @@ for f in art.png cyborg.txt lain.txt shodan.txt; do
     s=$(asset "$f") && place "$s" "$HOME/.config/zsh/gits/$f"
 done
 s=$(asset lain.txt) && place "$s" "$HOME/.config/nvim/lua/gits/lain.txt"
+s=$(asset lain-dance.gif) && place "$s" "$HOME/.config/gits-widgets/lain.gif"   # the radio popup and the lock screen dance from it
 
 # ------------------------------------------------------------------ hooks into your own config files
 say "hooking into zsh and neovim"
@@ -239,6 +240,7 @@ fi
 say "building the icon theme (cyan folders on top of Tela-circle-grey)"
 run python3 "$HOME/.local/share/gits-icons/build.py" || warn "icon theme build failed (needs Tela-circle-grey: AUR tela-circle-icon-theme-grey): the theme falls back to it"
 run python3 "$HOME/.local/share/gits-sounds/build.py" || warn "UI sounds not built (needs python-numpy)"
+run python3 "$HOME/.local/share/gits-lock/build.py" >/dev/null || warn "lock screen frames not built (needs python-pillow and python-numpy): the dancing Lain stays blank"
 ((TELEGRAM)) && run python3 "$HOME/.local/share/gits-telegram/build.py"
 
 # ------------------------------------------------------------------ activation

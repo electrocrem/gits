@@ -77,7 +77,7 @@ if [[ -s $ce ]]; then bad "a config module failed to load, see $ce: $(head -c 16
 wf=$(getst workflow)
 if [[ -z $wf || $wf == 01-default ]]; then ok "workflow: default"
 else warn "workflow is '$wf': it overrides parts of the GitS look (gaps/blur/animations). Back: gits-workflow set 01-default"; fi
-an=$(getst animation); [[ -z $an || $an == gits ]] && ok "animation preset: gits" || warn "animation preset is '$an'"
+an=$(getst animation); [[ -z $an ]] && an=cyber; case $an in cyber | gits | lively) ok "animation preset: $an" ;; *) warn "animation preset is '$an' (gits-anim set cyber for the GitS look)" ;; esac
 cur=$(gsettings get org.gnome.desktop.interface cursor-theme 2>/dev/null | tr -d "'")
 [[ $cur == GitS-Cursors ]] && ok "cursor theme: GitS-Cursors" || warn "cursor theme is '$cur' (a KDE app's kded6 syncs kcminputrc into GTK; do not flip it live, waybar/Zen can crash)"
 gt=$(gsettings get org.gnome.desktop.interface gtk-theme 2>/dev/null | tr -d "'")
@@ -214,6 +214,8 @@ pgrep -f "[g]its-events.sh" >/dev/null && ok "gits-events running (login / plug 
 python3 -c "import numpy" 2>/dev/null && ok "python-numpy present (audio spectrum card)" || warn "python-numpy missing: no audio spectrum card"
 rmiss=(); for c in mpv socat jq curl parec pactl; do command -v "$c" >/dev/null || rmiss+=("$c"); done
 [[ ${#rmiss[@]} -eq 0 ]] && ok "web radio ready (gits-radio: mpv, socat, jq, curl, parec)" || warn "gits-radio needs: ${rmiss[*]} (sudo pacman -S mpv socat jq curl libpulse)"
+[[ -r $H/.config/gits-widgets/lain.gif ]] && ok "lain.gif present (radio popup, lock screen)" || warn "lain.gif missing in ~/.config/gits-widgets: no dancing Lain (re-run install.sh)"
+[[ -r $H/.local/share/gits-lock/lain-0.txt ]] && ok "lock screen frames built (the dancing Lain)" || warn "lock screen frames missing: python3 ~/.local/share/gits-lock/build.py"
 if command -v rog-control-center >/dev/null; then
     pgrep -f "^(/usr/bin/)?rog-control-center" >/dev/null && ok "ROG Control Center running" || warn "ROG Control Center installed but not running"
 fi

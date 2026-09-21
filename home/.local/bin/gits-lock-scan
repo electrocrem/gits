@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# hyprlock label: a bright segment running back and forth along a thin line (a scanner). No forks.
+slot=$(( ${EPOCHREALTIME/./} / 130000 ))
+w=28 seg=5
+period=$(( (w - seg) * 2 ))
+p=$(( slot % period )); (( p > w - seg )) && p=$(( period - p ))
+out=""
+for (( i = 0; i < w; i++ )); do
+    if (( i >= p && i < p + seg )); then out+="━"; else out+="─"; fi
+done
+echo "$out"

@@ -9,7 +9,7 @@ dir=${GITS_HYPR_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/hypr/gits}
 case $kind in
     layout)    sub=layouts;    key=layout;    def=master;     title=$'\U000F0A33  TILING LAYOUT'; tag="// 配置" ;;
     workflow)  sub=workflows;  key=workflow;  def=01-default; title=$'\U000F0A2D  WORKFLOW';       tag="// 作業" ;;
-    animation) sub=animations; key=animation; def=gits;       title=$'\U000F0A32  ANIMATIONS';     tag="// 動画" ;;
+    animation) sub=animations; key=animation; def=cyber;      title=$'\U000F0A32  ANIMATIONS';     tag="// 動画" ;;
     *) echo "usage: gits-variant layout|workflow|animation list|current|set NAME|toggle NAME|select" >&2; exit 2 ;;
 esac
 declare -A desc=(
@@ -17,7 +17,7 @@ declare -A desc=(
     [scrolling]="windows in a strip you scroll sideways" [scrolling-down]="windows in a strip you scroll downwards"
     [01-default]="the GitS look: blur, shadows, gaps, animations" [editing]="true colours, no transparency (writing, colour picking)"
     [gaming]="no blur, shadows, gaps or animations" [powersaver]="no effects, saves battery" [snappy]="no animations, quick"
-    [gits]="lock-in overshoot, scan-line feel" [off]="no animations at all")
+    [gits]="lock-in overshoot, scan-line feel" [cyber]="simple and sharp: fast snap-in, no bounce, data-hop workspaces" [lively]="springs: bouncy windows, wobbling tiles, springy workspaces" [off]="no animations at all")
 names() { ls "$dir/$sub" | sed -n 's/\.lua$//p'; }
 cur() { sed -n "s/^$key=//p" "$state" 2>/dev/null | head -1 | grep . || echo "$def"; }
 apply() {

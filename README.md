@@ -11,7 +11,8 @@ thin frames, kanji tags. Nothing else is needed: no dotfiles framework, no theme
 | Desktop widgets | GTK4 layer-shell cards: clock, calendar, media player, weather, network, battery, CPU/RAM/SSD, history graph, to-do, **audio spectrum** (LED bars from the default sink, no cava), rare wallpaper glitch bursts (on AC only, `GITS_WIDGETS_GLITCH=0` disables) |
 | Wallpaper | awww: `gits-wall --pick` (also in Super+I → Wallpaper) chooses from `~/.local/share/gits/wallpapers` and `~/Pictures/wallpapers`; PNG, JPEG, WebP and **animated GIF** (roughly 2-5% of one core, 20-100 MB, depending on the loop); the choice survives logins. No GIFs are shipped: copyright |
 | Radio | `gits-radio` runs a web radio (DATAMOSH; any AzuraCast station through `GITS_RADIO_STREAM` / `GITS_RADIO_API`) in the background as the user unit `gits-radio`; the popup on Super+R shows what is on air with its cover, listeners, tune in / out, pause and volume, and a stage where Lain dances on a live spectrum of the radio's own stream (`GITS_RADIO_LAIN=holo|color|off`, `GITS_RADIO_LAIN_SPEED=1`; on every beat the stage flashes and the bass bars punch to the top, `GITS_RADIO_FLASH=0` turns the flash off). It is an MPRIS player, so the bar's player module and the media keys work with it |
-| Lock / login / boot | hyprlock layout, SDDM (Qt6) theme, Plymouth + GRUB themes |
+| Animations | `gits-anim` (Super+Shift+Y): **`cyber`** (default: simple and sharp, windows snap in fast without a bounce, workspaces slide like a data hop), `gits` (hard lock-in with a small overshoot), `lively` (real spring physics: a bounce and a wobble), `off` |
+| Lock / login / boot | hyprlock layout that is alive: a braille Lain dances at the right edge (8 frames a second), the clock glitches now and then with a red colour-split ghost, the prompt has a blinking cursor, a scanner runs along the line, spring animations for the input field (`hyprlock/static.conf` is the plain version); SDDM (Qt6) theme, Plymouth + GRUB themes |
 | Animations | preset `gits`: windows lock in with a hard overshoot and collapse when closed, workspaces jump-cut; optional neon border runner (`touch ~/.local/state/gits-neon-border`, costs battery) |
 | Launchers | **GTK launcher / command palette** (Super+A: apps with icons and a most-used-first order, settings, projects, open windows, notes, a calculator, web search) and **clipboard history** (Super+V), plus a **window switcher** (Super+Tab), **emoji picker** (Super+comma) and **key binding list** (Super+/), all closing on Esc or a click outside; wlogout, dunst, notification action menu, **Wi-Fi menu** (`gits-wifi`, bar click), **Bluetooth menu** (`gits-bt`), **power-profile menu** (bar module) |
 | Popups | **control panel** (`gits-panel`, Super+Shift+C, the cog next to the power button: toggles, volume/brightness/keyboard sliders, power profile, charge limit, screenshot/OCR/picker/clipboard, lock/sleep/logout/reboot/off with confirmation), **player popup** (Super+Shift+M, click on the bar player: cover, seek, transport; follows the player that is actually playing), **notification centre** (Super+Shift+N, click on the bell); all open with a GitS "scan" effect (the card is uncovered from the top by a bright scan line with glitch slivers and a double flicker, and folds back up on close) and close on Esc or an outside click; the list menus (Wi-Fi, Bluetooth, notification actions, **all settings** on Super+I) are GTK popups too, not rofi |
@@ -71,11 +72,12 @@ thin frames, kanji tags. Nothing else is needed: no dotfiles framework, no theme
 | | |
 |---|---|
 | ![Dolphin](docs/img/dolphin.jpg) **Dolphin** (Kvantum) with `GitS-Icons` cyan folders | ![VS Code](docs/img/vscode.jpg) **VS Code / Code-OSS** theme |
-| ![SDDM](docs/img/sddm.jpg) **SDDM** login (Qt6) |  |
+| ![SDDM](docs/img/sddm.jpg) **SDDM** login (Qt6) | ![Lock screen](docs/img/lock.jpg) **Lock screen** (hyprlock): a braille Lain dances, the clock glitches now and then, blinking cursor, scanner |
 
-The popups open with a scan-line "power-on" effect (a bright line uncovers the card from the top). The lock screen (hyprlock), Plymouth and GRUB themes,
+The popups open with a scan-line "power-on" effect (a bright line uncovers the card from the top). Plymouth and GRUB themes,
 and the Zen, Logseq and Telegram themes are not pictured: they cannot be screenshotted safely or reliably on a live session (Logseq would open your own notes).
-`tools/screenshots.sh` regenerates the pictures and the GIF on an empty workspace with the widgets and popups in their demo modes; it refuses to shoot
+The lock screen picture comes from `tools/lock-shot.sh`, which runs hyprlock in a NESTED Hyprland window (never on your session; it verifies that before anything else).
+`tools/screenshots.sh` regenerates the other pictures and the GIF on an empty workspace with the widgets and popups in their demo modes; it refuses to shoot
 the bar while a player is playing, so the title of your music never ends up in a picture.
 
 ## Requirements

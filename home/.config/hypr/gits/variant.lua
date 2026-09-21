@@ -14,4 +14,4 @@ local function load(kind, key, fallback)
 end
 load("layouts", state.get("layout", "master"), "master")
 load("workflows", state.get("workflow", "01-default"), "01-default")
-load("animations", state.get("animation", "gits"), "gits")
+load("animations", state.get("animation", "cyber"), "gits")
