@@ -29,6 +29,7 @@ os.environ.setdefault("GSK_RENDERER", "cairo")
 os.environ.setdefault("GDK_BACKEND", "wayland")
 os.environ["GTK_THEME"] = "Adwaita:dark"
 
+import cairo
 import gi
 
 gi.require_version("Gtk", "4.0")
@@ -43,9 +44,13 @@ from gi.repository import Gtk4LayerShell as LS  # noqa: E402
 os.environ.pop("LD_PRELOAD", None)
 
 try:
-    from spectrum import StreamSpectrum   # only the radio popup needs it (numpy, pactl, parec)
+    from spectrum import StreamSpectrum   # only the radio popup needs these two (numpy, pactl, parec / Pillow, numpy, cairo)
 except ImportError:
     StreamSpectrum = None
+try:
+    import dancer
+except ImportError:
+    dancer = None
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 HOME = os.path.expanduser("~")
@@ -719,22 +724,17 @@ class ArtMixin:
         self.cover.set_path(path)
 
 
-class MediaPopup(ArtMixin, Popup):
-    """Player popup (MPRIS through playerctl): cover, title, seek bar, transport, shuffle/repeat, player volume."""
+class PlayerPage(ArtMixin, Gtk.Box):
+    """One page of the media carousel: an MPRIS player (playerctl -p NAME): cover, title, seek bar, transport, shuffle/repeat, player volume."""
 
-    def __init__(self, monitor):
-        super().__init__(monitor)
-        self.hcenter = True   # opened from the bar or by Super+Shift+M: always in the middle, never wherever the pointer happens to be
-        self.CARD_W = 304
+    def __init__(self, name):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=7)
+        self.name = name
+        self.alive = True
         self.quiet = False
         self.art_key = None
         self.length = 0.0
         self.seek_timer = None
-        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=7)
-        root.add_css_class("panel")
-        head = self.header("MEDIA.LINK // 音")
-        root.append(head)
-
         self.cover = CoverArea(274, 250)  # fills the card's inner width (304 - padding - frame), fixed height
         self.cover.add_css_class("cover")
         frame = Gtk.Box()
@@ -746,7 +746,7 @@ class MediaPopup(ArtMixin, Popup):
         self.nosig.set_halign(Gtk.Align.CENTER)
         self.nosig.set_valign(Gtk.Align.CENTER)
         ov.add_overlay(self.nosig)
-        root.append(ov)
+        self.append(ov)
 
         self.title = label("—", "m-title")
         self.title.set_ellipsize(Pango.EllipsizeMode.END)
@@ -754,20 +754,20 @@ class MediaPopup(ArtMixin, Popup):
         self.artist = label("", "m-artist")
         self.artist.set_ellipsize(Pango.EllipsizeMode.END)
         self.artist.set_max_width_chars(34)
-        root.append(self.title)
-        root.append(self.artist)
+        self.append(self.title)
+        self.append(self.artist)
 
         self.seek = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, 100, 1)
         self.seek.set_draw_value(False)
         self.seek.set_hexpand(True)
         self.seek.connect("value-changed", self._seek_moved)
-        root.append(self.seek)
+        self.append(self.seek)
         times = Gtk.Box()
         self.t_pos, self.t_len = label("0:00", "m-time"), label("0:00", "m-time", 1.0)
         self.t_len.set_hexpand(True)
         times.append(self.t_pos)
         times.append(self.t_len)
-        root.append(times)
+        self.append(times)
 
         ctl = Gtk.Box(spacing=6, homogeneous=True)
         def btn(text, cb, css="ctl"):
@@ -782,7 +782,7 @@ class MediaPopup(ArtMixin, Popup):
         self.b_play = btn("󰐊", lambda: self._pc("play-pause"), "ctl big")
         btn("󰒭", lambda: self._pc("next"))
         self.b_loop = btn("󰑖", self._cycle_loop)
-        root.append(ctl)
+        self.append(ctl)
 
         vrow = Gtk.Box(spacing=8)
         vrow.append(label("VOL", "row-name"))
@@ -795,19 +795,25 @@ class MediaPopup(ArtMixin, Popup):
         self.l_vol.set_width_chars(5)
         vrow.append(self.l_vol)
         self.vol_row = vrow
-        root.append(vrow)
-        self.set_child(root)
-
+        self.append(vrow)
+        self.connect("map", lambda *_: self.refresh())
         self.refresh()
-        GLib.timeout_add_seconds(1, lambda: (self.refresh(), True)[1])
+        GLib.timeout_add_seconds(1, self._auto)
+
+    def _auto(self):
+        if self.get_mapped():   # only the visible page polls
+            self.refresh()
+        return self.alive
+
+    def shutdown(self):
+        self.alive = False
 
     # -- playerctl helpers
-    @staticmethod
-    def _pcout(*args):
-        return sh(["gits-media", *args], timeout=2.5)
+    def _pcout(self, *args):
+        return sh(["playerctl", "-p", self.name, *args], timeout=2.5)
 
     def _pc(self, *args):
-        fire(["gits-media", *args])
+        fire(["playerctl", "-p", self.name, *args])
         GLib.timeout_add(250, lambda: (self.refresh(), False)[1])
 
     def _cycle_loop(self):
@@ -821,22 +827,24 @@ class MediaPopup(ArtMixin, Popup):
         self.t_pos.set_text(fmt_time(v))
         if self.seek_timer:
             GLib.source_remove(self.seek_timer)
-        self.seek_timer = GLib.timeout_add(120, lambda: (setattr(self, "seek_timer", None), fire(["gits-media", "position", f"{v:.1f}"]), False)[2])
+        self.seek_timer = GLib.timeout_add(120, lambda: (setattr(self, "seek_timer", None), fire(["playerctl", "-p", self.name, "position", f"{v:.1f}"]), False)[2])
 
     def _vol_moved(self, sc):
         v = int(sc.get_value())
         self.l_vol.set_text(f"{v}%")
         if not self.quiet:
-            fire(["gits-media", "volume", f"{v / 100:.2f}"])
+            fire(["playerctl", "-p", self.name, "volume", f"{v / 100:.2f}"])
 
     # -- state
     def refresh(self):
         threading.Thread(target=self._fetch, daemon=True).start()
 
     def _fetch(self):
-        if DEMO:
+        if DEMO and self.name == "spotify":
             data = ["Playing", "Lain Iwakura", "Serial Experiments Lain - Duvet", ("file://" + os.environ["GITS_PANEL_ART"]) if os.environ.get("GITS_PANEL_ART") else "", str(232 * 10**6), str(84 * 10**6),
                     "spotify", "On", "None", "0.62"]
+        elif DEMO:
+            data = ["Paused", "", "Wired ambient mix (10 hours)", "", str(36000 * 10**6), str(725 * 10**6), "firefox", "Off", "None", "1.00"]
         else:
             fmt = "\t".join(["{{status}}", "{{artist}}", "{{title}}", "{{mpris:artUrl}}", "{{mpris:length}}", "{{position}}",
                             "{{playerName}}"])
@@ -911,20 +919,23 @@ def mpv_ipc(sock, command, timeout=0.6):
     return None
 
 
-class RadioPopup(ArtMixin, Popup):
-    """Web radio (gits-radio; DATAMOSH unless GITS_RADIO_API / GITS_RADIO_STREAM say otherwise): what is on air with its cover, the live
-    spectrum of the radio's own stream, listeners, tune in / out, pause, volume. The radio itself runs in the user unit gits-radio, so it
-    keeps playing when this popup closes."""
+class RadioPage(ArtMixin, Gtk.Box):
+    """The last page of the media carousel: the web radio (gits-radio; DATAMOSH unless GITS_RADIO_API / GITS_RADIO_STREAM say otherwise): a stage
+    where Lain dances on the live spectrum of the radio's own stream, what is on air with its cover, listeners, tune in / out, volume. The radio
+    runs in the user unit gits-radio, so it keeps playing when the popup closes. Lain: GITS_RADIO_LAIN=holo (default) | color | off."""
     RUN = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "gits-radio")
     API = os.environ.get("GITS_RADIO_API", "https://radio.datamosh.ru/api/nowplaying/datamosh_radio")
     NAME = os.environ.get("GITS_RADIO_NAME", "DATAMOSH")
+    LAIN = os.environ.get("GITS_RADIO_LAIN", "holo").lower()
+    STAGE_H = 150      # logical px; also the height of Lain
+    SPEED = float(os.environ.get("GITS_RADIO_LAIN_SPEED", "1") or 1)   # 1 = lively, 0.5 = calm, 1.5 = frantic
     SEG, SGAP = 3, 1   # LED segment height / gap of the spectrum, px
     CY, CYB, RED, FG = (0.18, 0.83, 0.84), (0.55, 0.95, 0.97), (0.94, 0.31, 0.31), (0.86, 0.94, 0.96)
 
-    def __init__(self, monitor):
-        super().__init__(monitor)
-        self.hcenter = True
-        self.CARD_W = 304
+    def __init__(self):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=7)
+        self.alive = True
+        self.state = "OFF AIR"
         self.quiet = False
         self.art_key = None
         self.running, self.paused = DEMO, False
@@ -935,67 +946,58 @@ class RadioPopup(ArtMixin, Popup):
         self.level, self.peak, self.hold = [0.0] * n, [0.0] * n, [0] * n
         self.demo_t = 0.0
         self.spec = None
+        self.dance, self.phase, self.energy = [], 0.0, 0.0
+        self.pulse, self.bass_avg, self.t = 0.0, 0.0, 0.0   # a beat "kick" (1 -> 0), the slow average of the bass, the dance clock
         if StreamSpectrum is not None and not DEMO:
             self.spec = StreamSpectrum(os.path.join(self.RUN, "mpv.pid"))
             self.spec.start()
+        if dancer is not None and self.LAIN != "off":
+            threading.Thread(target=self._load_dancer, daemon=True).start()
 
-        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=7)
-        root.add_css_class("panel")
-        head = Gtk.Box(spacing=6)
-        head.append(label("RADIO // 電波", "tag"))
-        sp = Gtk.Box()
-        sp.set_hexpand(True)
-        head.append(sp)
-        self.l_state = label("OFF AIR", "tag")
-        head.append(self.l_state)
-        head.append(label("▪", "tag-dot"))
-        root.append(head)
+        self.da = Gtk.DrawingArea()   # the stage: spectrum bars behind, Lain in front
+        self.da.set_content_height(self.STAGE_H)
+        self.da.set_hexpand(True)
+        self.da.set_draw_func(self._draw)
+        self.append(self.da)
 
-        self.cover = CoverArea(274, 132)
+        info = Gtk.Box(spacing=10)
+        self.cover = CoverArea(66, 66)
         self.cover.add_css_class("cover")
         frame = Gtk.Box()
         frame.add_css_class("cover-frame")
+        frame.set_valign(Gtk.Align.START)
         frame.append(self.cover)
-        ov = Gtk.Overlay()
-        ov.set_child(frame)
-        self.nosig = label("OFF AIR", "nosig", 0.5)
-        self.nosig.set_halign(Gtk.Align.CENTER)
-        self.nosig.set_valign(Gtk.Align.CENTER)
-        ov.add_overlay(self.nosig)
-        root.append(ov)
-
-        self.da = Gtk.DrawingArea()
-        self.da.set_content_height(58)
-        self.da.set_hexpand(True)
-        self.da.set_draw_func(self._draw)
-        root.append(self.da)
-
+        info.append(frame)
+        text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
+        text.set_hexpand(True)
+        text.set_valign(Gtk.Align.CENTER)
         self.l_station = label(self.NAME.upper(), "m-time")
-        root.append(self.l_station)
         self.title = label("—", "m-title")
         self.title.set_ellipsize(Pango.EllipsizeMode.END)
-        self.title.set_max_width_chars(30)
+        self.title.set_max_width_chars(22)
         self.artist = label("", "m-artist")
         self.artist.set_ellipsize(Pango.EllipsizeMode.END)
-        self.artist.set_max_width_chars(34)
-        root.append(self.title)
-        root.append(self.artist)
+        self.artist.set_max_width_chars(24)
+        for w in (self.l_station, self.title, self.artist):
+            text.append(w)
+        info.append(text)
+        self.append(info)
 
         self.prog = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, 100, 1)
         self.prog.set_draw_value(False)
         self.prog.set_hexpand(True)
         self.prog.set_can_target(False)   # a live stream cannot be seeked: show the progress, ignore the pointer
-        root.append(self.prog)
+        self.append(self.prog)
         times = Gtk.Box()
         self.t_pos, self.t_len = label("0:00", "m-time"), label("0:00", "m-time", 1.0)
         self.t_len.set_hexpand(True)
         times.append(self.t_pos)
         times.append(self.t_len)
-        root.append(times)
+        self.append(times)
         self.l_next = label("", "m-time")
         self.l_next.set_ellipsize(Pango.EllipsizeMode.END)
         self.l_next.set_max_width_chars(38)
-        root.append(self.l_next)
+        self.append(self.l_next)
 
         ctl = Gtk.Box(spacing=6, homogeneous=True)
         self.b_power = Gtk.Button(label="󰐥")
@@ -1008,14 +1010,14 @@ class RadioPopup(ArtMixin, Popup):
         self.b_pause.connect("clicked", lambda *_: self._pause())
         ctl.append(self.b_power)
         ctl.append(self.b_pause)
-        root.append(ctl)
+        self.append(ctl)
 
         lrow = Gtk.Box(spacing=8)
         lrow.append(label("LISTENERS", "row-name"))
         self.l_listen = label("–", "row-val", 1.0)
         self.l_listen.set_hexpand(True)
         lrow.append(self.l_listen)
-        root.append(lrow)
+        self.append(lrow)
 
         vrow = Gtk.Box(spacing=8)
         vrow.append(label("VOL", "row-name"))
@@ -1027,12 +1029,19 @@ class RadioPopup(ArtMixin, Popup):
         self.l_vol = label("", "row-val", 1.0)
         self.l_vol.set_width_chars(5)
         vrow.append(self.l_vol)
-        root.append(vrow)
-        self.set_child(root)
-
+        self.append(vrow)
         self._render()
         self._tick()
         GLib.timeout_add_seconds(1, self._tick)
+
+    def _load_dancer(self):
+        frames = dancer.load(self.STAGE_H, "color" if self.LAIN == "color" else "holo")   # ~1.5 s the first time, cached afterwards
+        GLib.idle_add(self._dancer_ready, frames)
+
+    def _dancer_ready(self, frames):
+        self.dance = frames
+        self.da.queue_draw()
+        return False
 
     # -- radio control (gits-radio does the work; the popup only asks)
     def _sock(self):
@@ -1057,7 +1066,7 @@ class RadioPopup(ArtMixin, Popup):
         if not self.polling:
             self.polling = True
             threading.Thread(target=self._poll, daemon=True).start()
-        return True
+        return self.alive
 
     def _poll(self):
         try:
@@ -1085,11 +1094,10 @@ class RadioPopup(ArtMixin, Popup):
 
     def _apply_state(self, running, paused, vol):
         self.running, self.paused = running, paused
-        self.l_state.set_text("PAUSED" if paused else "ON AIR" if running else "OFF AIR")
+        self.state = "PAUSED" if paused else "ON AIR" if running else "OFF AIR"
         self.b_power.set_label("󰓛" if running else "󰐥")
         self.b_pause.set_label("󰐊" if paused else "󰏤")
         self.b_pause.set_sensitive(running)
-        self.nosig.set_visible(not running and self.art_key is None)
         if vol is not None:
             self.quiet = True
             self.vol.set_value(float(vol))
@@ -1098,6 +1106,7 @@ class RadioPopup(ArtMixin, Popup):
         self.vol.set_sensitive(vol is not None)
         if (running or any(v > 0.01 for v in self.level)) and self.fast is None:
             self.fast = GLib.timeout_add(33, self._frame)
+        self.da.queue_draw()   # she dims when the radio is off, the pose stays when it is paused
         self._render()
         return False
 
@@ -1108,12 +1117,13 @@ class RadioPopup(ArtMixin, Popup):
 
     def _render(self):
         d = self.api
+        name = ((d or {}).get("station") or {}).get("name", self.NAME).upper()
+        self.l_station.set_text(f"{name} · {self.state}")
         if not d:
             self.title.set_text("—" if self.running else "OFF AIR")
             self.artist.set_text("" if self.running else "press 󰐥 to tune in")
             return
         song = (d.get("now_playing") or {}).get("song") or {}
-        self.l_station.set_text((d.get("station") or {}).get("name", self.NAME).upper())
         self.title.set_text(song.get("title") or "—")
         self.artist.set_text(song.get("artist") or "")
         nxt = ((d.get("playing_next") or {}).get("song") or {})
@@ -1134,11 +1144,8 @@ class RadioPopup(ArtMixin, Popup):
                 self._load_art(art)
             else:
                 self.cover.set_path(None)
-        self.nosig.set_visible(not art)
-        self.nosig.set_text("OFF AIR" if not self.running else "NO COVER")
-        (self.nosig.remove_css_class if not self.running else self.nosig.add_css_class)("dim")
 
-    # -- spectrum (LED bars with peak caps, like the desktop audio card)
+    # -- the stage: LED spectrum bars behind, Lain in front
     def _target(self):
         n = len(self.level)
         if DEMO:
@@ -1164,6 +1171,17 @@ class RadioPopup(ArtMixin, Popup):
             else:
                 self.peak[i] = max(0.0, self.peak[i] - 0.02)
             moving = moving or lv > 0.01 or self.peak[i] > 0.01
+        bass = sum(self.level[:8]) / 8
+        self.energy = self.energy + (bass - self.energy) * (0.5 if bass > self.energy else 0.15)
+        self.bass_avg += (bass - self.bass_avg) * 0.08
+        if bass - self.bass_avg > 0.09 and self.pulse < 0.35:   # the bass jumps above its own average: a beat
+            self.pulse = 1.0
+        self.pulse *= 0.86
+        if self.running and not self.paused and self.dance:
+            self.t += 0.033
+            self.phase += 0.033 * self.SPEED * min(30.0, 10.0 + 16.0 * self.energy + 12.0 * self.pulse)   # 10 frames a second at rest, up to 30 on a loud beat
+            if os.environ.get("GITS_PANEL_DEBUG") and int(self.t * 30) % 30 == 0:
+                open(os.environ["GITS_PANEL_DEBUG"], "a").write(f"dance phase={self.phase:.1f} energy={self.energy:.2f} pulse={self.pulse:.2f}\n")
         self.da.queue_draw()
         if not moving and not self.running:
             self.fast = None
@@ -1175,7 +1193,7 @@ class RadioPopup(ArtMixin, Popup):
         gap = 1.5
         bw = (w - gap * (n - 1)) / n
         pitch = self.SEG + self.SGAP
-        rows = max(int(h // pitch), 1)
+        rows = max(int(h * 0.55 // pitch), 1)   # the bars are the floor and the backdrop, not the whole stage
         for i in range(n):   # faint baseline dots: alive even when silent
             cr.set_source_rgba(*self.CY, 0.22)
             cr.rectangle(i * (bw + gap), h - self.SEG, bw, self.SEG)
@@ -1190,15 +1208,248 @@ class RadioPopup(ArtMixin, Popup):
             pk = int(self.peak[i] * rows)
             if pk > k:
                 lit[self.FG].append((x, h - pk * pitch + self.SGAP))
-        for col, alpha in ((self.CY, 0.55), (self.CYB, 0.85), (self.RED, 0.95), (self.FG, 0.9)):
+        for col, alpha in ((self.CY, 0.45), (self.CYB, 0.7), (self.RED, 0.85), (self.FG, 0.8)):
             for x, y in lit[col]:
                 cr.rectangle(x, y, bw, self.SEG)
             cr.set_source_rgba(*col, alpha)
             cr.fill()
+        if not self.dance:
+            return
+        frame = self.dance[int(self.phase) % len(self.dance)]
+        fw, fh = frame.get_width() / 2, frame.get_height() / 2
+        sx, sy = 1 - 0.035 * self.pulse, 1 + 0.06 * self.pulse                     # stretches up on every beat
+        hop = 6 * self.energy + 13 * self.pulse                                    # and jumps
+        sway = 6 * math.sin(self.t * 2.4) * (0.35 + self.energy)                   # and rocks from side to side
+        x, y = (w - fw * sx) / 2 + sway, h - fh * sy - hop
+        alpha = 1.0 if self.running else 0.3
+        cr.save()   # a soft light on the floor under her feet, pulsing with the bass
+        cr.translate(w / 2, h - 4)
+        cr.scale(1, 0.16)
+        g = cairo.RadialGradient(0, 0, 4, 0, 0, 66)
+        k = (0.30 + 0.45 * self.energy + 0.3 * self.pulse) * (1.0 if self.running else 0.3)
+        g.add_color_stop_rgba(0, *self.CYB, k)
+        g.add_color_stop_rgba(1, *self.CY, 0.0)
+        cr.set_source(g)
+        cr.arc(0, 0, 66, 0, 2 * math.pi)
+        cr.fill()
+        cr.restore()
+        cr.save()
+        cr.translate(x, y)
+        cr.scale(0.5 * sx, 0.5 * sy)
+        cr.set_source_surface(frame, 0, 0)
+        cr.paint_with_alpha(alpha)
+        cr.restore()
 
     def shutdown(self):
+        self.alive = False
         if self.spec is not None:
             self.spec.stop()
+
+
+class MediaPopup(Popup):
+    """The media popup is a carousel: one page per MPRIS player (Spotify, a browser tab, mpv...), then the web radio (RadioPage), so any sound
+    source is one step away. Switch with the arrows, the dots, Left / Right, or a two-finger swipe on the touchpad. `start`: "auto" opens on the
+    player the bar follows (a playing one wins), "radio" opens on the radio (Super+R)."""
+    RADIO_URL = os.environ.get("GITS_RADIO_STREAM", "https://radio.datamosh.ru/listen/datamosh_radio/radio.mp3")
+
+    def __init__(self, monitor, start="auto"):
+        super().__init__(monitor)
+        self.hcenter = True   # opened from the bar or by Super+Shift+M: always in the middle, never wherever the pointer happens to be
+        self.CARD_W = 304
+        self.pages = {}    # name -> page widget ("radio" is the radio page)
+        self.order = []    # names in navigation order: players (in the order they appeared), radio last
+        self.current = None
+        self.scanning = False
+        self.scroll_acc, self.scroll_t = 0.0, 0.0
+        self.radio_name = None
+        self.missing = {}   # name -> consecutive scans in which the player was not seen
+        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=7)
+        root.add_css_class("panel")
+        head = Gtk.Box(spacing=2)
+        head.append(label("MEDIA.LINK // 音", "tag"))
+        sp = Gtk.Box()
+        sp.set_hexpand(True)
+        head.append(sp)
+        self.b_prev = Gtk.Button(label="‹")
+        self.b_prev.add_css_class("navbtn")
+        self.b_prev.connect("clicked", lambda *_: self.go(-1))
+        self.l_src = label("", "src")
+        self.l_src.set_width_chars(9)
+        self.l_src.set_xalign(0.5)
+        self.b_next = Gtk.Button(label="›")
+        self.b_next.add_css_class("navbtn")
+        self.b_next.connect("clicked", lambda *_: self.go(1))
+        for w in (self.b_prev, self.l_src, self.b_next):
+            head.append(w)
+        root.append(head)
+        self.deck = Gtk.Stack()
+        self.deck.set_transition_duration(230)
+        self.deck.set_hhomogeneous(True)
+        self.deck.set_vhomogeneous(False)      # the card takes the height of the page it shows
+        self.deck.set_interpolate_size(True)
+        root.append(self.deck)
+        self.dots = Gtk.Box(spacing=0)
+        self.dots.set_halign(Gtk.Align.CENTER)
+        root.append(self.dots)
+        self.set_child(root)
+
+        self._add("radio", RadioPage())
+        self._apply_players(self._scan(), start=start)
+
+        keys = Gtk.EventControllerKey()
+        keys.connect("key-pressed", self._key)
+        self.add_controller(keys)
+        scroll = Gtk.EventControllerScroll.new(Gtk.EventControllerScrollFlags.HORIZONTAL)
+        scroll.connect("scroll", self._scrolled)
+        self.add_controller(scroll)
+        GLib.timeout_add_seconds(1, self._tick)
+
+    # -- players
+    def _scan(self):
+        """{player name: (status, title, url)} for every MPRIS player."""
+        if DEMO:
+            return {"spotify": ("Playing", "Serial Experiments Lain - Duvet", ""), "firefox.instance_1": ("Paused", "Wired ambient mix (10 hours)", "")}
+        out = {}
+        for name in sh(["playerctl", "-l"], timeout=2).splitlines():
+            line = sh(["playerctl", "-p", name, "metadata", "--format", "{{status}}\t{{title}}\t{{xesam:url}}"], timeout=2)
+            st, _, rest = line.partition("\t")
+            title, _, url = rest.partition("\t")
+            out[name] = (st, title, url)
+        return out
+
+    def _tick(self):
+        if not self.scanning:
+            self.scanning = True
+            def work():
+                try:
+                    GLib.idle_add(self._apply_players, self._scan())
+                finally:
+                    self.scanning = False
+            threading.Thread(target=work, daemon=True).start()
+        return True
+
+    @staticmethod
+    def source_name(name):
+        if name == "radio":
+            return "RADIO"
+        parts = name.split(".")
+        if parts[0] in ("org", "com", "io", "net") and len(parts) > 1:   # reverse-DNS names: org.telegram.desktop -> telegram, org.mozilla.firefox -> firefox
+            base = parts[-2] if parts[-1] in ("desktop", "app", "player", "client", "mediaplayer", "instance") and len(parts) > 2 else parts[-1]
+        else:
+            base = parts[0]
+        return base.upper()[:10]
+
+    def _apply_players(self, scan, start=None):
+        names, radio = [], None
+        for name, (st, title, url) in scan.items():
+            if url and url == self.RADIO_URL:   # the radio's own MPRIS entry is the radio page, not one more player
+                radio = name
+                continue
+            if st in ("Playing", "Paused"):   # a stopped player (an idle chat app that still remembers a title) is not a source
+                names.append(name)
+        new = sorted((n for n in names if n not in self.pages), key=lambda n: (scan[n][0] != "Playing", n))
+        for n in names:
+            self.missing.pop(n, None)
+        for n in [n for n in self.order if n != "radio" and n not in names]:
+            self.missing[n] = self.missing.get(n, 0) + 1   # one failed or slow scan must not make a page vanish and come back at the end
+        gone = [n for n, c in self.missing.items() if c >= 3]
+        for n in gone:
+            self.missing.pop(n, None)
+            self._remove(n)
+        keep = [n for n in self.order if n != "radio" and (n in names or n in self.missing)]
+        for n in new:
+            self._add(n, PlayerPage(n))
+        self.radio_name = radio
+        order = keep + new + ["radio"]
+        if order != self.order:
+            self.order = order
+        if self.current is None or self.current not in self.pages:
+            target = "radio"
+            if start != "radio":
+                picked = "spotify" if DEMO else sh(["gits-media", "pick"], timeout=2)
+                if picked in self.pages:
+                    target = picked
+                elif picked and picked == radio:
+                    target = "radio"
+                elif len(self.order) > 1:
+                    target = self.order[0]
+            self.select(target, animate=False)
+        self._chrome()
+        return False
+
+    def _add(self, name, page):
+        self.pages[name] = page
+        self.deck.add_named(page, name)
+
+    def _remove(self, name):
+        page = self.pages.pop(name, None)
+        if page is None:
+            return
+        if self.current == name:   # step to a neighbour first, so the page does not just vanish under the pointer
+            i = self.order.index(name) if name in self.order else 0
+            rest = [n for n in self.order if n != name]
+            self.order = rest
+            self.select(rest[min(i, len(rest) - 1)] if rest else "radio")
+        page.shutdown()
+        GLib.timeout_add(400, lambda: (self.deck.remove(page), False)[1])
+
+    # -- navigation
+    def select(self, name, animate=True):
+        if name not in self.pages or name == self.current:
+            return
+        forward = True
+        if self.current in self.order and name in self.order:
+            forward = self.order.index(name) > self.order.index(self.current)
+        kind = Gtk.StackTransitionType.NONE if not animate else (Gtk.StackTransitionType.SLIDE_LEFT if forward else Gtk.StackTransitionType.SLIDE_RIGHT)
+        self.current = name
+        self.deck.set_visible_child_full(name, kind)
+        self._chrome()
+
+    def go(self, delta):
+        if len(self.order) < 2 or self.current not in self.order:
+            return
+        self.select(self.order[(self.order.index(self.current) + delta) % len(self.order)])
+
+    def _key(self, _c, kv, *_):
+        if kv in (Gdk.KEY_Left, Gdk.KEY_Right):
+            self.go(-1 if kv == Gdk.KEY_Left else 1)
+            return True
+        return False
+
+    def _scrolled(self, _c, dx, _dy):
+        now = time.monotonic()
+        if now - self.scroll_t > 0.5:   # a new gesture
+            self.scroll_acc = 0.0
+        self.scroll_t = now
+        self.scroll_acc += dx
+        if abs(self.scroll_acc) > 1.5:
+            self.go(1 if self.scroll_acc > 0 else -1)
+            self.scroll_acc = -100.0   # one page per gesture
+        return True
+
+    def _chrome(self):
+        """The source name, the arrows and the dots follow the pages."""
+        self.l_src.set_text(self.source_name(self.current) if self.current else "")
+        many = len(self.order) > 1
+        self.b_prev.set_sensitive(many)
+        self.b_next.set_sensitive(many)
+        key = (tuple(self.order), self.current)
+        if key == getattr(self, "_dots_key", None):
+            return
+        self._dots_key = key
+        while (c := self.dots.get_first_child()) is not None:
+            self.dots.remove(c)
+        for name in self.order:
+            b = Gtk.Button(label="󰐹" if name == "radio" else "●")
+            b.add_css_class("dotbtn")
+            if name == self.current:
+                b.add_css_class("on")
+            b.connect("clicked", lambda _b, n=name: self.select(n))
+            self.dots.append(b)
+
+    def shutdown(self):
+        for page in self.pages.values():
+            page.shutdown()
 
 
 def fmt_age(sec):
@@ -2029,7 +2280,7 @@ def main():
     elif mode == "media":
         win = MediaPopup(mon)
     elif mode == "radio":
-        win = RadioPopup(mon)
+        win = MediaPopup(mon, start="radio")
     else:
         win = Panel(mon)
     win.connect("close-request", lambda *_: (loop.quit(), False)[1])

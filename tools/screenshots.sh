@@ -87,7 +87,7 @@ popup() {  # popup <mode> <out> <x y w h>
 printf -- '- 2026-09-19 22:10  buy a USB-C dock\n- 2026-09-20 09:30  ask Batou about the tachikoma firmware\n- 2026-09-20 18:45  rice: try the new glitch preset\n- 2026-09-21 01:05  reboot to check the login guard\n' >"$TMP/notes.md"
 export GITS_NOTES=$TMP/notes.md GITS_PANEL_ART=$REPO/assets/gits_eye.png
 want control-panel && { echo "control panel"; popup control "$OUT/control-panel.jpg" 930 40 350 700; }
-want player && { echo "player"; popup media "$OUT/player.jpg" 470 40 340 490; }
+want player && { echo "player"; popup media "$OUT/player.jpg" auto 496 68; }
 want radio && { echo "radio"; GITS_PANEL_ART=$REPO/assets/gits_eye.png popup radio "$OUT/radio.jpg" auto 496 68; }
 want mixer && { echo "mixer"; popup mixer "$OUT/mixer.jpg" 500 40 380 300; }
 want notifications && { echo "notifications"; popup notify "$OUT/notifications.jpg" 900 40 380 400; }

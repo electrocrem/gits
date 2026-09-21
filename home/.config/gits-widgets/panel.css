@@ -57,6 +57,13 @@ scale:disabled { opacity: 0.35; }
 .ctl.on { color: #5EF1F5; border-color: #2ED3D7; }
 .ctl.big { background: #2ED3D7; color: #060A14; border-color: #2ED3D7; font-size: 17px; }
 .nosig.dim { color: #254F5D; font-size: 12px; }
+.navbtn { font-size: 17px; color: #9FC5D6; padding: 0 7px; }
+.navbtn:hover { color: #5EF1F5; }
+.navbtn:disabled { color: #254F5D; }
+.src { font-size: 9px; font-weight: 700; letter-spacing: 2px; color: #C8F4FF; }
+.dotbtn { font-size: 8px; color: #254F5D; padding: 3px 4px; }
+.dotbtn:hover { color: #9FC5D6; }
+.dotbtn.on { color: #5EF1F5; }
 
 /* notification centre */
 .nrow { padding: 7px 4px 7px 6px; border-bottom: 1px solid alpha(#2ED3D7, 0.16); border-left: 2px solid transparent; }

@@ -19,3 +19,8 @@ installer then generates original placeholder wallpapers and a generic ASCII ban
   config (GPL-3.0) and were adapted.
 * GTK widgets come from the `adw-gtk-theme` package (only the colour overrides in `home/.config/gtk-*/gtk.css` are ours).
 * Fonts (JetBrains Mono Nerd Font, Noto CJK) are not bundled.
+
+## Dancing Lain (radio popup)
+
+`home/.config/gits-widgets/lain.gif` is the dance animation from [pryanostnik/lain-dance](https://github.com/pryanostnik/lain-dance) (MIT). The character is
+Lain Iwakura from *Serial Experiments Lain* (Triangle Staff / Pioneer LDC); like the other artwork here it stays under the rights of its owners.
