@@ -3,6 +3,7 @@
     tap = StreamSpectrum(pid_file)      # pid_file holds the pid of the mpv (gits-radio writes it)
     tap.start()                         # a daemon thread: finds mpv's sink input with pactl, records it with `parec --monitor-stream`
     tap.bands                           # BANDS floats 0..1, low to high pitch; all zero while nothing plays
+    tap.beats, tap.kick                 # count of detected beats (it goes up by one per beat) and the strength 0.4..1 of the last one
     tap.stop()                          # kills parec (call it when the popup closes)
 
 The stream is not there for a moment after mpv starts, and it vanishes when mpv stops: the thread keeps looking, so the popup can
@@ -51,6 +52,7 @@ class StreamSpectrum(threading.Thread):
         self.pid_file = pid_file
         self.bands = [0.0] * self.BANDS
         self.error = ""
+        self.beats, self.kick = 0, 0.0
         self.proc = None
         self._halt = threading.Event()
         edges = np.geomspace(LOW, HIGH, self.BANDS + 1)
@@ -105,6 +107,9 @@ class StreamSpectrum(threading.Thread):
         raw = b""
         shown = np.zeros(self.BANDS)
         ref = 1.0
+        prev = np.zeros(self.BANDS)
+        fluxes = []            # recent spectral flux: the sum of the rises of the low and mid bands from one 50 ms step to the next
+        last_beat = 0.0
         last = time.monotonic()
         try:
             while not self._halt.is_set() and proc.poll() is None and self._pid() == pid:
@@ -121,7 +126,18 @@ class StreamSpectrum(threading.Thread):
                     mag = np.abs(np.fft.rfft(buf * self.win))
                     level = np.array([mag[a:b].max() for a, b in zip(self.lo, self.hi)]) * self.tilt
                     ref = max(ref * 0.985, level.max(), 1.0)                # automatic gain, half-life ~2 s
-                    shown = np.maximum(np.clip(level / ref, 0, 1) ** 0.65, shown * 0.80)
+                    fresh = np.clip(level / ref, 0, 1) ** 0.65
+                    shown = np.maximum(fresh, shown * 0.80)
+                    flux = float(np.maximum(fresh[:12] - prev[:12], 0).sum())
+                    prev = fresh
+                    if len(fluxes) >= 4:                            # a beat = the flux jumps above its own recent mean + 1 sigma (tuned on breakcore: ~2.4 a second)
+                        m, sd = float(np.mean(fluxes)), float(np.std(fluxes))
+                        if flux > m + sd and flux > 0.12 and now - last_beat > 0.15:
+                            self.kick = min(1.0, 0.4 + 0.6 * (flux - m) / max(3 * sd, 0.2))
+                            self.beats += 1
+                            last_beat = now
+                    fluxes.append(flux)
+                    del fluxes[:-30]                                # the last 1.5 s
                     last = now
                 elif now - last > 0.15:                                      # nothing arrives (paused): let the bars sink
                     shown = shown * 0.85

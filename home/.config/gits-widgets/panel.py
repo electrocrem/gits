@@ -947,7 +947,8 @@ class RadioPage(ArtMixin, Gtk.Box):
         self.demo_t = 0.0
         self.spec = None
         self.dance, self.phase, self.energy = [], 0.0, 0.0
-        self.pulse, self.bass_avg, self.t = 0.0, 0.0, 0.0   # a beat "kick" (1 -> 0), the slow average of the bass, the dance clock
+        self.pulse, self.t = 0.0, 0.0   # a beat "kick" (1 -> 0) and the dance clock
+        self.seen_beats, self.rings = 0, []   # beats already answered; the shock waves running over the floor (birth time, strength)
         if StreamSpectrum is not None and not DEMO:
             self.spec = StreamSpectrum(os.path.join(self.RUN, "mpv.pid"))
             self.spec.start()
@@ -1173,20 +1174,27 @@ class RadioPage(ArtMixin, Gtk.Box):
             moving = moving or lv > 0.01 or self.peak[i] > 0.01
         bass = sum(self.level[:8]) / 8
         self.energy = self.energy + (bass - self.energy) * (0.5 if bass > self.energy else 0.15)
-        self.bass_avg += (bass - self.bass_avg) * 0.08
-        if bass - self.bass_avg > 0.09 and self.pulse < 0.35:   # the bass jumps above its own average: a beat
-            self.pulse = 1.0
+        if self.spec is not None and self.spec.beats != self.seen_beats:   # the spectrum thread heard a beat
+            self.seen_beats = self.spec.beats
+            self._kick(self.spec.kick)
+        elif DEMO and int(self.t / 0.42) != int((self.t - 0.033) / 0.42) and self.running:   # the demo has a steady made-up beat
+            self._kick(0.8)
         self.pulse *= 0.86
         if self.running and not self.paused and self.dance:
             self.t += 0.033
             self.phase += 0.033 * self.SPEED * min(30.0, 10.0 + 16.0 * self.energy + 12.0 * self.pulse)   # 10 frames a second at rest, up to 30 on a loud beat
             if os.environ.get("GITS_PANEL_DEBUG") and int(self.t * 30) % 30 == 0:
-                open(os.environ["GITS_PANEL_DEBUG"], "a").write(f"dance phase={self.phase:.1f} energy={self.energy:.2f} pulse={self.pulse:.2f}\n")
+                open(os.environ["GITS_PANEL_DEBUG"], "a").write(f"dance phase={self.phase:.1f} energy={self.energy:.2f} beats={self.seen_beats}\n")
         self.da.queue_draw()
         if not moving and not self.running:
             self.fast = None
             return False
         return True
+
+    def _kick(self, strength):
+        self.pulse = max(self.pulse, 0.6 + 0.4 * strength)
+        self.rings.append((time.monotonic(), strength))
+        del self.rings[:-4]
 
     def _draw(self, area, cr, w, h):
         n = len(self.level)
@@ -1217,8 +1225,8 @@ class RadioPage(ArtMixin, Gtk.Box):
             return
         frame = self.dance[int(self.phase) % len(self.dance)]
         fw, fh = frame.get_width() / 2, frame.get_height() / 2
-        sx, sy = 1 - 0.035 * self.pulse, 1 + 0.06 * self.pulse                     # stretches up on every beat
-        hop = 6 * self.energy + 13 * self.pulse                                    # and jumps
+        sx, sy = 1 - 0.04 * self.pulse, 1 + 0.08 * self.pulse                      # stretches up on every beat
+        hop = 3 * self.energy + 17 * self.pulse                                    # and jumps
         sway = 6 * math.sin(self.t * 2.4) * (0.35 + self.energy)                   # and rocks from side to side
         x, y = (w - fw * sx) / 2 + sway, h - fh * sy - hop
         alpha = 1.0 if self.running else 0.3
@@ -1233,6 +1241,19 @@ class RadioPage(ArtMixin, Gtk.Box):
         cr.arc(0, 0, 66, 0, 2 * math.pi)
         cr.fill()
         cr.restore()
+        now = time.monotonic()
+        for born, st in self.rings:   # a shock wave runs over the floor on every beat
+            age = (now - born) / 0.5
+            if age >= 1:
+                continue
+            cr.save()
+            cr.translate(w / 2, h - 5)
+            cr.scale(1, 0.16)
+            cr.arc(0, 0, 14 + 96 * age, 0, 2 * math.pi)
+            cr.restore()   # the path stays an ellipse, the stroke below has a uniform width
+            cr.set_source_rgba(*self.CYB, 0.7 * (1 - age) * (0.55 + 0.45 * st))
+            cr.set_line_width(1.8)
+            cr.stroke()
         cr.save()
         cr.translate(x, y)
         cr.scale(0.5 * sx, 0.5 * sy)
