@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# gits-panel [control|media|notify|mixer|note|launch|clip|windows|emoji|keys|close]: the popups under the bar. Running the same one again closes it; the other one replaces it.
+# gits-panel [control|media|radio|notify|mixer|note|launch|clip|windows|emoji|keys|close]: the popups under the bar. Running the same one again closes it; the other one replaces it.
 #   control  toggles, sliders, power profile, charge limit   (Super+Shift+C, waybar power-profile module)
 #   media    player: cover, seek, transport, volume          (Super+Shift+M, click on the player module)
+#   radio    web radio: cover, live spectrum, listeners, tune in/out (Super+R; the radio itself is `gits-radio`)
 #   mixer    sound mixer: master + output devices + one slider per playing app (Super+Alt+V, click on the bar's volume icon)
 #   note     quick note into ~/notes/inbox.md (Super+N; see also gits-note)
 #   launch   command palette: apps, settings, projects, windows, notes, calculator, web search (Super+A)
@@ -19,8 +20,8 @@ alive=0; [[ $pid =~ ^[0-9]+$ ]] && grep -qa 'panel.py' "/proc/$pid/cmdline" 2>/d
 if ((alive)); then for _ in {1..30}; do kill -0 "$pid" 2>/dev/null || break; sleep 0.05; done; rm -f "$pidfile"; fi
 case $mode in
     close) exit 0 ;;
-    control|media|notify|mixer|note|launch|clip|windows|emoji|keys) ((alive)) && [[ $cur == "$mode" ]] && exit 0 ;;   # pressed again = close
-    *) echo "usage: gits-panel [control|media|notify|mixer|note|launch|clip|windows|emoji|keys|close]" >&2; exit 2 ;;
+    control|media|radio|notify|mixer|note|launch|clip|windows|emoji|keys) ((alive)) && [[ $cur == "$mode" ]] && exit 0 ;;   # pressed again = close
+    *) echo "usage: gits-panel [control|media|radio|notify|mixer|note|launch|clip|windows|emoji|keys|close]" >&2; exit 2 ;;
 esac
 python3 "$HOME/.config/gits-widgets/panel.py" "$mode" >"${XDG_RUNTIME_DIR:-/tmp}/gits-panel.log" 2>&1 &
 echo "$! $mode" >"$pidfile"

@@ -7,7 +7,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Shell syntax
         run: |
-          for f in install.sh uninstall.sh tools/roundtrip.sh $(git ls-files 'home/*.sh') home/.local/bin/gits-doctor; do bash -n "$f" || exit 1; done
+          for f in install.sh uninstall.sh tools/roundtrip.sh tools/screenshots.sh $(git ls-files 'home/*.sh'); do bash -n "$f" || exit 1; done
+          for f in $(git ls-files 'home/.local/bin/gits-*'); do head -1 "$f" | grep -q bash && { bash -n "$f" || exit 1; }; done
       - name: Python syntax
         run: python3 -m py_compile tools/*.py $(git ls-files 'home/*.py')
       - name: Lua syntax

@@ -13,9 +13,11 @@ import operator
 import os
 import re
 import shlex
+import socket
 import subprocess
 import sys
 import threading
+import time
 import urllib.parse
 import urllib.request
 
@@ -39,6 +41,11 @@ from gi.repository import Gtk4LayerShell as LS  # noqa: E402
 # gtk4-layer-shell only has to be preloaded into THIS process: every child (bash, git, nmcli, hyprctl...) inherited it and loaded GTK's
 # libraries for nothing, which made each spawned command several times slower
 os.environ.pop("LD_PRELOAD", None)
+
+try:
+    from spectrum import StreamSpectrum   # only the radio popup needs it (numpy, pactl, parec)
+except ImportError:
+    StreamSpectrum = None
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 HOME = os.path.expanduser("~")
@@ -677,9 +684,43 @@ class CoverArea(Gtk.DrawingArea):
         cr.paint()
 
 
-class MediaPopup(Popup):
-    """Player popup (MPRIS through playerctl): cover, title, seek bar, transport, shuffle/repeat, player volume."""
+class ArtMixin:
+    """Cover art for a popup that has `self.cover` (a CoverArea) and `self.art_key`: file:// paths at once, http(s) URLs downloaded
+    once into a cache."""
     CACHE = os.path.join(os.environ.get("XDG_CACHE_HOME", HOME + "/.cache"), "gits-widgets", "art")
+
+    def _load_art(self, url):
+        if not url:
+            self.cover.set_path(None)
+            return
+        if url.startswith("file://"):
+            self._set_cover(urllib.parse.unquote(url[7:]))
+            return
+        import hashlib
+        path = os.path.join(self.CACHE, hashlib.sha1(url.encode()).hexdigest())
+        if os.path.exists(path):
+            self._set_cover(path)
+            return
+
+        def work():
+            try:
+                os.makedirs(self.CACHE, exist_ok=True)
+                req = urllib.request.Request(url, headers={"User-Agent": "gits-panel"})
+                with urllib.request.urlopen(req, timeout=8) as r, open(path + ".tmp", "wb") as f:
+                    f.write(r.read())
+                os.replace(path + ".tmp", path)
+                GLib.idle_add(lambda: (self.art_key == url and self._set_cover(path), False)[1])
+            except (OSError, ValueError):
+                pass
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _set_cover(self, path):
+        self.cover.set_path(path)
+
+
+class MediaPopup(ArtMixin, Popup):
+    """Player popup (MPRIS through playerctl): cover, title, seek bar, transport, shuffle/repeat, player volume."""
 
     def __init__(self, monitor):
         super().__init__(monitor)
@@ -843,35 +884,321 @@ class MediaPopup(Popup):
             self.art_key = art
             self._load_art(art)
 
-    def _load_art(self, url):
-        if not url:
-            self.cover.set_path(None)
+
+
+
+def mpv_ipc(sock, command, timeout=0.6):
+    """One command to mpv's JSON IPC socket: the reply's data, or None when mpv is not there / does not answer."""
+    try:
+        c = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        c.settimeout(timeout)
+        c.connect(sock)
+        c.sendall((json.dumps({"command": command}) + "\n").encode())
+        buf = b""
+        while True:
+            chunk = c.recv(4096)
+            if not chunk:
+                break
+            buf += chunk
+            for line in buf.split(b"\n")[:-1]:   # events come between the reply and us: skip everything without "error"
+                r = json.loads(line)
+                if "error" in r:
+                    c.close()
+                    return r.get("data") if r["error"] == "success" else None
+            buf = buf.split(b"\n")[-1]
+    except (OSError, ValueError):
+        pass
+    return None
+
+
+class RadioPopup(ArtMixin, Popup):
+    """Web radio (gits-radio; DATAMOSH unless GITS_RADIO_API / GITS_RADIO_STREAM say otherwise): what is on air with its cover, the live
+    spectrum of the radio's own stream, listeners, tune in / out, pause, volume. The radio itself runs in the user unit gits-radio, so it
+    keeps playing when this popup closes."""
+    RUN = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "gits-radio")
+    API = os.environ.get("GITS_RADIO_API", "https://radio.datamosh.ru/api/nowplaying/datamosh_radio")
+    NAME = os.environ.get("GITS_RADIO_NAME", "DATAMOSH")
+    SEG, SGAP = 3, 1   # LED segment height / gap of the spectrum, px
+    CY, CYB, RED, FG = (0.18, 0.83, 0.84), (0.55, 0.95, 0.97), (0.94, 0.31, 0.31), (0.86, 0.94, 0.96)
+
+    def __init__(self, monitor):
+        super().__init__(monitor)
+        self.hcenter = True
+        self.CARD_W = 304
+        self.quiet = False
+        self.art_key = None
+        self.running, self.paused = DEMO, False
+        self.api, self.api_at, self.api_mono = None, -100.0, 0.0
+        self.polling = False
+        self.fast = None
+        n = StreamSpectrum.BANDS if StreamSpectrum else 24
+        self.level, self.peak, self.hold = [0.0] * n, [0.0] * n, [0] * n
+        self.demo_t = 0.0
+        self.spec = None
+        if StreamSpectrum is not None and not DEMO:
+            self.spec = StreamSpectrum(os.path.join(self.RUN, "mpv.pid"))
+            self.spec.start()
+
+        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=7)
+        root.add_css_class("panel")
+        head = Gtk.Box(spacing=6)
+        head.append(label("RADIO // 電波", "tag"))
+        sp = Gtk.Box()
+        sp.set_hexpand(True)
+        head.append(sp)
+        self.l_state = label("OFF AIR", "tag")
+        head.append(self.l_state)
+        head.append(label("▪", "tag-dot"))
+        root.append(head)
+
+        self.cover = CoverArea(274, 132)
+        self.cover.add_css_class("cover")
+        frame = Gtk.Box()
+        frame.add_css_class("cover-frame")
+        frame.append(self.cover)
+        ov = Gtk.Overlay()
+        ov.set_child(frame)
+        self.nosig = label("OFF AIR", "nosig", 0.5)
+        self.nosig.set_halign(Gtk.Align.CENTER)
+        self.nosig.set_valign(Gtk.Align.CENTER)
+        ov.add_overlay(self.nosig)
+        root.append(ov)
+
+        self.da = Gtk.DrawingArea()
+        self.da.set_content_height(58)
+        self.da.set_hexpand(True)
+        self.da.set_draw_func(self._draw)
+        root.append(self.da)
+
+        self.l_station = label(self.NAME.upper(), "m-time")
+        root.append(self.l_station)
+        self.title = label("—", "m-title")
+        self.title.set_ellipsize(Pango.EllipsizeMode.END)
+        self.title.set_max_width_chars(30)
+        self.artist = label("", "m-artist")
+        self.artist.set_ellipsize(Pango.EllipsizeMode.END)
+        self.artist.set_max_width_chars(34)
+        root.append(self.title)
+        root.append(self.artist)
+
+        self.prog = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, 100, 1)
+        self.prog.set_draw_value(False)
+        self.prog.set_hexpand(True)
+        self.prog.set_can_target(False)   # a live stream cannot be seeked: show the progress, ignore the pointer
+        root.append(self.prog)
+        times = Gtk.Box()
+        self.t_pos, self.t_len = label("0:00", "m-time"), label("0:00", "m-time", 1.0)
+        self.t_len.set_hexpand(True)
+        times.append(self.t_pos)
+        times.append(self.t_len)
+        root.append(times)
+        self.l_next = label("", "m-time")
+        self.l_next.set_ellipsize(Pango.EllipsizeMode.END)
+        self.l_next.set_max_width_chars(38)
+        root.append(self.l_next)
+
+        ctl = Gtk.Box(spacing=6, homogeneous=True)
+        self.b_power = Gtk.Button(label="󰐥")
+        self.b_power.add_css_class("ctl")
+        self.b_power.add_css_class("big")
+        self.b_power.set_tooltip_text("tune in / switch off")
+        self.b_power.connect("clicked", lambda *_: self._power())
+        self.b_pause = Gtk.Button(label="󰏤")
+        self.b_pause.add_css_class("ctl")
+        self.b_pause.connect("clicked", lambda *_: self._pause())
+        ctl.append(self.b_power)
+        ctl.append(self.b_pause)
+        root.append(ctl)
+
+        lrow = Gtk.Box(spacing=8)
+        lrow.append(label("LISTENERS", "row-name"))
+        self.l_listen = label("–", "row-val", 1.0)
+        self.l_listen.set_hexpand(True)
+        lrow.append(self.l_listen)
+        root.append(lrow)
+
+        vrow = Gtk.Box(spacing=8)
+        vrow.append(label("VOL", "row-name"))
+        self.vol = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, 100, 1)
+        self.vol.set_draw_value(False)
+        self.vol.set_hexpand(True)
+        self.vol.connect("value-changed", self._vol_moved)
+        vrow.append(self.vol)
+        self.l_vol = label("", "row-val", 1.0)
+        self.l_vol.set_width_chars(5)
+        vrow.append(self.l_vol)
+        root.append(vrow)
+        self.set_child(root)
+
+        self._render()
+        self._tick()
+        GLib.timeout_add_seconds(1, self._tick)
+
+    # -- radio control (gits-radio does the work; the popup only asks)
+    def _sock(self):
+        return os.path.join(self.RUN, "mpv.sock")
+
+    def _power(self):
+        fire(["gits-radio", "stop" if self.running else "start"])
+        GLib.timeout_add(1600, lambda: (self._tick(), False)[1])
+
+    def _pause(self):
+        fire(["gits-radio", "playpause"])
+        GLib.timeout_add(350, lambda: (self._tick(), False)[1])
+
+    def _vol_moved(self, sc):
+        v = int(sc.get_value())
+        self.l_vol.set_text(f"{v}%")
+        if not self.quiet and not DEMO:
+            threading.Thread(target=mpv_ipc, args=(self._sock(), ["set_property", "volume", v]), daemon=True).start()
+
+    # -- state, once a second
+    def _tick(self):
+        if not self.polling:
+            self.polling = True
+            threading.Thread(target=self._poll, daemon=True).start()
+        return True
+
+    def _poll(self):
+        try:
+            if DEMO:
+                GLib.idle_add(self._apply_state, True, False, 70.0)
+                if self.api is None:
+                    GLib.idle_add(self._apply_api, {"station": {"name": "DATAMOSH RADIO"}, "listeners": {"current": 7}, "playing_next": {"song": {"artist": "Wired Angel", "title": "Protocol 7"}},
+                                                    "now_playing": {"elapsed": 84, "duration": 232, "song": {"artist": "Lain Iwakura", "title": "Duvet (breakcore rework)",
+                                                                                                             "art": ("file://" + os.environ["GITS_PANEL_ART"]) if os.environ.get("GITS_PANEL_ART") else ""}}})
+                return
+            vol = mpv_ipc(self._sock(), ["get_property", "volume"])
+            running = vol is not None
+            paused = running and mpv_ipc(self._sock(), ["get_property", "pause"]) is True
+            GLib.idle_add(self._apply_state, running, paused, vol)
+            if time.monotonic() - self.api_at > 3.0:
+                self.api_at = time.monotonic()
+                try:
+                    req = urllib.request.Request(f"{self.API}?_={int(time.time())}", headers={"User-Agent": "gits-panel", "Cache-Control": "no-cache"})
+                    with urllib.request.urlopen(req, timeout=4) as r:
+                        GLib.idle_add(self._apply_api, json.loads(r.read().decode()))
+                except (OSError, ValueError):
+                    pass
+        finally:
+            self.polling = False
+
+    def _apply_state(self, running, paused, vol):
+        self.running, self.paused = running, paused
+        self.l_state.set_text("PAUSED" if paused else "ON AIR" if running else "OFF AIR")
+        self.b_power.set_label("󰓛" if running else "󰐥")
+        self.b_pause.set_label("󰐊" if paused else "󰏤")
+        self.b_pause.set_sensitive(running)
+        self.nosig.set_visible(not running and self.art_key is None)
+        if vol is not None:
+            self.quiet = True
+            self.vol.set_value(float(vol))
+            self.l_vol.set_text(f"{float(vol):.0f}%")
+            self.quiet = False
+        self.vol.set_sensitive(vol is not None)
+        if (running or any(v > 0.01 for v in self.level)) and self.fast is None:
+            self.fast = GLib.timeout_add(33, self._frame)
+        self._render()
+        return False
+
+    def _apply_api(self, d):
+        self.api, self.api_mono = d, time.monotonic()
+        self._render()
+        return False
+
+    def _render(self):
+        d = self.api
+        if not d:
+            self.title.set_text("—" if self.running else "OFF AIR")
+            self.artist.set_text("" if self.running else "press 󰐥 to tune in")
             return
-        if url.startswith("file://"):
-            self._set_cover(urllib.parse.unquote(url[7:]))
-            return
-        import hashlib
-        path = os.path.join(self.CACHE, hashlib.sha1(url.encode()).hexdigest())
-        if os.path.exists(path):
-            self._set_cover(path)
-            return
+        song = (d.get("now_playing") or {}).get("song") or {}
+        self.l_station.set_text((d.get("station") or {}).get("name", self.NAME).upper())
+        self.title.set_text(song.get("title") or "—")
+        self.artist.set_text(song.get("artist") or "")
+        nxt = ((d.get("playing_next") or {}).get("song") or {})
+        self.l_next.set_text(f"NEXT  {nxt.get('artist', '')} - {nxt.get('title', '')}" if nxt.get("title") else "")
+        self.l_listen.set_text(str((d.get("listeners") or {}).get("current", "–")))
+        np_ = d.get("now_playing") or {}
+        ln = float(np_.get("duration") or 0)
+        ps = float(np_.get("elapsed") or 0) + (time.monotonic() - self.api_mono if not DEMO else 0)
+        ps = min(ps, ln) if ln else ps
+        self.prog.set_range(0, max(ln, 1))
+        self.prog.set_value(ps)
+        self.t_pos.set_text(fmt_time(ps))
+        self.t_len.set_text(fmt_time(ln))
+        art = song.get("art") or ""
+        if art != self.art_key:
+            self.art_key = art or None
+            if art:
+                self._load_art(art)
+            else:
+                self.cover.set_path(None)
+        self.nosig.set_visible(not art)
+        self.nosig.set_text("OFF AIR" if not self.running else "NO COVER")
+        (self.nosig.remove_css_class if not self.running else self.nosig.add_css_class)("dim")
 
-        def work():
-            try:
-                os.makedirs(self.CACHE, exist_ok=True)
-                req = urllib.request.Request(url, headers={"User-Agent": "gits-panel"})
-                with urllib.request.urlopen(req, timeout=8) as r, open(path + ".tmp", "wb") as f:
-                    f.write(r.read())
-                os.replace(path + ".tmp", path)
-                GLib.idle_add(lambda: (self.art_key == url and self._set_cover(path), False)[1])
-            except (OSError, ValueError):
-                pass
+    # -- spectrum (LED bars with peak caps, like the desktop audio card)
+    def _target(self):
+        n = len(self.level)
+        if DEMO:
+            self.demo_t += 0.033
+            t = self.demo_t
+            return [max(0.04, min(1.0, 0.72 * math.exp(-((i - 3 - 2.5 * math.sin(t * 1.3)) / 6) ** 2)
+                                  + 0.28 * abs(math.sin(t * 2.1 + i * 0.55)) * (1 - i / (n * 1.4))
+                                  + 0.12 * abs(math.sin(t * 9 + i * 1.7)))) for i in range(n)]
+        if self.spec is None or not self.running:
+            return [0.0] * n
+        return list(self.spec.bands)
 
-        threading.Thread(target=work, daemon=True).start()
+    def _frame(self):
+        moving = False
+        for i, tv in enumerate(self._target()):
+            lv = self.level[i]
+            lv = lv + (tv - lv) * 0.6 if tv > lv else max(tv, lv - 0.045)
+            self.level[i] = lv
+            if lv >= self.peak[i]:
+                self.peak[i], self.hold[i] = lv, 12
+            elif self.hold[i] > 0:
+                self.hold[i] -= 1
+            else:
+                self.peak[i] = max(0.0, self.peak[i] - 0.02)
+            moving = moving or lv > 0.01 or self.peak[i] > 0.01
+        self.da.queue_draw()
+        if not moving and not self.running:
+            self.fast = None
+            return False
+        return True
 
-    def _set_cover(self, path):
-        self.cover.set_path(path)
+    def _draw(self, area, cr, w, h):
+        n = len(self.level)
+        gap = 1.5
+        bw = (w - gap * (n - 1)) / n
+        pitch = self.SEG + self.SGAP
+        rows = max(int(h // pitch), 1)
+        for i in range(n):   # faint baseline dots: alive even when silent
+            cr.set_source_rgba(*self.CY, 0.22)
+            cr.rectangle(i * (bw + gap), h - self.SEG, bw, self.SEG)
+        cr.fill()
+        lit = {self.CY: [], self.CYB: [], self.RED: [], self.FG: []}
+        for i in range(n):
+            x = i * (bw + gap)
+            k = int(self.level[i] * rows)
+            for r in range(k):
+                frac = (r + 1) / rows
+                lit[self.RED if frac > 0.86 else (self.CYB if frac > 0.55 else self.CY)].append((x, h - (r + 1) * pitch + self.SGAP))
+            pk = int(self.peak[i] * rows)
+            if pk > k:
+                lit[self.FG].append((x, h - pk * pitch + self.SGAP))
+        for col, alpha in ((self.CY, 0.55), (self.CYB, 0.85), (self.RED, 0.95), (self.FG, 0.9)):
+            for x, y in lit[col]:
+                cr.rectangle(x, y, bw, self.SEG)
+            cr.set_source_rgba(*col, alpha)
+            cr.fill()
 
+    def shutdown(self):
+        if self.spec is not None:
+            self.spec.stop()
 
 
 def fmt_age(sec):
@@ -1701,6 +2028,8 @@ def main():
         win = MixerPopup(mon, max(8, min(cx - 170, width - 348)))
     elif mode == "media":
         win = MediaPopup(mon)
+    elif mode == "radio":
+        win = RadioPopup(mon)
     else:
         win = Panel(mon)
     win.connect("close-request", lambda *_: (loop.quit(), False)[1])
@@ -1708,6 +2037,7 @@ def main():
     for sig in (2, 15):
         GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, sig, lambda: (loop.quit(), False)[1])
     loop.run()
+    getattr(win, "shutdown", lambda: None)()   # e.g. the radio popup's parec
     return 0
 
 

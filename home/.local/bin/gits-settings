@@ -14,6 +14,7 @@ entries=$(cat <<'ROWS'
 󰎞  Quick note (Super+N)	gits-note add
 󰎞  Recent notes (copy one)	gits-note list
 󱎫  Focus timer (pomodoro)	gits-focus menu
+󰐹  Radio (DATAMOSH: on air, spectrum, tune in / out)	gits-panel radio
 󰖔  Night light schedule (evening / night warmth)	gits-daynight menu
 󰆍  Tiling layout (dwindle / master / monocle / scrolling)	gits-layout select
 󰓅  Workflow (default / gaming / editing / powersaver)	gits-workflow select

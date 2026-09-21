@@ -36,6 +36,8 @@ python-numpy              # audio spectrum card, UI sound synthesis
 python-pillow             # asset generator, boot/telegram builders
 playerctl
 socat
+mpv                       # gits-radio: the web radio runs in mpv (mpv-mpris makes it an MPRIS player)
+mpv-mpris
 jq
 grim
 slurp

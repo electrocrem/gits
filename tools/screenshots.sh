@@ -75,10 +75,10 @@ GITS_WIDGETS_DEMO=1 GITS_WIDGETS_ART=$REPO/assets/gits_eye.png GITS_WEATHER_LOCA
 focus "$ws"; hyprctl dispatch 'hl.dsp.cursor.move({x=20,y=780})' >/dev/null; sleep 4
 
 # ---------------------------------------------------------------- desktop
-# the bar shows the title of whatever is playing: pictures with the bar wait for silence instead of publishing your music
-playing() { playerctl -a status 2>/dev/null | grep -q Playing; }
-want desktop && { echo "desktop"; if playing; then echo "a player is playing: the bar would show the track, skipped desktop (pause it and retake)" >&2; else shot "$OUT/desktop.jpg"; fi; }
-want bar && { echo "bar"; if playing; then echo "a player is playing: skipped bar" >&2; else shot "$OUT/bar.jpg" 0 0 1280 44; fi; }
+# the bar shows the title of any media player, playing or paused (a browser tab is enough): pictures with the bar wait until there is none
+playing() { [[ -n $(playerctl -l 2>/dev/null) ]]; }
+want desktop && { echo "desktop"; if playing; then echo "a media player exists (playerctl -l): the bar would show its title, skipped desktop (close it and retake)" >&2; else shot "$OUT/desktop.jpg"; fi; }
+want bar && { echo "bar"; if playing; then echo "a media player exists: skipped bar" >&2; else shot "$OUT/bar.jpg" 0 0 1280 44; fi; }
 
 # ---------------------------------------------------------------- popups (all in demo mode: made-up data)
 popup() {  # popup <mode> <out> <x y w h>
@@ -88,6 +88,7 @@ printf -- '- 2026-09-19 22:10  buy a USB-C dock\n- 2026-09-20 09:30  ask Batou a
 export GITS_NOTES=$TMP/notes.md GITS_PANEL_ART=$REPO/assets/gits_eye.png
 want control-panel && { echo "control panel"; popup control "$OUT/control-panel.jpg" 930 40 350 700; }
 want player && { echo "player"; popup media "$OUT/player.jpg" 470 40 340 490; }
+want radio && { echo "radio"; GITS_PANEL_ART=$REPO/assets/gits_eye.png popup radio "$OUT/radio.jpg" auto 496 68; }
 want mixer && { echo "mixer"; popup mixer "$OUT/mixer.jpg" 500 40 380 300; }
 want notifications && { echo "notifications"; popup notify "$OUT/notifications.jpg" 900 40 380 400; }
 unset GITS_PANEL_ART
@@ -230,5 +231,5 @@ want gif && { echo "demo gif"
             && du -h "$OUT/demo.gif" | cut -f1
     else echo "wf-recorder or ffmpeg missing: skipped" >&2; fi; }
 echo "done: $OUT"
-# names: desktop bar control-panel player mixer notifications launcher calc clipboard windows emoji keys note wifi bluetooth focus
+# names: desktop bar control-panel player radio mixer notifications launcher calc clipboard windows emoji keys note wifi bluetooth focus
 #        settings-menu osd dunst terminal doctor nvim-dashboard nvim btop lazygit yazi tmux tiling wlogout dolphin vscode sddm gif

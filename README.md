@@ -10,6 +10,7 @@ thin frames, kanji tags. Nothing else is needed: no dotfiles framework, no theme
 | Waybar | its own layout + style, one compact CPU/GPU/RAM module (details in the tooltip), power-profile module, language, notification counter, **workflow switcher** (click: next mode); systemd restarts it if it crashes |
 | Desktop widgets | GTK4 layer-shell cards: clock, calendar, media player, weather, network, battery, CPU/RAM/SSD, history graph, to-do, **audio spectrum** (LED bars from the default sink, no cava), rare wallpaper glitch bursts (on AC only, `GITS_WIDGETS_GLITCH=0` disables) |
 | Wallpaper | awww: `gits-wall --pick` (also in Super+I → Wallpaper) chooses from `~/.local/share/gits/wallpapers` and `~/Pictures/wallpapers`; PNG, JPEG, WebP and **animated GIF** (roughly 2-5% of one core, 20-100 MB, depending on the loop); the choice survives logins. No GIFs are shipped: copyright |
+| Radio | `gits-radio` runs a web radio (DATAMOSH; any AzuraCast station through `GITS_RADIO_STREAM` / `GITS_RADIO_API`) in the background as the user unit `gits-radio`; the popup on Super+R shows what is on air with its cover, a live spectrum of the radio's own stream, listeners, tune in / out, pause and volume. It is an MPRIS player, so the bar's player module and the media keys work with it |
 | Lock / login / boot | hyprlock layout, SDDM (Qt6) theme, Plymouth + GRUB themes |
 | Animations | preset `gits`: windows lock in with a hard overshoot and collapse when closed, workspaces jump-cut; optional neon border runner (`touch ~/.local/state/gits-neon-border`, costs battery) |
 | Launchers | **GTK launcher / command palette** (Super+A: apps with icons and a most-used-first order, settings, projects, open windows, notes, a calculator, web search) and **clipboard history** (Super+V), plus a **window switcher** (Super+Tab), **emoji picker** (Super+comma) and **key binding list** (Super+/), all closing on Esc or a click outside; wlogout, dunst, notification action menu, **Wi-Fi menu** (`gits-wifi`, bar click), **Bluetooth menu** (`gits-bt`), **power-profile menu** (bar module) |
@@ -52,10 +53,11 @@ thin frames, kanji tags. Nothing else is needed: no dotfiles framework, no theme
 | | |
 |---|---|
 | ![Control panel](docs/img/control-panel.jpg) **Control panel** (the power button, Super+Shift+C): toggles, sliders, power profile, charge limit, tools, session, health chip | ![Player](docs/img/player.jpg) **Player popup** (Super+Shift+M) |
-| ![Mixer](docs/img/mixer.jpg) **Sound mixer** (Super+Alt+V): master, outputs, one slider per app | ![Notification centre](docs/img/notifications.jpg) **Notification centre** (Super+Shift+N) |
-| ![Wi-Fi](docs/img/wifi.jpg) **Wi-Fi menu** (click on the bar icon) | ![Bluetooth](docs/img/bluetooth.jpg) **Bluetooth menu** (click on the bar icon) |
-| ![Settings](docs/img/settings-menu.jpg) **All settings** (Super+I) | ![OSD](docs/img/osd.jpg) **On-screen display** for volume, brightness, keyboard backlight, touchpad |
-| ![Notification popups](docs/img/notification-popups.jpg) **Notification popups** (dunst): normal, critical and phone notifications | ![Power menu](docs/img/wlogout.jpg) **Power menu** (wlogout) |
+| ![Radio](docs/img/radio.jpg) **Radio** (Super+R): what is on air with its cover, live spectrum of the radio's own stream, listeners, tune in / out, pause, volume | ![Mixer](docs/img/mixer.jpg) **Sound mixer** (Super+Alt+V): master, outputs, one slider per app |
+| ![Notification centre](docs/img/notifications.jpg) **Notification centre** (Super+Shift+N) | ![Wi-Fi](docs/img/wifi.jpg) **Wi-Fi menu** (click on the bar icon) |
+| ![Bluetooth](docs/img/bluetooth.jpg) **Bluetooth menu** (click on the bar icon) | ![Settings](docs/img/settings-menu.jpg) **All settings** (Super+I) |
+| ![OSD](docs/img/osd.jpg) **On-screen display** for volume, brightness, keyboard backlight, touchpad | ![Notification popups](docs/img/notification-popups.jpg) **Notification popups** (dunst): normal, critical and phone notifications |
+| ![Power menu](docs/img/wlogout.jpg) **Power menu** (wlogout) |  |
 
 ### Terminal and tools
 | | |

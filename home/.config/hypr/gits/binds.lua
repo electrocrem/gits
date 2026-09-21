@@ -80,6 +80,7 @@ bind(MOD .. " + ALT + V", run("gits-panel mixer"), "[GitS] sound mixer")
 bind(MOD .. " + SHIFT + N", run("gits-panel notify"), "[GitS] notification centre")
 bind(MOD .. " + O", run("gits-project"), "[GitS] open a project")
 bind(MOD .. " + F", run("gits-focus menu"), "[GitS] focus timer")
+bind(MOD .. " + R", run("gits-panel radio"), "[GitS] radio (DATAMOSH): what is on air, spectrum, tune in / out")
 bind(MOD .. " + N", run("gits-note add"), "[GitS] quick note")
 bind(MOD .. " + SHIFT + O", run("gits-note list"), "[GitS] recent notes")
 

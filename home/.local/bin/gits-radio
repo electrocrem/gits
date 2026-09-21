@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# gits-radio: web radio in the background (DATAMOSH by default). The popup is `gits-panel radio` (Super+R).
+#   gits-radio start | stop | toggle        tune in / switch off (mpv runs as the user unit gits-radio, no terminal needed)
+#   gits-radio pause | resume | playpause   the stream keeps its place in the world, not in a file: resume = live again
+#   gits-radio volume 70 | +5 | -5          mpv volume of the radio only
+#   gits-radio status                       playing | paused | stopped
+#   gits-radio now                          "Artist - Title (N listening)"
+# The radio is an MPRIS player (mpv-mpris): the bar's player module, Super+Shift+M and the media keys work with it.
+# Other stations: GITS_RADIO_STREAM (stream URL), GITS_RADIO_API (an AzuraCast now-playing API URL), GITS_RADIO_NAME,
+#   GITS_RADIO_VOLUME (start volume, default 70), GITS_RADIO_MPV_ARGS (extra mpv options).
+STREAM=${GITS_RADIO_STREAM:-https://radio.datamosh.ru/listen/datamosh_radio/radio.mp3}
+API=${GITS_RADIO_API:-https://radio.datamosh.ru/api/nowplaying/datamosh_radio}
+NAME=${GITS_RADIO_NAME:-DATAMOSH}
+VOL=${GITS_RADIO_VOLUME:-70}
+RUN=${XDG_RUNTIME_DIR:-/tmp}/gits-radio
+SOCK=$RUN/mpv.sock
+UNIT=gits-radio
+
+ipc() { printf '%s\n' "$1" | socat - "$SOCK" 2>/dev/null; }
+running() { systemctl --user is-active --quiet "$UNIT" 2>/dev/null && [[ -S $SOCK ]]; }
+prop() { ipc "{\"command\": [\"get_property\", \"$1\"]}" | jq -r '.data // empty' 2>/dev/null; }
+say() { command -v notify-send >/dev/null && notify-send -a "Radio" -u low -t 3500 -i audio-x-generic "$@"; }
+
+start() {
+    running && return 0
+    systemctl --user reset-failed "$UNIT" 2>/dev/null
+    local env=() v   # a transient unit does not inherit the shell environment: pass the GITS_RADIO_* settings on
+    for v in GITS_RADIO_STREAM GITS_RADIO_API GITS_RADIO_NAME GITS_RADIO_VOLUME GITS_RADIO_MPV_ARGS; do
+        [[ -n ${!v:-} ]] && env+=(--setenv="$v=${!v}")
+    done
+    systemd-run --user --quiet --unit="$UNIT" --description="GitS radio ($NAME)" --collect "${env[@]}" "$(readlink -f "$0")" _run
+    for _ in {1..40}; do [[ -S $SOCK ]] && return 0; sleep 0.1; done
+    echo "gits-radio: mpv did not come up (journalctl --user -u $UNIT)" >&2; return 1
+}
+
+stop() { systemctl --user stop "$UNIT" 2>/dev/null; rm -rf "$RUN"; }
+
+case ${1:-} in
+    start) start ;;
+    stop) stop ;;
+    toggle) if running; then stop; else start; fi ;;
+    pause | resume | playpause)
+        running || { start || exit 1; exit 0; }   # a pause key on a stopped radio tunes in
+        case $1 in
+            pause) ipc '{"command": ["set_property", "pause", true]}' >/dev/null ;;
+            resume) ipc '{"command": ["set_property", "pause", false]}' >/dev/null ;;
+            *) ipc '{"command": ["cycle", "pause"]}' >/dev/null ;;
+        esac ;;
+    volume)
+        running || exit 1
+        case ${2:-} in
+            +* | -*) ipc "{\"command\": [\"add\", \"volume\", ${2#+}]}" >/dev/null ;;   # JSON has no "+5"
+            [0-9]*) ipc "{\"command\": [\"set_property\", \"volume\", ${2}]}" >/dev/null ;;
+            *) prop volume ;;
+        esac ;;
+    status)
+        if ! running; then echo stopped; exit 1; fi
+        [[ $(prop pause) == true ]] && echo paused || echo playing ;;
+    now)
+        curl -s --max-time 5 -H "Cache-Control: no-cache" "$API?_=$(date +%s)" \
+            | jq -r '"\(.now_playing.song.artist) - \(.now_playing.song.title) (\(.listeners.current // 0) listening)"' 2>/dev/null || exit 1 ;;
+    _run)   # the body of the user unit: mpv, plus a loop that keeps the MPRIS title in step with the API
+        mkdir -p "$RUN"
+        # shellcheck disable=SC2086
+        mpv --no-video --really-quiet --idle=no --input-ipc-server="$SOCK" --demuxer-lavf-o=icy=0 \
+            --audio-client-name="$NAME" --force-media-title="$NAME" --volume="$VOL" $GITS_RADIO_MPV_ARGS "$STREAM" &
+        mpv=$!
+        echo "$mpv" >"$RUN/mpv.pid"
+        trap 'kill "$mpv" 2>/dev/null; rm -rf "$RUN"' EXIT TERM INT
+        last=""
+        for _ in {1..40}; do [[ -S $SOCK ]] && break; sleep 0.1; done   # mpv creates its socket a moment after it starts
+        while kill -0 "$mpv" 2>/dev/null; do
+            title=$(curl -s --max-time 4 -H "Cache-Control: no-cache" "$API?_=$(date +%s)" | jq -r '"\(.now_playing.song.artist) - \(.now_playing.song.title)"' 2>/dev/null)
+            if [[ -n $title && $title != "$last" && -S $SOCK ]]; then
+                last=$title
+                jq -nc --arg t "$title" '{command: ["set_property", "force-media-title", $t]}' | socat - "$SOCK" >/dev/null 2>&1
+            fi
+            sleep 5 & wait $!
+        done ;;
+    *)
+        sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'
+        exit 2 ;;
+esac
