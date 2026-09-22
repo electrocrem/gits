@@ -23,9 +23,11 @@ hl.window_rule({
 })
 hl.window_rule({ name = "gits_floating_class", tag = "+gits_floating", match = { class = floating_class }, float = true })
 hl.window_rule({ name = "gits_floating_title", tag = "+gits_floating", match = { title = floating_title }, float = true })
+-- picture-in-picture video (Super+Alt+Y): 16:9 whatever the screen shape, bottom-right corner, on every workspace, never steals focus
 hl.window_rule({
-    name = "gits_pip", tag = "+gits_pin", match = { title = pip_title }, float = true,
-    move = "(monitor_w*0.73) (monitor_h*0.72)", size = "(monitor_w*0.25) (monitor_h*0.25)", pin = true,
+    name = "gits_pip", tag = "+gits_pin", match = { title = pip_title }, float = true, pin = true,
+    size = "(monitor_w*0.25) (monitor_w*0.140625)", move = "(monitor_w-monitor_w*0.25-24) (monitor_h-monitor_w*0.140625-24)",
+    keep_aspect_ratio = true, no_initial_focus = true, opaque = true, no_shadow = true,
 })
 hl.window_rule({
     name = "gits_modals", tag = "+gits_modals",

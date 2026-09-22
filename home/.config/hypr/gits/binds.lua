@@ -24,9 +24,42 @@ local function move_window(dir, pix)
     end
 end
 
+-- picture-in-picture: Firefox-family browsers pop the tab's video out on Ctrl+Shift+]; the window itself is shaped in rules.lua
+local PIP = "^[Pp]icture.?[Ii]n.?[Pp]icture"
+local PIP_BROWSERS = { "zen", "firefox", "librewolf", "floorp", "waterfox", "mullvad" }
+local function pip_window()
+    for _, w in ipairs(hl.get_windows() or {}) do
+        if (w.title or ""):match(PIP) then return w end
+    end
+end
+local function is_pip_browser(w)
+    local c = (w and w.class or ""):lower()
+    for _, b in ipairs(PIP_BROWSERS) do if c:find(b, 1, true) then return true end end
+    return false
+end
+local function toggle_pip()
+    local pip = pip_window()
+    if pip then return hl.dispatch(hl.dsp.window.close({ window = pip })) end
+    local target = hl.get_active_window()
+    if not is_pip_browser(target) then
+        target = nil
+        for _, w in ipairs(hl.get_windows() or {}) do
+            if is_pip_browser(w) then target = w; break end
+        end
+    end
+    if not target then return hl.exec_cmd("notify-send -a GitS 'Picture-in-picture' 'no Firefox / Zen window'") end
+    hl.dispatch(hl.dsp.send_shortcut({ mods = "CTRL SHIFT", key = "]", window = target }))
+end
+local function pip_to_next_monitor()
+    local pip = pip_window()
+    if pip then hl.dispatch(hl.dsp.window.move({ monitor = "+1", window = pip })) end
+end
+
 -- ---------------------------------------------------------------- apps
 bind(MOD .. " + T", run("kitty"), "[Launcher|Apps] terminal emulator")
 bind(MOD .. " + ALT + T", run("gits-dropdown"), "[Launcher|Apps] dropdown terminal")
+bind(MOD .. " + ALT + Y", toggle_pip, "[Launcher|Apps] picture-in-picture video from the browser (again: close it)")
+bind(MOD .. " + ALT + SHIFT + Y", pip_to_next_monitor, "[Launcher|Apps] picture-in-picture video to the next monitor")
 bind(MOD .. " + E", run("gits-open explorer"), "[Launcher|Apps] file explorer")
 bind(MOD .. " + B", run("gits-open browser"), "[Launcher|Apps] browser")
 bind(MOD .. " + C", run("gits-open editor"), "[Launcher|Apps] text editor")
