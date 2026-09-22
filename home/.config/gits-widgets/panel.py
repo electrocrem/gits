@@ -13,6 +13,7 @@ import operator
 import os
 import re
 import shlex
+import shutil
 import socket
 import subprocess
 import sys
@@ -464,7 +465,7 @@ class Panel(Popup):
         tools = Gtk.Box(spacing=6, homogeneous=True)
         for icon, name, cmd in (("󰄀", "SHOT", "gits-shot area"), ("󰗊", "OCR", "gits-shot ocr"),
                                 ("󰈊", "PICK", "hyprpicker -an"), ("󰅍", "CLIP", "gits-panel clip"),
-                                ("󰢮", "ROG", "gits-rog")):
+                                ("󰑊", "REC", "gits-rec toggle area")) + ((("󰢮", "ROG", "gits-rog"),) if shutil.which("rog-control-center") and os.path.isdir("/sys/devices/platform/asus-nb-wmi") else ()):
             tools.append(self._action(icon, name, lambda c=cmd: self._later(c)))
         root.append(tools)
         wide = Gtk.Box(spacing=6, homogeneous=True)
@@ -2248,7 +2249,7 @@ class LauncherPopup(Popup):
             if not self.dry:
                 os.makedirs(os.path.dirname(self.USAGE), exist_ok=True)
                 json.dump(self.usage, open(self.USAGE, "w"))
-            cmd = ["gtk-launch", arg[:-8] if arg.endswith(".desktop") else arg]
+            cmd = ["gtk-launch", arg if arg.endswith(".desktop") else arg + ".desktop"]   # full id: org.telegram.desktop would lose its tail
         elif kind == "sh":
             cmd = ["bash", "-c", arg]
         elif kind == "prj":
@@ -2278,13 +2279,14 @@ def main():
     css = Gtk.CssProvider()
     css.load_from_path(os.path.join(HERE, "panel.css"))
     Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), css, Gtk.STYLE_PROVIDER_PRIORITY_USER)
+    # no monitor given = the compositor opens the popup on the focused one (where the bar was clicked / the key was pressed);
+    # GITS_PANEL_MONITOR=<connector> pins every popup to one screen instead
     mons = Gdk.Display.get_default().get_monitors()
+    want = os.environ.get("GITS_PANEL_MONITOR", "")
     mon = None
     for i in range(mons.get_n_items()):
         m = mons.get_item(i)
-        if mon is None:
-            mon = m
-        if (m.get_connector() or "").startswith("eDP"):
+        if want and (m.get_connector() or "") == want:
             mon = m
             break
     loop = GLib.MainLoop()
