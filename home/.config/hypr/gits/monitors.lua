@@ -1,8 +1,25 @@
 -- Several monitors: workspaces 1-5 live on the main one, 6-10 on the next one (a third monitor gets none of its own).
 -- The main monitor: GITS_MAIN_MONITOR=<connector> if set, else a laptop panel (eDP), else the largest one (ties: the leftmost).
 -- The session starts focused on it, and XWayland apps (games) see it as the primary output.
--- Re-applied whenever a monitor comes or goes. One monitor: nothing changes. GITS_WS_SPLIT=0 turns the split off.
+-- Re-applied whenever a monitor comes or goes. One monitor: nothing changes. GITS_WS_SPLIT=0 turns the split off (the keys below stay).
 -- The same choice of main monitor is made by the desktop widgets and the panel popups (gits-widgets).
+
+-- keys (with one monitor they do nothing): Super+. other monitor, Super+Shift+. window to it, Super+Ctrl+. swap the two monitors' workspaces
+hl.bind("SUPER + period", hl.dsp.focus({ monitor = "+1" }), { description = "[Monitors] focus the next monitor" })
+hl.bind("SUPER + SHIFT + period", hl.dsp.window.move({ monitor = "+1" }), { description = "[Monitors] move the window to the next monitor" })
+hl.bind("SUPER + CONTROL + period", function()
+    local cur = hl.get_active_monitor()
+    local mons = hl.get_monitors() or {}
+    if not cur or #mons < 2 then return end
+    for i, m in ipairs(mons) do
+        if m.name == cur.name then
+            local other = mons[i % #mons + 1]
+            hl.dispatch(hl.dsp.workspace.swap_monitors({ monitor1 = cur.name, monitor2 = other.name }))
+            return
+        end
+    end
+end, { description = "[Monitors] swap the workspaces of this and the next monitor" })
+
 if os.getenv("GITS_WS_SPLIT") == "0" then return end
 
 local function area(m) return m.width * m.height end
