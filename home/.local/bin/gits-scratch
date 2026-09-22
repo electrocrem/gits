@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# gits-scratch NAME CLASS-REGEX COMMAND...: an app that drops in and out of the special workspace NAME, like gits-dropdown does for
+# the terminal. Started on first use; if it is already open on a normal workspace it is pulled in; then only toggled.
+# The window rules (float, size, centre) come from hypr/gits/scratch.lua, which also binds the keys (Super+Alt+C chat, Super+Alt+M music).
+name=${1:?usage: gits-scratch NAME CLASS-REGEX COMMAND...}
+re=${2:?class regex}
+shift 2
+addr=$(hyprctl clients -j | jq -r --arg re "$re" 'first(.[] | select(.class | test($re))) | .address // empty')
+if [[ -z $addr ]]; then
+    (( $# )) || { notify-send -a GitS "gits-scratch" "nothing to start for $name"; exit 1; }
+    setsid -f "$@" >/dev/null 2>&1
+    # the window rule puts it on special:$name by itself; show the workspace once it is there
+    for _ in {1..40}; do
+        hyprctl clients -j | jq -e --arg re "$re" 'any(.[]; .class | test($re))' >/dev/null && break
+        sleep 0.25
+    done
+else
+    ws=$(hyprctl clients -j | jq -r --arg a "$addr" '.[] | select(.address == $a) | .workspace.name')
+    if [[ $ws != "special:$name" ]]; then
+        # opened before the rule could catch it: pull it in and give it the dropdown shape (62% x 78% of the focused monitor, centred)
+        read -r mw mh < <(hyprctl monitors -j | jq -r 'first(.[] | select(.focused)) | "\((.width / .scale) | floor) \((.height / .scale) | floor)"')
+        w="address:$addr"
+        hyprctl dispatch "hl.dsp.window.move({ workspace = \"special:$name\", window = \"$w\" })" >/dev/null
+        hyprctl dispatch "hl.dsp.window.float({ action = \"enable\", window = \"$w\" })" >/dev/null
+        hyprctl dispatch "hl.dsp.window.resize({ x = $((mw * 62 / 100)), y = $((mh * 78 / 100)), window = \"$w\" })" >/dev/null
+        hyprctl dispatch "hl.dsp.window.center({ window = \"$w\" })" >/dev/null
+    fi
+fi
+# moving a window onto a special workspace may already show it: only toggle when the result is not "shown"
+shown=$(hyprctl monitors -j | jq -r 'first(.[] | select(.focused)) | .specialWorkspace.name')
+if [[ -z ${ws:-} || $ws == "special:$name" || $shown != "special:$name" ]]; then
+    hyprctl dispatch "hl.dsp.workspace.toggle_special(\"$name\")" >/dev/null
+fi
