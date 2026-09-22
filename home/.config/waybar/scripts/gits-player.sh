@@ -12,7 +12,7 @@ pos=$(gits-media metadata --format '{{duration(position)}}' 2>/dev/null)
 len=$(gits-media metadata --format '{{duration(mpris:length)}}' 2>/dev/null)
 name=$(gits-media metadata --format '{{playerName}}' 2>/dev/null)
 line="${artist:+$artist – }$title"
-(( ${#line} > 38 )) && short="${line:0:37}…" || short=$line
+(( ${#line} > 56 )) && short="${line:0:55}…" || short=$line   # it sits in the centre next to the clock: room for more
 if [[ $status == Playing ]]; then icon=$''; cls=playing; else icon=$''; cls=paused; fi
 tip=$(printf '%s\n%s\n%s\n──────────────────────\n%s / %s   [%s]\nclick: player · middle: pause · right: next · scroll: prev/next' \
     "${title:-?}" "${artist:-unknown artist}" "${album:-—}" "${pos:-0:00}" "${len:-?}" "${name:-player}")

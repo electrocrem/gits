@@ -32,7 +32,8 @@ tooltip {
 tooltip label { color: @main-fg; padding: 2px 4px; }
 
 /* every module: same colour, same padding, thin divider instead of a gap */
-#workspaces,
+#custom-gits-ws1, #custom-gits-ws2, #custom-gits-ws3, #custom-gits-ws4, #custom-gits-ws5,
+#custom-gits-ws6, #custom-gits-ws7, #custom-gits-ws8, #custom-gits-ws9, #custom-gits-ws10,
 #window,
 #clock,
 #custom-gits-player,
@@ -77,23 +78,59 @@ tooltip label { color: @main-fg; padding: 2px 4px; }
     border-left: 1px solid alpha(@main-fg, 0.28);
 }
 
-/* workspaces: kanji, active one is inverted */
-#workspaces { padding: 0; }
-#workspaces button {
+/* workspace buttons (custom/gits-ws1..10): the focused one is inverted, the one shown on another monitor is brighter */
+#custom-gits-ws1,
+#custom-gits-ws2,
+#custom-gits-ws3,
+#custom-gits-ws4,
+#custom-gits-ws5,
+#custom-gits-ws6,
+#custom-gits-ws7,
+#custom-gits-ws8,
+#custom-gits-ws9,
+#custom-gits-ws10 {
     background: transparent;
     color: alpha(@main-fg, 0.5);
     padding: 0 8px;
     min-width: 0;
+    border: none;
 }
-#workspaces button.active {
+#custom-gits-ws1.visible,
+#custom-gits-ws2.visible,
+#custom-gits-ws3.visible,
+#custom-gits-ws4.visible,
+#custom-gits-ws5.visible,
+#custom-gits-ws6.visible,
+#custom-gits-ws7.visible,
+#custom-gits-ws8.visible,
+#custom-gits-ws9.visible,
+#custom-gits-ws10.visible { color: @main-fg; }
+#custom-gits-ws1.active,
+#custom-gits-ws2.active,
+#custom-gits-ws3.active,
+#custom-gits-ws4.active,
+#custom-gits-ws5.active,
+#custom-gits-ws6.active,
+#custom-gits-ws7.active,
+#custom-gits-ws8.active,
+#custom-gits-ws9.active,
+#custom-gits-ws10.active {
     background: @wb-act-bg;
     color: @wb-act-fg;
 }
-#workspaces button:hover {
+#custom-gits-ws1:hover,
+#custom-gits-ws2:hover,
+#custom-gits-ws3:hover,
+#custom-gits-ws4:hover,
+#custom-gits-ws5:hover,
+#custom-gits-ws6:hover,
+#custom-gits-ws7:hover,
+#custom-gits-ws8:hover,
+#custom-gits-ws9:hover,
+#custom-gits-ws10:hover {
     background: @wb-hvr-bg;
     color: @wb-hvr-fg;
 }
-#workspaces button.urgent { background: alpha(@main-fg, 0.35); color: @main-fg; }
 
 #window { color: alpha(@main-fg, 0.75); }
 

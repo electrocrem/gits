@@ -6,7 +6,8 @@ wallpaper, below every window; BACKGROUND would be covered by a later-started wa
 battery, CPU/RAM/SSD rings, CPU/RAM history graph, network throughput, audio spectrum (parec + numpy), to-do list.
 
 Env: GITS_WEATHER_LOCATION  city for wttr.in (default: auto-detect by IP; "off" disables the request)
-     GITS_WIDGETS_MONITOR   connector name to place the cards on (default: first eDP, else first monitor)
+     GITS_WIDGETS_MONITOR   connector name to place the cards on (default: the main monitor, as in hypr/gits/monitors.lua:
+                            GITS_MAIN_MONITOR, else a laptop panel (eDP), else the largest one)
      GITS_WIDGETS_GLITCH    0 = no wallpaper glitch bursts (default: on, only while on AC power)
      GITS_WIDGETS_DEMO      1 = screenshot mode: made-up SSID/IP and to-do items, throw-away state and cache dirs
                             (your to-do file and weather cache are neither read nor written)
@@ -1236,17 +1237,17 @@ class App:
         self.loop = GLib.MainLoop()
 
     def pick_monitor(self):
+        """The main monitor, chosen like hypr/gits/monitors.lua does: named one, else eDP, else the largest (ties: leftmost)."""
         mons = Gdk.Display.get_default().get_monitors()
-        want = os.environ.get("GITS_WIDGETS_MONITOR", "")
-        fallback = None
-        for i in range(mons.get_n_items()):
-            m = mons.get_item(i)
-            conn = m.get_connector() or ""
-            if fallback is None:
-                fallback = m
-            if (want and conn == want) or (not want and conn.startswith("eDP")):
-                return m
-        return fallback
+        want = os.environ.get("GITS_WIDGETS_MONITOR") or os.environ.get("GITS_MAIN_MONITOR", "")
+        items = [mons.get_item(i) for i in range(mons.get_n_items())]
+        if not items:
+            return None
+
+        def rank(m):
+            conn, g = m.get_connector() or "", m.get_geometry()
+            return (0 if want and conn == want else 1 if not want and conn.startswith("eDP") else 2, -g.width * g.height, g.x)
+        return min(items, key=rank)
 
     def start(self):
         css = Gtk.CssProvider()

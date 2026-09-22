@@ -8,7 +8,11 @@ gits = { root = root, home = os.getenv("HOME") }
 local log = (os.getenv("XDG_STATE_HOME") or (gits.home .. "/.local/state")) .. "/gits/config-errors.log"
 os.execute("mkdir -p '" .. log:match("^(.*)/") .. "'")
 local out = io.open(log, "w")
-for _, m in ipairs({ "env", "options", "variant", "rules", "binds", "hooks", "start" }) do
+-- gits/local.lua is this machine's own part (monitors, overrides): the installer never ships or touches it, and it loads last so it wins.
+local modules = { "env", "options", "variant", "rules", "monitors", "binds", "hooks", "start" }
+local f = io.open(root .. "/gits/local.lua", "r")
+if f then f:close(); table.insert(modules, "local") end
+for _, m in ipairs(modules) do
     local ok, err = xpcall(require, debug.traceback, "gits." .. m)
     if not ok and out then out:write("gits.", m, ": ", tostring(err), "\n\n") end
 end

@@ -9,17 +9,28 @@
     "spacing": 0,
 
     "modules-left": [
-        "hyprland/workspaces#gits",
+        "custom/gits-ws1",
+        "custom/gits-ws2",
+        "custom/gits-ws3",
+        "custom/gits-ws4",
+        "custom/gits-ws5",
+        "custom/gits-ws6",
+        "custom/gits-ws7",
+        "custom/gits-ws8",
+        "custom/gits-ws9",
+        "custom/gits-ws10",
         "hyprland/window#gits"
     ],
     "modules-center": [
-        "clock#gits"
+        "clock#gits",
+        "custom/gits-player"
     ],
     "modules-right": [
-        "custom/gits-player",
         "custom/gits-focus",
         "custom/gits-rec",
         "custom/gits-sys",
+        "custom/gits-gpu",
+        "memory#gits",
         "network#gits",
         "bluetooth#gits",
         "pulseaudio#gits",
@@ -36,14 +47,38 @@
         "spacing": 8
     },
 
-    "hyprland/workspaces#gits": {
-        "all-outputs": true,
-        "disable-scroll": false,
-        "tooltip": false,
-        "format": "{id}",
-        "on-scroll-up": "hyprctl dispatch 'hl.dsp.focus({workspace=\"e-1\"})'",
-        "on-scroll-down": "hyprctl dispatch 'hl.dsp.focus({workspace=\"e+1\"})'"
-    },
+    // workspace buttons 1-10 (scripts/gits-ws.sh): each bar shows only its own monitor's workspaces; click = go there, scroll = next/prev.
+    // Not waybar's hyprland/workspaces: its clicks send a dispatch that a Lua Hyprland config rejects.
+    "custom/gits-ws1": { "exec": "$XDG_CONFIG_HOME/waybar/scripts/gits-ws.sh 1", "return-type": "json", "restart-interval": 2, "tooltip": true,
+        "on-click": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"1\" })'",
+        "on-scroll-up": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"e-1\" })'", "on-scroll-down": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"e+1\" })'" },
+    "custom/gits-ws2": { "exec": "$XDG_CONFIG_HOME/waybar/scripts/gits-ws.sh 2", "return-type": "json", "restart-interval": 2, "tooltip": true,
+        "on-click": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"2\" })'",
+        "on-scroll-up": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"e-1\" })'", "on-scroll-down": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"e+1\" })'" },
+    "custom/gits-ws3": { "exec": "$XDG_CONFIG_HOME/waybar/scripts/gits-ws.sh 3", "return-type": "json", "restart-interval": 2, "tooltip": true,
+        "on-click": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"3\" })'",
+        "on-scroll-up": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"e-1\" })'", "on-scroll-down": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"e+1\" })'" },
+    "custom/gits-ws4": { "exec": "$XDG_CONFIG_HOME/waybar/scripts/gits-ws.sh 4", "return-type": "json", "restart-interval": 2, "tooltip": true,
+        "on-click": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"4\" })'",
+        "on-scroll-up": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"e-1\" })'", "on-scroll-down": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"e+1\" })'" },
+    "custom/gits-ws5": { "exec": "$XDG_CONFIG_HOME/waybar/scripts/gits-ws.sh 5", "return-type": "json", "restart-interval": 2, "tooltip": true,
+        "on-click": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"5\" })'",
+        "on-scroll-up": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"e-1\" })'", "on-scroll-down": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"e+1\" })'" },
+    "custom/gits-ws6": { "exec": "$XDG_CONFIG_HOME/waybar/scripts/gits-ws.sh 6", "return-type": "json", "restart-interval": 2, "tooltip": true,
+        "on-click": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"6\" })'",
+        "on-scroll-up": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"e-1\" })'", "on-scroll-down": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"e+1\" })'" },
+    "custom/gits-ws7": { "exec": "$XDG_CONFIG_HOME/waybar/scripts/gits-ws.sh 7", "return-type": "json", "restart-interval": 2, "tooltip": true,
+        "on-click": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"7\" })'",
+        "on-scroll-up": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"e-1\" })'", "on-scroll-down": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"e+1\" })'" },
+    "custom/gits-ws8": { "exec": "$XDG_CONFIG_HOME/waybar/scripts/gits-ws.sh 8", "return-type": "json", "restart-interval": 2, "tooltip": true,
+        "on-click": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"8\" })'",
+        "on-scroll-up": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"e-1\" })'", "on-scroll-down": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"e+1\" })'" },
+    "custom/gits-ws9": { "exec": "$XDG_CONFIG_HOME/waybar/scripts/gits-ws.sh 9", "return-type": "json", "restart-interval": 2, "tooltip": true,
+        "on-click": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"9\" })'",
+        "on-scroll-up": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"e-1\" })'", "on-scroll-down": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"e+1\" })'" },
+    "custom/gits-ws10": { "exec": "$XDG_CONFIG_HOME/waybar/scripts/gits-ws.sh 10", "return-type": "json", "restart-interval": 2, "tooltip": true,
+        "on-click": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"10\" })'",
+        "on-scroll-up": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"e-1\" })'", "on-scroll-down": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"e+1\" })'" },
 
     "hyprland/window#gits": {
         "format": " {title}",
