@@ -1,10 +1,19 @@
 #!/usr/bin/env python3
 """Stage the Ghost in the Shell boot themes (GRUB + Plymouth) in ./staging. Nothing is installed here:
-run `sudo ./install.sh` for that.  Art = the theme's own gits_eye.png, darkened, scanlines, HUD frame."""
+run `sudo ./install.sh` for that.  Art = the theme's own gits_eye.png, darkened, scanlines, HUD frame.
+
+The art is rendered for one screen size, so the HUD frame is not cropped away on other aspect ratios:
+  ./build.py 2560x1440        that size
+  GITS_BOOT_SIZE=3840x2160    same, through the environment
+  ./build.py                  the largest connected monitor (/sys/class/drm), else 1920x1080
+Other screens still work: Plymouth and GRUB scale the art to cover them."""
+import glob
 import math
 import os
+import re
 import shutil
 import subprocess
+import sys
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
@@ -18,8 +27,30 @@ F_BOLD = os.path.join(FONTS, "JetBrainsMonoNerdFontMono-Bold.ttf")
 NAME = "ghost-in-the-shell"
 
 CY, CYH, NAVY, NAVY2, RED, DIM = (0x2E, 0xD3, 0xD7), (0x5E, 0xF1, 0xF5), (0x06, 0x0A, 0x14), (0x0C, 0x1A, 0x33), (0xE5, 0x43, 0x2B), (0x8E, 0xA2, 0xAE)
-W, H = 1920, 1200
 SS = 2  # supersampling for the vector-ish overlays
+
+
+def screen_size():
+    """WxH from argv / GITS_BOOT_SIZE, else the preferred mode of the largest connected monitor."""
+    want = (sys.argv[1:] or [os.environ.get("GITS_BOOT_SIZE", "")])[0]
+    m = re.fullmatch(r"(\d+)x(\d+)", want.strip())
+    if m:
+        return int(m[1]), int(m[2])
+    best = None
+    for c in glob.glob("/sys/class/drm/card*-*"):
+        try:
+            if open(os.path.join(c, "status")).read().strip() != "connected":
+                continue
+            m = re.match(r"(\d+)x(\d+)", open(os.path.join(c, "modes")).readline())
+        except OSError:
+            continue
+        if m and (best is None or int(m[1]) * int(m[2]) > best[0] * best[1]):
+            best = int(m[1]), int(m[2])
+    return best or (1920, 1080)
+
+
+W, H = screen_size()
+U = H / 1200  # the HUD was drawn for 1200 px of height
 
 
 def font(path, size):
@@ -31,7 +62,8 @@ def iris_centre(img):
     sub = a[380:560, 900:1150]
     mask = (sub[..., 0] > 170) & (sub[..., 1] < 110) & (sub[..., 2] < 90)
     ys, xs = np.nonzero(mask)
-    return int(xs.mean()) + 900, int(ys.mean()) + 380
+    k, dx, dy = cover(img)[1]
+    return round((xs.mean() + 900) * k - dx), round((ys.mean() + 380) * k - dy), k
 
 
 def text_spaced(d, xy, s, fnt, fill, spacing=0):
@@ -42,9 +74,17 @@ def text_spaced(d, xy, s, fnt, fill, spacing=0):
     return x
 
 
+def cover(img):
+    """Scale + centre-crop the image to fill WxH. Returns it with (k, dx, dy): x_out = x_in * k - dx."""
+    k = max(W / img.width, H / img.height)
+    sw, sh = round(img.width * k), round(img.height * k)
+    dx, dy = (sw - W) // 2, (sh - H) // 2
+    return img.resize((sw, sh), Image.LANCZOS).crop((dx, dy, dx + W, dy + H)), (k, dx, dy)
+
+
 def darkened():
     """The eye, pushed into the navy-black: vignette, bottom fade for the menu / bar, scanlines."""
-    img = np.asarray(Image.open(EYE).convert("RGB")).astype(np.float32)
+    img = np.asarray(cover(Image.open(EYE).convert("RGB"))[0]).astype(np.float32)
     navy = np.array(NAVY, dtype=np.float32)
     yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
     r = np.hypot((xx - W / 2) / (W * 0.62), (yy - H * 0.42) / (H * 0.75))
@@ -66,23 +106,24 @@ def overlay(draw_fn):
 
 def hud(d, s, iris, title):
     """Corner brackets, header strip, scan lines through the iris, targeting ticks."""
-    m, L = 34 * s, 58 * s
+    u = s * U  # one HUD pixel at this screen size
+    m, L = 34 * u, 58 * u
     c = CY + (230,)
     for (x, y, sx, sy) in ((m, m, 1, 1), (W * s - m, m, -1, 1), (m, H * s - m, 1, -1), (W * s - m, H * s - m, -1, -1)):
-        d.line([(x, y + sy * L), (x, y), (x + sx * L, y)], fill=c, width=2 * s)
-    f = font(F_REG, 15 * s)
-    text_spaced(d, (m + 22 * s, m + 10 * s), "SECTION 9  //  BOOT LOADER", f, DIM + (230,), 2 * s)
+        d.line([(x, y + sy * L), (x, y), (x + sx * L, y)], fill=c, width=max(1, round(2 * u)))
+    f = font(F_REG, round(15 * u))
+    text_spaced(d, (m + 22 * u, m + 10 * u), "SECTION 9  //  BOOT LOADER", f, DIM + (230,), 2 * u)
     right = "GHOST LINK: STANDBY"
-    tw = sum(d.textlength(ch, font=f) + 2 * s for ch in right)
-    text_spaced(d, (W * s - m - 22 * s - tw, m + 10 * s), right, f, DIM + (230,), 2 * s)
-    d.line([(m + 22 * s, m + 36 * s), (W * s - m - 22 * s, m + 36 * s)], fill=CY + (60,), width=s)
-    d.rectangle([m + 2 * s, m + 12 * s, m + 12 * s, m + 22 * s], fill=RED + (255,))
-    ix, iy = iris[0] * s, iris[1] * s
+    tw = sum(d.textlength(ch, font=f) + 2 * u for ch in right)
+    text_spaced(d, (W * s - m - 22 * u - tw, m + 10 * u), right, f, DIM + (230,), 2 * u)
+    d.line([(m + 22 * u, m + 36 * u), (W * s - m - 22 * u, m + 36 * u)], fill=CY + (60,), width=max(1, round(u)))
+    d.rectangle([m + 2 * u, m + 12 * u, m + 12 * u, m + 22 * u], fill=RED + (255,))
+    ix, iy, k = iris[0] * s, iris[1] * s, iris[2] * s  # the ticks sit on the ring, which follows the eye's scale
     d.line([(0, iy), (W * s, iy)], fill=CY + (26,), width=s)
     d.line([(ix, 0), (ix, H * s)], fill=CY + (26,), width=s)
     for a in (0, 90, 180, 270):
         ca, sa = math.cos(math.radians(a)), math.sin(math.radians(a))
-        d.line([(ix + ca * 250 * s, iy + sa * 250 * s), (ix + ca * 272 * s, iy + sa * 272 * s)], fill=CYH + (220,), width=2 * s)
+        d.line([(ix + ca * 250 * k, iy + sa * 250 * k), (ix + ca * 272 * k, iy + sa * 272 * k)], fill=CYH + (220,), width=max(1, round(2 * u)))
 
 
 def make_ring(size=480):
@@ -118,7 +159,8 @@ def plymouth(art, iris):
     os.makedirs(out, exist_ok=True)
     bg = Image.alpha_composite(art, overlay(lambda d, s: hud(d, s, iris, "")))
     bg.convert("RGB").save(os.path.join(out, "bg.png"), optimize=True)
-    make_ring().save(os.path.join(out, "ring.png"))
+    ring = round(480 * iris[2])
+    make_ring().resize((ring, ring), Image.LANCZOS).save(os.path.join(out, "ring.png"))
     text_png("GHOST  IN  THE  SHELL", os.path.join(out, "title.png"), 40, CYH, True, 10)
     stages = ["INITIALIZING GHOST LINK", "MOUNTING FILESYSTEMS", "LINKING NEURAL BUS", "SYNCHRONIZING SECTION 9", "ACCESS GRANTED"]
     for i, t in enumerate(stages):
@@ -137,8 +179,9 @@ def plymouth(art, iris):
     ImageDraw.Draw(ent).rectangle([0, 0, 299, 29], outline=CY + (140,), width=1)
     ent.save(os.path.join(out, "entry.png"))
     Image.new("RGBA", (14, 14), CYH + (255,)).save(os.path.join(out, "bullet.png"))
-    ix, iy = iris
-    script = open(os.path.join(HERE, "plymouth.script.in")).read().replace("@IRIS_X@", str(ix)).replace("@IRIS_Y@", str(iy))
+    script = open(os.path.join(HERE, "plymouth.script.in")).read()
+    for key, val in (("IRIS_X", iris[0]), ("IRIS_Y", iris[1]), ("ART_W", W), ("ART_H", H), ("RING", ring)):
+        script = script.replace(f"@{key}@", str(val))
     open(os.path.join(out, f"{NAME}.script"), "w").write(script)
     open(os.path.join(out, f"{NAME}.plymouth"), "w").write(f"""[Plymouth Theme]
 Name=Ghost in the Shell
@@ -157,19 +200,22 @@ def grub(art, iris):
     os.makedirs(out, exist_ok=True)
     bg = Image.alpha_composite(art, overlay(lambda d, s: hud(d, s, iris, "")))
     bg.convert("RGB").save(os.path.join(out, "background.png"), optimize=True)
-    for size in (16, 18):
+    g = H / 1080  # the menu was laid out for 1080 px of height
+    small, big = max(12, round(16 * g)), max(14, round(18 * g))
+    for size in sorted({small, big}):
         subprocess.run(["grub-mkfont", "-s", str(size), "-o", os.path.join(out, f"jbm{size}.pf2"), F_REG], check=True, stderr=subprocess.DEVNULL)
+    half, item_h, pad, gap = round(260 * g), round(34 * g), round(8 * g), round(6 * g)
     Image.new("RGBA", (8, 40), CY + (255,)).save(os.path.join(out, "select_c.png"))
     w = Image.new("RGBA", (8, 40), CY + (255,))
     ImageDraw.Draw(w).rectangle([0, 0, 3, 39], fill=RED + (255,))
     w.save(os.path.join(out, "select_w.png"))
     Image.new("RGBA", (8, 40), CY + (255,)).save(os.path.join(out, "select_e.png"))
-    open(os.path.join(out, "theme.txt"), "w").write(f"""# Ghost in the Shell: cyan on navy-black, red tick on the selected entry. Resolution independent.
+    open(os.path.join(out, "theme.txt"), "w").write(f"""# Ghost in the Shell: cyan on navy-black, red tick on the selected entry. Rendered for {W}x{H}, scales to others.
 title-text: ""
 desktop-image: "background.png"
 desktop-image-scale-method: "crop"
 desktop-color: "#060A14"
-terminal-font: "JetBrainsMono NFM Regular 16"
+terminal-font: "JetBrainsMono NFM Regular {small}"
 terminal-left: "0"
 terminal-top: "0"
 terminal-width: "100%"
@@ -177,19 +223,19 @@ terminal-height: "100%"
 terminal-border: "0"
 
 + boot_menu {{
-  left = 50%-260
+  left = 50%-{half}
   top = 64%
-  width = 520
+  width = {2 * half}
   height = 24%
-  item_font = "JetBrainsMono NFM Regular 18"
+  item_font = "JetBrainsMono NFM Regular {big}"
   item_color = "#9FC5D6"
   selected_item_color = "#060A14"
   icon_width = 0
   icon_height = 0
   item_icon_space = 12
-  item_height = 34
-  item_padding = 8
-  item_spacing = 6
+  item_height = {item_h}
+  item_padding = {pad}
+  item_spacing = {gap}
   scrollbar = true
   scrollbar_width = 6
   scrollbar_thumb = "select_c.png"
@@ -198,20 +244,20 @@ terminal-border: "0"
 
 + label {{
   top = 89%
-  left = 50%-260
-  width = 520
+  left = 50%-{half}
+  width = {2 * half}
   align = "center"
   id = "__timeout__"
   text = "AUTO-BOOT IN %d"
-  font = "JetBrainsMono NFM Regular 16"
+  font = "JetBrainsMono NFM Regular {small}"
   color = "#5EF1F5"
 }}
 
 + progress_bar {{
   id = "__timeout__"
-  left = 50%-260
+  left = 50%-{half}
   top = 93%
-  width = 520
+  width = {2 * half}
   height = 6
   show_text = false
   bg_color = "#0C1A33"
@@ -222,11 +268,11 @@ terminal-border: "0"
 
 + label {{
   top = 96%
-  left = 50%-260
-  width = 520
+  left = 50%-{half}
+  width = {2 * half}
   align = "center"
   text = "ENTER  boot     E  edit     C  console"
-  font = "JetBrainsMono NFM Regular 16"
+  font = "JetBrainsMono NFM Regular {small}"
   color = "#596977"
 }}
 """)
@@ -239,4 +285,5 @@ if __name__ == "__main__":
     print("iris centre", iris)
     plymouth(art, iris)
     grub(art, iris)
-    print("staged ->", STAGE)
+    open(os.path.join(STAGE, "size"), "w").write(f"{W}x{H}\n")   # install.sh sets GRUB_GFXMODE from it
+    print("staged ->", STAGE, f"({W}x{H})")

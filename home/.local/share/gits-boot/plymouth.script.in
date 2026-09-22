@@ -10,24 +10,24 @@ sh = Window.GetHeight();
 ox = Window.GetX();
 oy = Window.GetY();
 
-# the art is 1920x1200: "cover" scale for the background, height based scale for the bar and text
-cov = sw / 1920;
-if (sh / 1200 > cov)
-  cov = sh / 1200;
+# the art is @ART_W@x@ART_H@ (build.py renders it for the main screen): "cover" scale for the background, height based scale for the bar and text
+cov = sw / @ART_W@;
+if (sh / @ART_H@ > cov)
+  cov = sh / @ART_H@;
 ui = sh / 1200;
 
 #----------------------------------------- Background --------------------------------
 bg.orig = Image("bg.png");
-bg.image = bg.orig.Scale(Math.Int(1920 * cov), Math.Int(1200 * cov));
+bg.image = bg.orig.Scale(Math.Int(@ART_W@ * cov), Math.Int(@ART_H@ * cov));
 bg.sprite = Sprite(bg.image);
-bg.sprite.SetPosition(ox + Math.Int((sw - 1920 * cov) / 2), oy + Math.Int((sh - 1200 * cov) / 2), -100);
+bg.sprite.SetPosition(ox + Math.Int((sw - @ART_W@ * cov) / 2), oy + Math.Int((sh - @ART_H@ * cov) / 2), -100);
 
 #----------------------------------------- Ring --------------------------------------
-iris.x = ox + (sw - 1920 * cov) / 2 + @IRIS_X@ * cov;
-iris.y = oy + (sh - 1200 * cov) / 2 + @IRIS_Y@ * cov;
+iris.x = ox + (sw - @ART_W@ * cov) / 2 + @IRIS_X@ * cov;
+iris.y = oy + (sh - @ART_H@ * cov) / 2 + @IRIS_Y@ * cov;
 
 ring.orig = Image("ring.png");
-ring.base = ring.orig.Scale(Math.Int(480 * cov), Math.Int(480 * cov));
+ring.base = ring.orig.Scale(Math.Int(@RING@ * cov), Math.Int(@RING@ * cov));
 ring.sprite = Sprite(ring.base);
 ring.sprite.SetPosition(iris.x - ring.base.GetWidth() / 2, iris.y - ring.base.GetHeight() / 2, 10);
 ring.angle = 0;

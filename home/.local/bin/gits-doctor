@@ -177,7 +177,11 @@ grep -q '^GRUB_THEME=.*ghost-in-the-shell' /etc/default/grub 2>/dev/null && ok "
 
 grep -qE '^Theme=ghost-in-the-shell' /etc/plymouth/plymouthd.conf 2>/dev/null && ok "Plymouth theme: ghost-in-the-shell" || warn "Plymouth theme is not GitS"
 grep -q '\bsplash\b' /proc/cmdline && ok "kernel cmdline has splash" || warn "no splash on the kernel cmdline"
-grep -qE '^HOOKS=.*plymouth' /etc/mkinitcpio.conf 2>/dev/null && ok "mkinitcpio has the plymouth hook" || warn "plymouth hook missing in mkinitcpio.conf"
+if [[ -f /etc/mkinitcpio.conf ]]; then
+    grep -qE '^HOOKS=.*plymouth' /etc/mkinitcpio.conf && ok "mkinitcpio has the plymouth hook" || warn "plymouth hook missing in mkinitcpio.conf"
+elif command -v dracut >/dev/null; then
+    grep -rqsE '^add_dracutmodules\+?=.*plymouth' /etc/dracut.conf /etc/dracut.conf.d/ && ok "dracut adds the plymouth module" || warn "dracut does not add the plymouth module (install.sh --system)"
+fi
 
 # ---------------------------------------------------------------- apps
 head_ "apps"
