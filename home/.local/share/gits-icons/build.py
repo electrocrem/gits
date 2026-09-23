@@ -30,6 +30,8 @@ PANEL_ALIASES = {
     "org.telegram.desktop-attention-symbolic": "telegram-attention-panel.svg",
     "org.telegram.desktop-mute-symbolic": "telegram-mute-panel.svg",
     "spotify-linux-32": "spotify-indicator.svg",
+    # Steam ships a white steam_tray_mono.png in its own IconThemePath, which the tray searches first: a name only we have
+    "gits-steam-tray": "steam_tray_mono.svg",
 }
 
 if os.path.isdir(a.out):
