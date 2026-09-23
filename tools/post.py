@@ -8,6 +8,8 @@
     post.py zen     <zen-dir>     install userChrome/userContent/user.js into the default Zen profile
     post.py spotify               point Spicetify at Spotify and apply the GitS theme (~/.config/spicetify/Themes/GitS)
     post.py vesktop               enable ~/.config/vesktop/themes/gits.css in Vesktop (Discord)
+    post.py steam                 cyan Steam tray icon (its own steam_tray_mono.png, which the tray looks up before the theme)
+    post.py kde-apps              pick the GitS colour scheme inside the installed KF6 apps (Dolphin, Ark, Okular...)
     post.py flatpak               GitS icons for Flatpak apps (user override: ICON_THEME + read access to ~/.local/share/icons)
 Every file that gets modified is copied once to <file>.bak-pre-gits first.
 """
@@ -29,54 +31,115 @@ def create(path):
 
 
 def kdeglobals():
+    """Apply color-schemes/GitS.colors to ~/.config/kdeglobals the way Plasma does (its Colors:* / ColorEffects:* / WM sections
+    replace the old ones), and pin the icon theme and widget style: KF6 apps (Dolphin, Ark...) take all of these from kdeglobals,
+    not from qt6ct, and fall back to Breeze (blue folders, light window) or to whatever scheme a previous setup left there."""
     p = os.path.join(HOME, ".config/kdeglobals")
+    scheme = next((f for f in (os.path.join(HOME, ".local/share/color-schemes/GitS.colors"),
+                               os.path.join(os.path.dirname(os.path.abspath(__file__)), "../home/.local/share/color-schemes/GitS.colors"))
+                   if os.path.exists(f)), None)
     if not os.path.exists(p):
         create(p)
     backup(p)
-    out, sec, n = [], "", 0
-    lines = open(p).read().split("\n")
-    # KF6 apps (Dolphin, Ark...) take the icon theme and the widget style from kdeglobals ([Icons] Theme, [KDE] widgetStyle), not from
-    # qt6ct, and fall back to Breeze: blue folders and a light Breeze window instead of GitS-Icons + Kvantum
-    want = {"Icons": ("Theme", "GitS-Icons"), "KDE": ("widgetStyle", "kvantum")}
-    for s_, (k, v) in want.items():
-        if "[" + s_ + "]" not in lines:
-            lines += ["", "[" + s_ + "]", k + "=" + v]
-            n += 1
+
+    def sections(text):
+        """[(name, [lines])] in order; name None for lines before the first header"""
+        out, name, body = [], None, []
+        for ln in text.split("\n"):
+            m = re.match(r"^\[(.+)\]$", ln)
+            if m:
+                out.append((name, body))
+                name, body = m.group(1), []
+            else:
+                body.append(ln)
+        out.append((name, body))
+        return out
+
+    ours = lambda n: n and (n.startswith("Colors:") or n.startswith("ColorEffects:") or n == "WM")
+    old = open(p).read()
+    secs = [(n, b) for n, b in sections(old) if not ours(n)] if scheme else sections(old)
+    if scheme:
+        secs += [(n, b) for n, b in sections(open(scheme).read()) if ours(n)]
+    # single keys: [General] ColorScheme, [Icons] Theme, [KDE] widgetStyle
+    want = {"General": {"ColorScheme": "GitS"} if scheme else {}, "Icons": {"Theme": "GitS-Icons"}, "KDE": {"widgetStyle": "kvantum"}}
+    for sec, kv in want.items():
+        i = next((i for i, (n, _) in enumerate(secs) if n == sec), None)
+        if i is None:
+            secs.append((sec, []))
+            i = len(secs) - 1
+        # an accent colour (Plasma's "accent from wallpaper / custom") would override the scheme's cyan selection
+        drop = set(kv) | ({"AccentColor", "LastUsedCustomAccentColor", "ColorSchemeHash"} if sec == "General" and scheme else set())
+        body = [l for l in secs[i][1] if l.split("=", 1)[0] not in drop]
+        while body and body[-1] == "":
+            body.pop()
+        secs[i] = (sec, [f"{k}={v}" for k, v in kv.items()] + body + [""])
+    text = "\n".join(("" if n is None else f"[{n}]\n") + "\n".join(b).strip("\n") + ("\n" if b and any(b) else "")
+                      for n, b in secs if n is not None or any(b)).strip("\n") + "\n"
+    text = re.sub(r"\n(\[)", r"\n\n\1", re.sub(r"\n{2,}", "\n", text)).lstrip("\n")
+    if text == old:
+        print("kdeglobals: already GitS")
+        return
+    open(p, "w").write(text)
+    print("kdeglobals: GitS colours, icons and widget style" + ("" if scheme else " (GitS.colors not found: colours left as they were)"))
+
+
+STEAM_PUBLIC = [".local/share/Steam/public", ".var/app/com.valvesoftware.Steam/.local/share/Steam/public"]
+
+
+def steam():
+    # Steam's tray item names steam_tray_mono and points IconThemePath at its own public/ dir, so the tray finds the white PNG
+    # there before any icon theme (and waybar <= 0.15 drops its per-app icon override on every icon update). Replace that PNG
+    # with the cyan GitS-Icons glyph; a Steam client update puts the white one back: run this again (install.sh does).
+    svg = os.path.join(HOME, ".local/share/icons/GitS-Icons/22/panel/steam_tray_mono.svg")
+    dirs = [os.path.join(HOME, d) for d in STEAM_PUBLIC if os.path.isfile(os.path.join(HOME, d, "steam_tray_mono.png"))]
+    if not dirs:
+        print("steam: no Steam install, skipped")
+        return
+    if not os.path.exists(svg) or not shutil.which("rsvg-convert"):
+        print("steam: needs the GitS-Icons theme and rsvg-convert (librsvg), skipped")
+        return
+    for d in dirs:
+        png = os.path.join(d, "steam_tray_mono.png")
+        backup(png)
+        r = subprocess.run(["rsvg-convert", "-w", "48", "-h", "48", "-o", png, svg], capture_output=True, text=True)
+        if r.returncode != 0:
+            shutil.copy2(png + ".bak-pre-gits", png)
+            print("steam: rsvg-convert failed: " + r.stderr.strip())
+            return
+    print("steam: cyan tray icon (restart Steam)")
+
+
+# KF6 apps keep their colour scheme in their own rc ([UiSettings] ColorScheme). Unset, KColorSchemeManager outside Plasma picks
+# Breeze Light/Dark from Qt's colour-scheme hint, which qt6ct does not give: Breeze Light text (#232629) on the Kvantum navy
+# background, unreadable. Only apps that are installed get the key. uninstall.sh walks the same list.
+KDE_APPS = {"dolphin": "dolphinrc", "ark": "arkrc", "okular": "okularrc", "gwenview": "gwenviewrc", "kate": "katerc",
+            "kwrite": "kwriterc", "konsole": "konsolerc", "filelight": "filelightrc", "spectacle": "spectaclerc",
+            "partitionmanager": "partitionmanagerrc", "kcalc": "kcalcrc", "elisa": "elisarc", "haruna": "harunarc",
+            "kdeconnect-app": "kdeconnect-apprc"}
+
+
+def kde_apps():
+    done = []
+    for binary, rc in KDE_APPS.items():
+        if not shutil.which(binary):
+            continue
+        p = os.path.join(HOME, ".config", rc)
+        text = open(p).read() if os.path.exists(p) else None
+        if text is not None and re.search(r"(?m)^\[UiSettings\]\n(?:[^\[].*\n)*?ColorScheme=GitS$", text):
+            continue
+        if text is None:
+            create(p)
+            text = ""
         else:
-            i = lines.index("[" + s_ + "]")
-            j = next((x for x in range(i + 1, len(lines)) if lines[x].startswith("[")), len(lines))
-            if not any(l.startswith(k + "=") for l in lines[i + 1:j]):
-                lines.insert(i + 1, k + "=" + v)
-                n += 1
-    for ln in lines:
-        m = re.match(r"\[(.+)\]$", ln)
-        if m:
-            sec = m.group(1)
-        if sec in want and ln.startswith(want[sec][0] + "=") and ln != "=".join(want[sec]):
-            ln, n = "=".join(want[sec]), n + 1
-        if sec.startswith("Colors:"):
-            k, _, v = ln.partition("=")
-            new = ln
-            if v == "61,174,233":
-                new = k + "=" + ("94,241,245" if k == "ForegroundActive" else "46,211,215")
-            elif k == "ForegroundLink" and v == "29,153,243":
-                new = k + "=94,241,245"
-            elif k in ("BackgroundAlternate", "BackgroundNormal") and v in ("32,35,38", "41,44,48"):
-                new = k + "=" + ("6,10,20" if v == "32,35,38" else "10,18,38")
-            elif k == "ForegroundNormal" and v in ("252,252,252", "255,255,255") and sec != "Colors:Selection":
-                new = k + "=200,244,255"
-            if sec == "Colors:Selection":
-                if k == "BackgroundNormal":
-                    new = k + "=46,211,215"
-                elif k == "BackgroundAlternate":
-                    new = k + "=94,241,245"
-                elif k.startswith("Foreground"):
-                    new = k + "=6,10,20"
-            n += new != ln
-            ln = new
-        out.append(ln)
-    open(p, "w").write("\n".join(out))
-    print(f"kdeglobals: {n} colour lines changed")
+            backup(p)
+        if "[UiSettings]" in text:
+            text = re.sub(r"(?m)^ColorScheme=.*\n?", "", text)   # only UiSettings uses this key in these rc files
+            text = text.replace("[UiSettings]\n", "[UiSettings]\nColorScheme=GitS\n", 1)
+        else:
+            text = text.rstrip("\n") + ("\n\n" if text.strip() else "") + "[UiSettings]\nColorScheme=GitS\n"
+        open(p, "w").write(text)
+        done.append(binary)
+    print("kde-apps: GitS colour scheme in " + (", ".join(done) if done else "nothing new"))
 
 
 def kded():
@@ -253,4 +316,4 @@ def flatpak():
 
 cmd = sys.argv[1] if len(sys.argv) > 1 else ""
 {"kded": kded, "kdeglobals": kdeglobals, "logseq": lambda: logseq(sys.argv[2]), "vscode": lambda: vscode(sys.argv[2]),
- "zen": lambda: zen(sys.argv[2]), "spotify": spotify, "vesktop": vesktop, "flatpak": flatpak}.get(cmd, lambda: sys.exit(__doc__))()
+ "zen": lambda: zen(sys.argv[2]), "spotify": spotify, "vesktop": vesktop, "flatpak": flatpak, "kde-apps": kde_apps, "steam": steam}.get(cmd, lambda: sys.exit(__doc__))()

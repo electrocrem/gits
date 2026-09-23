@@ -60,6 +60,13 @@ restore_bak "$HOME/.config/kdeglobals"
 restore_bak "$HOME/.vscode-oss/extensions/extensions.json"
 restore_bak "$HOME/.config/vesktop/settings/settings.json"
 restore_bak "${XDG_DATA_HOME:-$HOME/.local/share}/flatpak/overrides/global"
+# Steam's tray PNG (post.py steam)
+for d in "$HOME/.local/share/Steam/public" "$HOME/.var/app/com.valvesoftware.Steam/.local/share/Steam/public"; do restore_bak "$d/steam_tray_mono.png"; done
+# KF6 app rc files that got [UiSettings] ColorScheme=GitS (post.py kde-apps)
+for rc in dolphinrc arkrc okularrc gwenviewrc katerc kwriterc konsolerc filelightrc spectaclerc partitionmanagerrc kcalcrc elisarc harunarc kdeconnect-apprc; do
+    restore_bak "$HOME/.config/$rc"
+    [[ -f $HOME/.config/$rc.gits-created ]] && { echo "delete   $HOME/.config/$rc"; run rm -f "$HOME/.config/$rc" "$HOME/.config/$rc.gits-created"; }
+done
 # files post.py created from nothing (no backup to restore): delete them
 for m in "$HOME/.config/kdeglobals" "$HOME/.config/vesktop/settings/settings.json" "${XDG_DATA_HOME:-$HOME/.local/share}/flatpak/overrides/global"; do
     [[ -f $m.gits-created ]] && { echo "delete   $m"; run rm -f "$m" "$m.gits-created"; }

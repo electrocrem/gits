@@ -218,10 +218,11 @@ fi
 # ------------------------------------------------------------------ apps
 say "apps"
 if ((DRY)); then
-    echo "   (dry) post.py kded / kdeglobals / logseq / vscode / zen / spotify / vesktop / flatpak"
+    echo "   (dry) post.py kded / kdeglobals / logseq / vscode / zen / spotify / vesktop / flatpak / kde-apps / steam"
 else
     python3 "$REPO/tools/post.py" kded
     python3 "$REPO/tools/post.py" kdeglobals
+    python3 "$REPO/tools/post.py" kde-apps
     python3 "$REPO/tools/post.py" logseq "$REPO/logseq/gits.css"
     python3 "$REPO/tools/post.py" vscode "$HOME/.vscode-oss/extensions/gits.ghost-in-the-shell-1.0.0"
     python3 "$REPO/tools/post.py" zen "$REPO/zen"
@@ -243,6 +244,7 @@ else
 fi
 say "building the icon theme (cyan folders on top of Tela-circle-grey)"
 run python3 "$HOME/.local/share/gits-icons/build.py" || warn "icon theme build failed (needs Tela-circle-grey: AUR tela-circle-icon-theme-grey): the theme falls back to it"
+((DRY)) || python3 "$REPO/tools/post.py" steam
 run python3 "$HOME/.local/share/gits-sounds/build.py" || warn "UI sounds not built (needs python-numpy)"
 run python3 "$HOME/.local/share/gits-lock/build.py" >/dev/null || warn "lock screen frames not built (needs python-pillow and python-numpy): the dancing Lain stays blank"
 ((TELEGRAM)) && run python3 "$HOME/.local/share/gits-telegram/build.py"
