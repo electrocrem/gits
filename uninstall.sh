@@ -68,7 +68,8 @@ for rc in dolphinrc arkrc okularrc gwenviewrc katerc kwriterc konsolerc fileligh
     [[ -f $HOME/.config/$rc.gits-created ]] && { echo "delete   $HOME/.config/$rc"; run rm -f "$HOME/.config/$rc" "$HOME/.config/$rc.gits-created"; }
 done
 # files post.py created from nothing (no backup to restore): delete them
-for m in "$HOME/.config/kdeglobals" "$HOME/.config/vesktop/settings/settings.json" "${XDG_DATA_HOME:-$HOME/.local/share}/flatpak/overrides/global"; do
+restore_bak "$HOME/.config/kcminputrc"
+for m in "$HOME/.config/kdeglobals" "$HOME/.config/kcminputrc" "$HOME/.config/vesktop/settings/settings.json" "${XDG_DATA_HOME:-$HOME/.local/share}/flatpak/overrides/global"; do
     [[ -f $m.gits-created ]] && { echo "delete   $m"; run rm -f "$m" "$m.gits-created"; }
 done
 # Spotify patched by Spicetify with the GitS theme: put the original files back

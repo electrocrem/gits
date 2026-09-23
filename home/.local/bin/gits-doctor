@@ -94,7 +94,8 @@ kc=$(grep -m1 '^cursorTheme=' "$H/.config/kcminputrc" 2>/dev/null | cut -d= -f2)
 
 # GTK4 apps hang forever while loading the theme when gtk-4.0/settings.ini says gtk-application-prefer-dark-theme=true. KDE's kded6 "gtkconfig" module keeps recreating that file.
 g4=$H/.config/gtk-4.0/settings.ini
-if [[ -f $g4 ]] && grep -q 'gtk-application-prefer-dark-theme *= *true' "$g4"; then
+# (only when gtk-4.0 is a symlink into a generated theme dir, as with HyDE's Wallbash; a plain dir, as GitS ships it, is fine)
+if [[ -f $g4 && -L $H/.config/gtk-4.0 ]] && grep -q 'gtk-application-prefer-dark-theme *= *true' "$g4"; then
     bad "$g4 has prefer-dark-theme: every GTK4 app will hang at start (rm it; kded6 gtkconfig recreates it)"
 else ok "no GTK4 settings.ini that hangs GTK4 apps"; fi
 if grep -A1 '^\[Module-gtkconfig\]' "$H/.config/kded6rc" 2>/dev/null | grep -q 'autoload=false'; then ok "kded6 gtkconfig module disabled"
@@ -263,7 +264,7 @@ if [[ $FIX == 1 ]]; then
     fixed() { FIXED=$((FIXED + 1)); printf '  %s[fix ]%s %s\n' "$C_OK" "$C_0" "$1"; }
     failed_fix() { printf '  %s[FAIL]%s could not: %s\n' "$C_BAD" "$C_0" "$1"; }
     g4=$H/.config/gtk-4.0/settings.ini
-    if [[ -f $g4 ]] && grep -q 'gtk-application-prefer-dark-theme *= *true' "$g4"; then rm -f "$g4" && fixed "removed the GTK4 settings.ini that hangs GTK4 apps"; fi
+    if [[ -f $g4 && -L $H/.config/gtk-4.0 ]] && grep -q 'gtk-application-prefer-dark-theme *= *true' "$g4"; then rm -f "$g4" && fixed "removed the GTK4 settings.ini that hangs GTK4 apps"; fi
     if ! grep -A1 '^\[Module-gtkconfig\]' "$H/.config/kded6rc" 2>/dev/null | grep -q 'autoload=false'; then
         printf '\n[Module-gtkconfig]\nautoload=false\n' >>"$H/.config/kded6rc" && fixed "kded6 gtkconfig module switched off (restart kded6 or re-login to apply)"
     fi

@@ -163,6 +163,24 @@ def kded():
             f.write(("\n" if have and not have.endswith("\n") else "") +
                     "# >>> gits:kded >>>\n[Module-gtkconfig]\nautoload=false\n# <<< gits:kded <<<\n")
         print("kded: gtkconfig module set to autoload=false (takes effect at the next kded6 start)")
+    # autoload=false is not the end of it: when a KDE app D-Bus-starts kded6 outside Plasma, gtkconfig still gets loaded and
+    # rewrites gsettings + gtk-3.0/gtk-4.0 settings.ini from kdeglobals / kcminputrc. kdeglobals is GitS already (icons);
+    # give it the GitS cursor too, or it writes breeze_cursors everywhere
+    km = os.path.join(HOME, ".config/kcminputrc")
+    text = open(km).read() if os.path.exists(km) else None
+    if text is None or not re.search(r"(?m)^cursorTheme=GitS-Cursors$", text):
+        if text is None:
+            create(km)
+            text = ""
+        else:
+            backup(km)
+        text = re.sub(r"(?m)^cursor(Theme|Size)=.*\n?", "", text)
+        if "[Mouse]" in text:
+            text = text.replace("[Mouse]\n", "[Mouse]\ncursorSize=22\ncursorTheme=GitS-Cursors\n", 1)
+        else:
+            text = text.rstrip("\n") + ("\n\n" if text.strip() else "") + "[Mouse]\ncursorSize=22\ncursorTheme=GitS-Cursors\n"
+        open(km, "w").write(text)
+        print("kded: kcminputrc cursor -> GitS-Cursors (what kded6 gtkconfig copies into GTK)")
     ini = os.path.join(HOME, ".config/gtk-4.0/settings.ini")
     if os.path.isfile(ini) and re.search(r"gtk-application-prefer-dark-theme\s*=\s*true", open(ini).read()):
         os.makedirs(os.path.join(HOME, ".local/state/gits"), exist_ok=True)
