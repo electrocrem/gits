@@ -64,6 +64,7 @@ git                       # LazyVim (the GitS Neovim look builds on it): plugin 
 ripgrep                   # LazyVim: grep / file search
 fd                        # LazyVim: file search
 tree-sitter-cli           # LazyVim: builds the syntax parsers
+xdg-terminal-exec         # terminal apps (nvim, btop...) from the launcher / file manager open in kitty
 
 # menus, sounds, power (optional: each feature simply does nothing without its tool)
 networkmanager            # gits-wifi

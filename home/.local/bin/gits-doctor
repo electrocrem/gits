@@ -202,6 +202,9 @@ if [[ -n $zp ]]; then
     [[ -f $zp/chrome/userChrome.css ]] && ok "Zen userChrome.css present" || warn "Zen userChrome.css missing"
 fi
 command -v tmux >/dev/null && ok "tmux installed" || warn "tmux not installed"
+# GLib (launcher, gtk-launch, xdg-open) opens Terminal=true apps with xdg-terminal-exec, else gnome-terminal / konsole / xterm
+command -v xdg-terminal-exec >/dev/null && ok "xdg-terminal-exec: terminal apps open in $(grep -v '^#' "$H/.config/xdg-terminals.list" 2>/dev/null | head -1 | sed 's/.desktop$//')" \
+    || warn "xdg-terminal-exec not installed: nvim / btop from the launcher open in another terminal, not kitty (pacman -S xdg-terminal-exec)"
 # screenshots (gits-shot) and the colour picker call grim/slurp by name: a shim earlier in PATH (e.g. /usr/local/bin/grim -> spectacle,
 # left over from KDE) silently breaks them
 for c in grim slurp; do

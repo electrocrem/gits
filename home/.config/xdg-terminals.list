@@ -1,0 +1,3 @@
+# Ghost in the Shell: the terminal for apps with Terminal=true (nvim, btop, yazi...) opened from the launcher, xdg-open or
+# gtk-launch; read by xdg-terminal-exec, which GLib asks first
+kitty.desktop

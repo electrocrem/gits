@@ -61,7 +61,11 @@ def kdeglobals():
     if scheme:
         secs += [(n, b) for n, b in sections(open(scheme).read()) if ours(n)]
     # single keys: [General] ColorScheme, [Icons] Theme, [KDE] widgetStyle
-    want = {"General": {"ColorScheme": "GitS"} if scheme else {}, "Icons": {"Theme": "GitS-Icons"}, "KDE": {"widgetStyle": "kvantum"}}
+    # TerminalApplication: Dolphin's "Open Terminal" and terminal apps it opens (nvim on a file) use kitty, not Konsole
+    general = {"TerminalApplication": "kitty", "TerminalService": "kitty.desktop"}
+    if scheme:
+        general["ColorScheme"] = "GitS"
+    want = {"General": general, "Icons": {"Theme": "GitS-Icons"}, "KDE": {"widgetStyle": "kvantum"}}
     for sec, kv in want.items():
         i = next((i for i, (n, _) in enumerate(secs) if n == sec), None)
         if i is None:
