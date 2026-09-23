@@ -137,4 +137,7 @@ list { background: transparent; }
 .l-glyph { font-size: 17px; color: #2ED3D7; }
 .l-tag { font-size: 8px; font-weight: 700; letter-spacing: 1px; color: #596977; }
 .lrow:selected .l-title, .lrow:selected .l-glyph { color: #060A14; }
+/* app icons as one-colour cyan: grey, then sepia turned to the GitS hue; dark on the selected (cyan) row */
+.l-icon { filter: grayscale(1) contrast(1.35) sepia(1) saturate(2.6) hue-rotate(140deg) brightness(0.85); }
+.lrow:selected .l-icon { filter: grayscale(1) brightness(0.12); }
 .lrow:selected .l-sub, .lrow:selected .l-tag { color: #0C1A33; }

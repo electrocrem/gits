@@ -2192,6 +2192,8 @@ class LauncherPopup(Popup):
             if it.icon is not None:
                 img = Gtk.Image.new_from_gicon(it.icon)
                 img.set_pixel_size(28)
+                if os.environ.get("GITS_ICON_TINT") != "0":   # app logos in the cyan phosphor tone; GITS_ICON_TINT=0 keeps their colours
+                    img.add_css_class("l-icon")
                 h.append(img)
             else:
                 g = label(it.glyph, "l-glyph", 0.5)

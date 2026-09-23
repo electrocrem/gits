@@ -47,7 +47,13 @@
 
     "tray": {
         "icon-size": 16,
-        "spacing": 8
+        "spacing": 8,
+        // apps that send a picture instead of an icon name get the cyan GitS-Icons glyph (the SNI Id is the key)
+        "icons": {
+            "discord_status_icon_1": "discord-tray",
+            "vesktop_status_icon_1": "discord-tray",
+            "steam": "steam_tray_mono"
+        }
     },
 
     // workspace buttons 1-10 (scripts/gits-ws.sh): each bar shows only its own monitor's workspaces; click = go there, scroll = next/prev.

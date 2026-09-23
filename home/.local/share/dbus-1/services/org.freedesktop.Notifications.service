@@ -1,0 +1,7 @@
+# Ghost in the Shell: notifications are dunst (gits-notifications.service). Other daemons (swaync, Plasma) also claim this name in
+# /usr/share/dbus-1/services, and when dunst is down for a moment (gits-session restart) D-Bus would start one of them, which then
+# keeps the name and dunst cannot come back. The per-user directory wins over the system one.
+[D-BUS Service]
+Name=org.freedesktop.Notifications
+Exec=/usr/bin/dunst
+SystemdService=gits-notifications.service
