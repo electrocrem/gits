@@ -1,0 +1,118 @@
+/**
+ * @name Ghost in the Shell
+ * @description CRT cyan on navy-black, square corners, the red "eye" only for mentions. Palette = docs/PALETTE.md
+ * @author gits
+ * @version 1.0.0
+ */
+
+:root {
+  --gits-bg: #060a14;
+  --gits-bg-alt: #0a1226;
+  --gits-surface: #0c1a33;
+  --gits-surface-hi: #163046;
+  --gits-line: #242f41;
+  --gits-fg: #c8f4ff;
+  --gits-dim: #9fc5d6;
+  --gits-muted: #596977;
+  --gits-cyan: #2ed3d7;
+  --gits-cyan-hi: #5ef1f5;
+  --gits-cyan-lo: #254f5d;
+  --gits-hover: rgba(46, 211, 215, 0.14);
+  --gits-red: #e5432b;
+}
+
+.theme-dark, .theme-darker, .theme-midnight, .visual-refresh {
+  /* surfaces: current names and the pre-2025 ones */
+  --background-base-lowest: var(--gits-bg);
+  --background-base-lower: var(--gits-bg);
+  --background-base-low: var(--gits-bg-alt);
+  --background-surface-high: var(--gits-bg-alt);
+  --background-surface-higher: var(--gits-surface);
+  --background-surface-highest: var(--gits-surface);
+  --bg-base-primary: var(--gits-bg);
+  --bg-base-secondary: var(--gits-bg-alt);
+  --bg-base-tertiary: var(--gits-bg);
+  --bg-surface-raised: var(--gits-surface);
+  --bg-surface-overlay: var(--gits-bg-alt);
+  --background-primary: var(--gits-bg);
+  --background-secondary: var(--gits-bg-alt);
+  --background-secondary-alt: var(--gits-bg-alt);
+  --background-tertiary: var(--gits-bg);
+  --background-accent: var(--gits-cyan-lo);
+  --background-floating: var(--gits-bg-alt);
+  --background-nested-floating: var(--gits-surface);
+  --background-mobile-primary: var(--gits-bg);
+  --background-mobile-secondary: var(--gits-bg-alt);
+  --background-modifier-hover: var(--gits-hover);
+  --background-modifier-active: rgba(46, 211, 215, 0.2);
+  --background-modifier-selected: rgba(46, 211, 215, 0.24);
+  --background-modifier-accent: var(--gits-line);
+  --background-message-hover: rgba(46, 211, 215, 0.06);
+  --background-mentioned: rgba(229, 67, 43, 0.1);
+  --background-mentioned-hover: rgba(229, 67, 43, 0.16);
+  --info-warning-foreground: var(--gits-red);
+  --channeltextarea-background: var(--gits-bg-alt);
+  --input-background: var(--gits-bg-alt);
+  --modal-background: var(--gits-bg-alt);
+  --modal-footer-background: var(--gits-bg);
+  --chat-background-default: var(--gits-bg);
+  --home-background: var(--gits-bg);
+  --app-frame-background: var(--gits-bg);
+  --border-subtle: var(--gits-line);
+  --border-faint: var(--gits-line);
+  --border-normal: var(--gits-cyan-lo);
+  --border-strong: rgba(46, 211, 215, 0.45);
+
+  /* text */
+  --text-default: var(--gits-fg);
+  --text-normal: var(--gits-fg);
+  --text-strong: #ddf9ff;
+  --text-subtle: var(--gits-dim);
+  --text-muted: var(--gits-muted);
+  --text-link: var(--gits-cyan-hi);
+  --header-primary: #ddf9ff;
+  --header-secondary: var(--gits-dim);
+  --channels-default: var(--gits-dim);
+  --channel-icon: var(--gits-muted);
+  --interactive-normal: var(--gits-dim);
+  --interactive-hover: var(--gits-cyan-hi);
+  --interactive-active: var(--gits-cyan-hi);
+  --interactive-muted: var(--gits-muted);
+  --icon-default: var(--gits-dim);
+
+  /* accents: Discord blurple -> cyan */
+  --brand-500: var(--gits-cyan);
+  --brand-560: var(--gits-cyan);
+  --brand-600: #22a9ad;
+  --brand-experiment: var(--gits-cyan);
+  --brand-experiment-560: var(--gits-cyan);
+  --button-filled-brand-background: var(--gits-cyan-lo);
+  --button-filled-brand-background-hover: #2f6475;
+  --button-filled-brand-text: var(--gits-cyan-hi);
+  --control-brand-foreground: var(--gits-cyan);
+  --control-brand-foreground-new: var(--gits-cyan);
+  --mention-foreground: var(--gits-cyan-hi);
+  --mention-background: rgba(46, 211, 215, 0.16);
+  --status-danger: var(--gits-red);
+  --scrollbar-thin-thumb: var(--gits-cyan-lo);
+  --scrollbar-auto-thumb: var(--gits-cyan-lo);
+  --scrollbar-auto-track: transparent;
+
+  /* square, like the terminal frames */
+  --radius-xs: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+}
+
+/* avatars and server icons stay round/squircle by Discord's masks; everything else goes square */
+[class*="card_"], [class*="modal_"], [class*="popout_"], [class*="menu_"], [class*="button_"], [class*="channelTextArea_"],
+[class*="scrollableContainer_"], [class*="embedFull_"], [class*="codeContainer_"], code, pre {
+  border-radius: 0 !important;
+}
+
+::selection {
+  background: var(--gits-cyan);
+  color: var(--gits-bg);
+}

@@ -14,6 +14,7 @@
 set -euo pipefail
 
 REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+export PYTHONDONTWRITEBYTECODE=1   # the build scripts import the widgets: no __pycache__ that uninstall would leave behind
 STATE=$HOME/.local/share/gits-install
 STAMP=$(date +%Y%m%d-%H%M%S)
 BK=$STATE/backup/$STAMP
@@ -217,13 +218,16 @@ fi
 # ------------------------------------------------------------------ apps
 say "apps"
 if ((DRY)); then
-    echo "   (dry) post.py kded / kdeglobals / logseq / vscode / zen"
+    echo "   (dry) post.py kded / kdeglobals / logseq / vscode / zen / spotify / vesktop / flatpak"
 else
     python3 "$REPO/tools/post.py" kded
     python3 "$REPO/tools/post.py" kdeglobals
     python3 "$REPO/tools/post.py" logseq "$REPO/logseq/gits.css"
     python3 "$REPO/tools/post.py" vscode "$HOME/.vscode-oss/extensions/gits.ghost-in-the-shell-1.0.0"
     python3 "$REPO/tools/post.py" zen "$REPO/zen"
+    python3 "$REPO/tools/post.py" spotify
+    python3 "$REPO/tools/post.py" vesktop
+    python3 "$REPO/tools/post.py" flatpak
 fi
 
 command -v dunstctl >/dev/null && run dunstctl reload 2>/dev/null || true
@@ -232,7 +236,7 @@ command -v dunstctl >/dev/null && run dunstctl reload 2>/dev/null || true
 say "building the cursor theme"
 if [[ -d $HOME/.local/share/icons/Bibata-Modern-Ice || -d /usr/share/icons/Bibata-Modern-Ice ]]; then
     [[ -d $HOME/.local/share/icons/Bibata-Modern-Ice ]] || warn "Bibata is only in /usr/share/icons: linking it for the builder"
-    [[ -d $HOME/.local/share/icons/Bibata-Modern-Ice ]] || run ln -s /usr/share/icons/Bibata-Modern-Ice "$HOME/.local/share/icons/Bibata-Modern-Ice"
+    [[ -d $HOME/.local/share/icons/Bibata-Modern-Ice ]] || { run mkdir -p "$HOME/.local/share/icons"; run ln -s /usr/share/icons/Bibata-Modern-Ice "$HOME/.local/share/icons/Bibata-Modern-Ice"; }
     run python3 "$HOME/.local/share/gits-cursor/build.py" || warn "cursor build failed"
 else
     warn "skipped: Bibata-Modern-Ice not found"

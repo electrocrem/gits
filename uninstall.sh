@@ -54,10 +54,22 @@ sort -u "$LIST" | sed 's/^new://' | sort -u | while IFS= read -r entry; do
     fi
 done
 
-# edits made by tools/post.py (kdeglobals, Logseq, VS Code, Zen): each left a .bak-pre-gits / plugins-backup copy
+# edits made by tools/post.py (kdeglobals, Logseq, VS Code, Zen, Vesktop, Flatpak): each left a .bak-pre-gits / plugins-backup copy
 restore_bak() { [[ -f $1.bak-pre-gits ]] && { echo "restore  $1"; run mv "$1.bak-pre-gits" "$1"; } || true; }
 restore_bak "$HOME/.config/kdeglobals"
 restore_bak "$HOME/.vscode-oss/extensions/extensions.json"
+restore_bak "$HOME/.config/vesktop/settings/settings.json"
+restore_bak "${XDG_DATA_HOME:-$HOME/.local/share}/flatpak/overrides/global"
+# files post.py created from nothing (no backup to restore): delete them
+for m in "$HOME/.config/kdeglobals" "$HOME/.config/vesktop/settings/settings.json" "${XDG_DATA_HOME:-$HOME/.local/share}/flatpak/overrides/global"; do
+    [[ -f $m.gits-created ]] && { echo "delete   $m"; run rm -f "$m" "$m.gits-created"; }
+done
+# Spotify patched by Spicetify with the GitS theme: put the original files back
+if command -v spicetify >/dev/null && grep -qs '^current_theme *= *GitS' "$HOME/.config/spicetify/config-xpui.ini"; then
+    echo "restore  Spotify (spicetify restore)"
+    run spicetify -q restore || true
+    run spicetify -q config current_theme "" color_scheme "" || true
+fi
 for d in "$HOME"/.var/app/app.zen_browser.zen/.zen/*/; do
     for f in chrome/userChrome.css chrome/userContent.css user.js; do restore_bak "$d$f"; done
 done

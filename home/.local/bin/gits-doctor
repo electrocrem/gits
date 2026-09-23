@@ -82,8 +82,13 @@ cur=$(gsettings get org.gnome.desktop.interface cursor-theme 2>/dev/null | tr -d
 [[ $cur == GitS-Cursors ]] && ok "cursor theme: GitS-Cursors" || warn "cursor theme is '$cur' (a KDE app's kded6 syncs kcminputrc into GTK; do not flip it live, waybar/Zen can crash)"
 gt=$(gsettings get org.gnome.desktop.interface gtk-theme 2>/dev/null | tr -d "'")
 [[ $gt == adw-gtk3-dark ]] && ok "GTK theme: adw-gtk3-dark (+ GitS colours)" || warn "GTK theme is '$gt' (adw-gtk3-dark expected)"
-gi=$(grep -m1 '^gtk-icon-theme-name' "$H/.config/gtk-3.0/settings.ini" 2>/dev/null | cut -d= -f2)
-[[ -z $gi || $gi == GitS-Icons ]] && ok "GTK3 icon theme: ${gi:-unset}" || warn "gtk-3.0/settings.ini icon theme is '$gi' (GitS-Icons expected; gits-doctor --fix)"
+# kded6 (started by any KDE app) copies kdeglobals [Icons] into these; post.py kdeglobals pins it, older files may still say breeze
+for f in gtk-3.0/settings.ini gtk-4.0/settings.ini; do
+    gi=$(grep -m1 '^gtk-icon-theme-name' "$H/.config/$f" 2>/dev/null | cut -d= -f2)
+    [[ -z $gi || $gi == GitS-Icons ]] && ok "${f%%/*} icon theme: ${gi:-unset}" || warn "$f icon theme is '$gi' (GitS-Icons expected; gits-doctor --fix)"
+done
+xi=$(sed -n 's/^Net\/IconThemeName "\(.*\)"/\1/p' "$H/.config/xsettingsd/xsettingsd.conf" 2>/dev/null)
+[[ -z $xi || $xi == GitS-Icons ]] && ok "xsettingsd icon theme: ${xi:-unset}" || warn "xsettingsd icon theme is '$xi' (X11 apps; gits-doctor --fix)"
 kc=$(grep -m1 '^cursorTheme=' "$H/.config/kcminputrc" 2>/dev/null | cut -d= -f2)
 [[ -z $kc || $kc == GitS-Cursors ]] && ok "kcminputrc cursorTheme: ${kc:-unset}" || warn "kcminputrc cursorTheme=$kc: any KDE app (KDE Connect, Dolphin) will push it into GTK settings"
 
@@ -197,6 +202,14 @@ if [[ -n $zp ]]; then
     [[ -f $zp/chrome/userChrome.css ]] && ok "Zen userChrome.css present" || warn "Zen userChrome.css missing"
 fi
 command -v tmux >/dev/null && ok "tmux installed" || warn "tmux not installed"
+# screenshots (gits-shot) and the colour picker call grim/slurp by name: a shim earlier in PATH (e.g. /usr/local/bin/grim -> spectacle,
+# left over from KDE) silently breaks them
+for c in grim slurp; do
+    p=$(command -v "$c") || { warn "$c not installed (screenshots)"; continue; }
+    if [[ $p != /usr/bin/$c ]] && ! pacman -Qqo "$p" >/dev/null 2>&1 && grep -qI . "$p" 2>/dev/null; then
+        bad "$c resolves to $p (a script, not the real $c): screenshots break; move it away (sudo mv $p $p.off)"
+    else ok "$c is the real one"; fi
+done
 
 # ---------------------------------------------------------------- extras
 head_ "menus, sounds, widgets extras"
@@ -251,8 +264,14 @@ if [[ $FIX == 1 ]]; then
     if ! grep -A1 '^\[Module-gtkconfig\]' "$H/.config/kded6rc" 2>/dev/null | grep -q 'autoload=false'; then
         printf '\n[Module-gtkconfig]\nautoload=false\n' >>"$H/.config/kded6rc" && fixed "kded6 gtkconfig module switched off (restart kded6 or re-login to apply)"
     fi
-    gi=$(grep -m1 '^gtk-icon-theme-name' "$H/.config/gtk-3.0/settings.ini" 2>/dev/null | cut -d= -f2)
-    if [[ -n $gi && $gi != GitS-Icons ]]; then sed -i 's/^gtk-icon-theme-name=.*/gtk-icon-theme-name=GitS-Icons/' "$H/.config/gtk-3.0/settings.ini" && fixed "GTK3 icon theme $gi -> GitS-Icons"; fi
+    for f in gtk-3.0/settings.ini gtk-4.0/settings.ini; do
+        gi=$(grep -m1 '^gtk-icon-theme-name' "$H/.config/$f" 2>/dev/null | cut -d= -f2)
+        if [[ -n $gi && $gi != GitS-Icons ]]; then sed -i 's/^gtk-icon-theme-name=.*/gtk-icon-theme-name=GitS-Icons/' "$H/.config/$f" && fixed "${f%%/*} icon theme $gi -> GitS-Icons"; fi
+    done
+    xs=$H/.config/xsettingsd/xsettingsd.conf
+    if [[ -f $xs ]] && grep -q '^Net/IconThemeName' "$xs" && ! grep -q '^Net/IconThemeName "GitS-Icons"' "$xs"; then
+        sed -i 's/^Net\/IconThemeName .*/Net\/IconThemeName "GitS-Icons"/' "$xs" && { pkill -HUP -x xsettingsd 2>/dev/null; fixed "xsettingsd icon theme -> GitS-Icons"; }
+    fi
     kc=$(grep -m1 '^cursorTheme=' "$H/.config/kcminputrc" 2>/dev/null | cut -d= -f2)
     if [[ -n $kc && $kc != GitS-Cursors ]]; then sed -i 's/^cursorTheme=.*/cursorTheme=GitS-Cursors/' "$H/.config/kcminputrc" && fixed "kcminputrc cursorTheme $kc -> GitS-Cursors"; fi
     pgrep -f '[g]its-widgets/widgets.py' >/dev/null || { "$H/.config/gits-widgets/run.sh" start </dev/null >/dev/null 2>&1 && fixed "desktop widgets started"; }

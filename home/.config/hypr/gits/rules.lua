@@ -44,6 +44,9 @@ hl.window_rule({
     no_initial_focus = true, no_focus = true, no_anim = true, no_blur = true, no_follow_mouse = true,
     max_size = { 1, 1 }, opacity = 0.0, float = true, workspace = "special:xwayland_video_bridge silent",
 })
+-- games (Steam / Proton, gamescope) start fullscreen: tiled next to the Steam window they get squeezed, and an XWayland game that
+-- thinks it owns the screen then maps the mouse wrong (clicks miss, the cursor stops at the tile edge)
+hl.window_rule({ name = "gits_games", match = { class = "^(steam_app_\\d+|gamescope)$" }, fullscreen = true })
 -- the drop-down terminal (gits-dropdown) lives on its own special workspace
 hl.window_rule({ name = "gits_dropdown", match = { class = "^(console-dropdown)$" }, workspace = "special:console silent", float = true, size = "(monitor_w*0.8) (monitor_h*0.5)", center = true })
 

@@ -2,13 +2,16 @@
 """Idempotent edits that a plain file copy cannot do.  Used by install.sh.
 
     post.py kded                  stop kded6 from recreating the GTK settings that hang GTK4 apps
-    post.py kdeglobals            recolour KDE/Qt accents (Breeze blue -> cyan) and greys -> navy
+    post.py kdeglobals            recolour KDE/Qt accents (Breeze blue -> cyan) and greys -> navy, pin the GitS icon theme
     post.py logseq  <gits.css>    make Logseq load the GitS stylesheet (theme plugin route)
     post.py vscode  <ext-dir>     register the theme extension for Code - OSS
     post.py zen     <zen-dir>     install userChrome/userContent/user.js into the default Zen profile
+    post.py spotify               point Spicetify at Spotify and apply the GitS theme (~/.config/spicetify/Themes/GitS)
+    post.py vesktop               enable ~/.config/vesktop/themes/gits.css in Vesktop (Discord)
+    post.py flatpak               GitS icons for Flatpak apps (user override: ICON_THEME + read access to ~/.local/share/icons)
 Every file that gets modified is copied once to <file>.bak-pre-gits first.
 """
-import configparser, json, os, re, shutil, sys, time
+import configparser, json, os, re, shutil, subprocess, sys, time
 
 HOME = os.path.expanduser("~")
 
@@ -18,17 +21,39 @@ def backup(path):
         shutil.copy2(path, path + ".bak-pre-gits")
 
 
+def create(path):
+    """A file gits makes from nothing: the marker tells uninstall.sh to delete it instead of restoring a backup."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    open(path, "w").close()
+    open(path + ".gits-created", "w").close()
+
+
 def kdeglobals():
     p = os.path.join(HOME, ".config/kdeglobals")
     if not os.path.exists(p):
-        print("kdeglobals: not present, skipped")
-        return
+        create(p)
     backup(p)
     out, sec, n = [], "", 0
-    for ln in open(p).read().split("\n"):
+    lines = open(p).read().split("\n")
+    # KF6 apps (Dolphin, Ark...) take the icon theme and the widget style from kdeglobals ([Icons] Theme, [KDE] widgetStyle), not from
+    # qt6ct, and fall back to Breeze: blue folders and a light Breeze window instead of GitS-Icons + Kvantum
+    want = {"Icons": ("Theme", "GitS-Icons"), "KDE": ("widgetStyle", "kvantum")}
+    for s_, (k, v) in want.items():
+        if "[" + s_ + "]" not in lines:
+            lines += ["", "[" + s_ + "]", k + "=" + v]
+            n += 1
+        else:
+            i = lines.index("[" + s_ + "]")
+            j = next((x for x in range(i + 1, len(lines)) if lines[x].startswith("[")), len(lines))
+            if not any(l.startswith(k + "=") for l in lines[i + 1:j]):
+                lines.insert(i + 1, k + "=" + v)
+                n += 1
+    for ln in lines:
         m = re.match(r"\[(.+)\]$", ln)
         if m:
             sec = m.group(1)
+        if sec in want and ln.startswith(want[sec][0] + "=") and ln != "=".join(want[sec]):
+            ln, n = "=".join(want[sec]), n + 1
         if sec.startswith("Colors:"):
             k, _, v = ln.partition("=")
             new = ln
@@ -155,6 +180,77 @@ def zen(src):
     print(f"zen: styles installed into {rel} (takes effect on the next browser start)")
 
 
+def spotify():
+    if not shutil.which("spicetify"):
+        print("spotify: spicetify not installed (AUR spicetify-cli), skipped")
+        return
+    # spotify-launcher keeps Spotify in the home dir, so Spicetify can patch it without sudo; the Flatpak one is read-only
+    app = next((d for d in (os.path.join(HOME, ".local/share/spotify-launcher/install/usr/share/spotify"), "/opt/spotify")
+                if os.path.isdir(os.path.join(d, "Apps"))), None)
+    prefs = os.path.join(HOME, ".config/spotify/prefs")
+    if not app:
+        print("spotify: no spotify-launcher / /opt/spotify install found, skipped")
+        return
+    if not os.path.exists(prefs):
+        print("spotify: start Spotify once (it writes ~/.config/spotify/prefs), skipped")
+        return
+    if not os.access(app, os.W_OK):
+        print(f"spotify: {app} is not writable, skipped")
+        return
+    sp = lambda *a: subprocess.run(["spicetify", "-q", *a], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    r = sp("config", "spotify_path", app, "prefs_path", prefs, "current_theme", "GitS", "color_scheme", "gits",
+           "inject_css", "1", "replace_colors", "1")
+    if r.returncode == 0:
+        r = sp("backup", "apply")
+        if r.returncode != 0:   # already backed up (e.g. after a Spotify update): re-apply over the fresh files
+            r = sp("restore", "backup", "apply")
+    if r.returncode == 0:
+        print("spotify: GitS applied (after a Spotify update run: spicetify backup apply)")
+    else:
+        print("spotify: spicetify failed: " + (r.stderr.strip().splitlines() or ["?"])[-1])
+
+
+def vesktop():
+    root = os.path.join(HOME, ".config/vesktop")
+    if not os.path.isdir(os.path.join(root, "themes")):
+        print("vesktop: no ~/.config/vesktop/themes, skipped")
+        return
+    p = os.path.join(root, "settings/settings.json")
+    if not os.path.exists(p):
+        create(p)
+    data = json.load(open(p)) if os.path.getsize(p) else {}
+    themes = data.setdefault("enabledThemes", [])
+    if "gits.css" in themes:
+        print("vesktop: already enabled")
+        return
+    if not os.path.exists(p + ".gits-created"):
+        backup(p)
+    themes.append("gits.css")
+    json.dump(data, open(p, "w"), indent=4)
+    print("vesktop: gits.css enabled (restart Vesktop)")
+
+
+def flatpak():
+    if not shutil.which("flatpak"):
+        print("flatpak: not installed, skipped")
+        return
+    # GTK apps inside take the theme name from the settings portal, but an old global ICON_THEME override (a previous rice) wins
+    # for the apps that read it; the theme itself and its base (Tela-circle-grey, /usr/share/icons) are visible via /run/host
+    cur = subprocess.run(["flatpak", "override", "--user", "--show"], capture_output=True, text=True).stdout
+    if "ICON_THEME=GitS-Icons" in cur and "xdg-data/icons:ro" in cur:
+        print("flatpak: already set")
+        return
+    g = os.path.join(os.environ.get("XDG_DATA_HOME", os.path.join(HOME, ".local/share")), "flatpak/overrides/global")
+    if os.path.exists(g):
+        backup(g)
+    else:
+        os.makedirs(os.path.dirname(g), exist_ok=True)
+        open(g + ".gits-created", "w").close()
+    r = subprocess.run(["flatpak", "override", "--user", "--env=ICON_THEME=GitS-Icons", "--filesystem=xdg-data/icons:ro"],
+                       capture_output=True, text=True)
+    print("flatpak: GitS icons for Flatpak apps (restart them)" if r.returncode == 0 else "flatpak: override failed: " + r.stderr.strip())
+
+
 cmd = sys.argv[1] if len(sys.argv) > 1 else ""
 {"kded": kded, "kdeglobals": kdeglobals, "logseq": lambda: logseq(sys.argv[2]), "vscode": lambda: vscode(sys.argv[2]),
- "zen": lambda: zen(sys.argv[2])}.get(cmd, lambda: sys.exit(__doc__))()
+ "zen": lambda: zen(sys.argv[2]), "spotify": spotify, "vesktop": vesktop, "flatpak": flatpak}.get(cmd, lambda: sys.exit(__doc__))()

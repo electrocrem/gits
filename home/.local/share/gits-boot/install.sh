@@ -43,6 +43,7 @@ if [[ ${1:-} == --revert ]]; then
     prev=$(cat "$STATE/plymouth-theme" 2>/dev/null || true)
     if [[ -n $prev && -d $PLY/$prev ]]; then plymouth-set-default-theme "$prev"; else plymouth-set-default-theme --reset; fi
     rm -f "$DRACUT_CONF"
+    [[ -f $STATE/plymouthd.conf ]] && cp -a "$STATE/plymouthd.conf" /etc/plymouth/plymouthd.conf
     [[ -f $STATE/mkinitcpio.conf ]] && cp -a "$STATE/mkinitcpio.conf" "$MKI"
     rebuild_initramfs
     grub_mkconfig
@@ -82,6 +83,14 @@ echo "==> plymouth theme"
 cur=$(plymouth-set-default-theme 2>/dev/null || true)
 [[ -f $STATE/plymouth-theme || -z $cur || $cur == "$NAME" ]] || echo "$cur" >"$STATE/plymouth-theme"
 plymouth-set-default-theme "$NAME"
+# the script scales the art by the screen height itself; plymouth's own HiDPI guess (2x on a 1440p screen whose size it
+# does not know) would hand it half the pixels and blow everything up, so pin the device scale to 1
+PDC=/etc/plymouth/plymouthd.conf
+mkdir -p "${PDC%/*}"; touch "$PDC"
+[[ -f $STATE/plymouthd.conf ]] || cp -a "$PDC" "$STATE/plymouthd.conf"
+grep -q '^\[Daemon\]' "$PDC" || printf '[Daemon]\n' >>"$PDC"
+if grep -q '^DeviceScale=' "$PDC"; then sed -i 's/^DeviceScale=.*/DeviceScale=1/' "$PDC"
+else sed -i '/^\[Daemon\]/a DeviceScale=1' "$PDC"; fi
 
 echo "==> initramfs ($(initramfs_tool), takes a minute)"
 case $(initramfs_tool) in

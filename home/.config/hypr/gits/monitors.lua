@@ -66,12 +66,21 @@ end
 
 local function safe_apply() local ok, main = pcall(apply); return ok and main or nil end
 
-safe_apply()   -- on a config reload the monitors are already there
+-- X11 games (Proton) size themselves for the XWayland primary output, which is otherwise the one at 0,0: with a 1080p screen on the
+-- left the game renders 1920x1080 into the top-left corner of the fullscreen window on the main one. XWayland may come up a while
+-- after Hyprland (or restart), so retry until xrandr knows the output instead of one fixed sleep.
+local function x_primary(main)
+    if not main then return end
+    hl.exec_cmd("sh -c 'command -v xrandr >/dev/null || exit 0; for i in $(seq 30); do " ..
+                "xrandr --output " .. main.name .. " --primary 2>/dev/null && exit 0; sleep 1; done'")
+end
+
+x_primary(safe_apply())   -- on a config reload the monitors are already there
 hl.on("hyprland.start", function()
     local main = safe_apply()
     if not main then return end
     hl.dispatch(hl.dsp.focus({ monitor = main.name }))
-    hl.exec_cmd("sh -c 'command -v xrandr >/dev/null || exit 0; sleep 2; xrandr --output " .. main.name .. " --primary 2>/dev/null'")
+    x_primary(main)
 end)
-hl.on("monitor.added", safe_apply)
-hl.on("monitor.removed", safe_apply)
+hl.on("monitor.added", function() x_primary(safe_apply()) end)
+hl.on("monitor.removed", function() x_primary(safe_apply()) end)

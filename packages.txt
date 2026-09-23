@@ -1,5 +1,6 @@
 # Packages this setup needs (Arch / CachyOS repos). One per line, comments after #. `./install.sh --deps` installs the missing ones.
-# AUR (not listed, the installer only warns): Bibata-Modern-Ice cursors (bibata-cursor-theme), Tela-circle-grey icons (tela-circle-icon-theme-grey).
+# AUR (not listed, the installer only warns): Bibata-Modern-Ice cursors (bibata-cursor-theme), Tela-circle-grey icons (tela-circle-icon-theme-grey);
+# optional themes: Spotify via spicetify-cli (with spotify-launcher), Discord via vesktop-bin.
 
 # compositor and session
 hyprland

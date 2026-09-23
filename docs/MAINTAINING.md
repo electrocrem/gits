@@ -15,7 +15,7 @@ tools/screenshots.sh        retake the pictures in docs/img and the demo GIF
 tools/lock-shot.sh          a picture of the lock screen without locking your session
 tools/roundtrip.sh          install twice + uninstall in a throw-away $HOME and compare
 tools/make-assets.py        generates original placeholder artwork when assets/ is incomplete
-tools/post.py               idempotent edits: kdeglobals, Logseq, VS Code, Zen
+tools/post.py               idempotent edits: kdeglobals, Logseq, VS Code, Zen, Spotify, Vesktop, Flatpak
 docs/PITFALLS.md            what broke and why
 docs/PALETTE.md             the colours
 ```

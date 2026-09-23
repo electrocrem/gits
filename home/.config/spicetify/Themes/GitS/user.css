@@ -1,0 +1,50 @@
+/*
+ * Ghost in the Shell for Spotify (Spicetify): CRT cyan on navy-black, square corners, thin cyan frames.
+ * Colours come from color.ini ([gits]); this file is shape only.
+ */
+
+:root {
+  --border-radius-1: 0px;
+  --border-radius-2: 0px;
+  --border-radius-3: 0px;
+  --gits-frame: 1px solid rgba(46, 211, 215, 0.35);
+}
+
+/* square everything */
+.main-rootlist-rootlistItem, .main-card-card, .main-cardImage-imageWrapper, .main-image-image, .main-entityHeader-image,
+.main-trackList-trackListRow, button, input, .x-searchInput-searchInputInput, .main-contextMenu-menu, .Root__main-view,
+.Root__nav-bar, .Root__right-sidebar, .main-yourLibraryX-libraryItemContainer, .encore-dark-theme img {
+  border-radius: 0 !important;
+}
+
+/* thin frames around the panels instead of rounded cards */
+.Root__nav-bar, .Root__main-view, .Root__right-sidebar {
+  border: var(--gits-frame) !important;
+  background-color: var(--spice-main) !important;
+}
+
+.main-card-card {
+  background-color: var(--spice-card) !important;
+  border: 1px solid transparent;
+}
+.main-card-card:hover {
+  border-color: rgba(46, 211, 215, 0.45);
+  background-color: var(--spice-highlight) !important;
+}
+
+/* now playing: cyan progress, no pill */
+.progress-bar {
+  --fg-color: var(--spice-button) !important;
+  --bg-color: var(--spice-misc) !important;
+}
+
+/* the red "eye" only on the playing track */
+.main-trackList-playingIcon, .main-trackList-active .main-trackList-rowTitle {
+  color: #e5432b !important;
+  fill: #e5432b !important;
+}
+
+.main-topBar-background, .main-home-homeHeader, .main-entityHeader-backgroundColor, .main-actionBarBackground-background {
+  background: var(--spice-main) !important;
+  background-image: none !important;
+}

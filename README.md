@@ -31,7 +31,7 @@ notification centre, Wi-Fi and Bluetooth menus, on-screen display for volume and
 screenshots with OCR, screen recording, a night-light schedule, and separate sleep timers for the wall socket and the battery.
 
 **A terminal and apps that match.** A banner in kitty, a themed prompt, tmux, btop, lazygit, yazi, Neovim, VS Code, Dolphin, and styles for
-Zen, Logseq and Telegram. Plus matching icons and cursors, and login, boot and lock screens in the same style.
+Zen, Logseq, Telegram, Spotify (Spicetify) and Discord (Vesktop). Plus matching icons (Flatpak apps too) and cursors, and login, boot and lock screens in the same style.
 
 **It looks after itself.** `gits-doctor` checks that everything is in order and can repair what an update breaks. `gits-update` takes a
 snapshot, updates the system, and then runs the repair.
