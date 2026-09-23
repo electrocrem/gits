@@ -60,6 +60,10 @@ tmux
 yazi
 fzf
 neovim
+git                       # LazyVim (the GitS Neovim look builds on it): plugin manager
+ripgrep                   # LazyVim: grep / file search
+fd                        # LazyVim: file search
+tree-sitter-cli           # LazyVim: builds the syntax parsers
 
 # menus, sounds, power (optional: each feature simply does nothing without its tool)
 networkmanager            # gits-wifi

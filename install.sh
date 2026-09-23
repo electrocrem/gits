@@ -208,6 +208,12 @@ EOF
     fi
 fi
 
+# no Neovim config of your own: the GitS look is a set of LazyVim plugin specs, so start from the LazyVim starter
+if [[ ! -e $HOME/.config/nvim/init.lua && ! -e $HOME/.config/nvim/init.vim ]]; then
+    place "$REPO/tools/nvim-starter/init.lua" "$HOME/.config/nvim/init.lua"
+    place "$REPO/tools/nvim-starter/lazy.lua" "$HOME/.config/nvim/lua/config/lazy.lua"
+    say "Neovim: no config found, installed the LazyVim starter (the first nvim start downloads the plugins)"
+fi
 if [[ -d $HOME/.config/nvim ]]; then
     place "$REPO/tools/nvim-gits-options.lua" "$HOME/.config/nvim/lua/config/gits-options.lua"
     add_block "$HOME/.config/nvim/lua/config/options.lua" nvim "--" <<'EOF'
