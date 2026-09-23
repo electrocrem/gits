@@ -50,6 +50,10 @@ snapshot, updates the system, and then runs the repair.
 | `Super+P` · `Super+Ctrl+S` · `Super+Alt+R` | screenshot a region · read text from the screen · record an area |
 | `Super+L` | lock the screen |
 | `Super+Shift+Y` · `Super+Shift+L` · `Super+Shift+X` | window animations · tiling layout · workflow (default, editing, gaming, battery saver) |
+| `Super+Alt+W` · `Super+Alt+B` · `Super+Shift+W` | Wi-Fi · Bluetooth · wallpaper |
+| `Super+Alt+N` · `Super+Ctrl+N` · `Super+Alt+I` | night light schedule · night light now · sleep timers |
+| `Super+Shift+R` · `Super+Shift+U` · `Super+F7` / `F8` / `F9` | radio on / off · UI sounds on / off · previous / play-pause / next |
+| `Super+Shift+T` · `Super+Alt+U` · `Super+Alt+D` · `Super+Shift+B` | tmux sessions · update the system · health report · restart the bar and services |
 
 ## Gallery
 
@@ -133,6 +137,8 @@ need sudo, so the commands to undo them are printed at the end.
 * **A plainer lock screen:** copy `~/.config/hypr/hyprlock/static.conf` over `~/.config/hypr/hyprlock.conf`.
 * **Weather card:** `GITS_WEATHER_LOCATION="Berlin"` (it guesses by IP otherwise).
 * **Add your own rows** to the settings menu in `~/.config/gits/settings.tsv`.
+* **Monitors and other per-machine settings:** put them in `~/.config/hypr/gits/local.lua` (for example
+  `hl.monitor({ output = "DP-3", mode = "2560x1440@180", position = "0x0", scale = 1 })`). It loads last and the installer never touches it.
 
 ## If something looks wrong
 

@@ -42,11 +42,14 @@ tooltip label { color: @main-fg; padding: 2px 4px; }
 #custom-gits-sys,
 #custom-gits-perf,
 #memory,
+#disk,
 #network,
 #bluetooth,
 #pulseaudio,
 #custom-gits-lang,
 #custom-gits-rec,
+#custom-gits-updates,
+#idle_inhibitor,
 #custom-gits-focus,
 #custom-gits-mode,
 #custom-gits-notify,
@@ -64,11 +67,14 @@ tooltip label { color: @main-fg; padding: 2px 4px; }
 #custom-gits-sys,
 #custom-gits-perf,
 #memory,
+#disk,
 #network,
 #bluetooth,
 #pulseaudio,
 #custom-gits-lang,
 #custom-gits-rec,
+#custom-gits-updates,
+#idle_inhibitor,
 #custom-gits-focus,
 #custom-gits-mode,
 #custom-gits-notify,
@@ -158,11 +164,14 @@ tooltip label { color: @main-fg; padding: 2px 4px; }
 #battery.warning:not(.charging),
 #custom-gits-cpu.warning,
 #custom-gits-sys.warning,
-#custom-gits-gpu.warning { background: alpha(@main-fg, 0.25); }
+#custom-gits-gpu.warning,
+#disk.warning,
+#custom-gits-updates.warning { background: alpha(@main-fg, 0.25); }
 #battery.critical:not(.charging),
 #custom-gits-cpu.critical,
 #custom-gits-sys.critical,
-#custom-gits-gpu.critical {
+#custom-gits-gpu.critical,
+#disk.critical {
     background: @main-fg;
     color: @main-bg;
     animation: gits-blink 1s steps(2, start) infinite;
@@ -171,13 +180,17 @@ tooltip label { color: @main-fg; padding: 2px 4px; }
 
 #pulseaudio.muted, #network.disconnected { color: alpha(@main-fg, 0.5); }
 
+/* caffeine: dim while off, inverted while it keeps the machine awake */
+#idle_inhibitor.deactivated { color: alpha(@main-fg, 0.5); }
+#idle_inhibitor.activated { background: @main-fg; color: @main-bg; }
+
 /* bluetooth: dim when off, normal when on, bright + counter when connected */
 #bluetooth.off, #bluetooth.disabled { color: alpha(@main-fg, 0.4); }
 #bluetooth.on { color: alpha(@main-fg, 0.8); }
 #bluetooth.connected { color: @main-fg; }
 
 /* hover feedback for clickable modules */
-#custom-gits-player:hover, #custom-gits-cpu:hover, #custom-gits-gpu:hover, #custom-gits-sys:hover, #custom-gits-perf:hover, #memory:hover, #network:hover, #bluetooth:hover,
+#custom-gits-player:hover, #custom-gits-cpu:hover, #custom-gits-gpu:hover, #custom-gits-sys:hover, #custom-gits-perf:hover, #memory:hover, #disk:hover, #idle_inhibitor:hover, #custom-gits-updates:hover, #network:hover, #bluetooth:hover,
 #pulseaudio:hover, #custom-gits-lang:hover, #custom-gits-mode:hover, #custom-gits-notify:hover, #custom-gits-power:hover {
     background: @wb-hvr-bg;
     color: @wb-hvr-fg;

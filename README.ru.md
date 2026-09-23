@@ -49,6 +49,10 @@ Zen, Logseq и Telegram. А ещё иконки и курсоры под ста�
 | `Super+P` · `Super+Ctrl+S` · `Super+Alt+R` | скриншот области · прочитать текст с экрана · записать область |
 | `Super+L` | заблокировать экран |
 | `Super+Shift+Y` · `Super+Shift+L` · `Super+Shift+X` | анимации окон · раскладка тайлинга · режим (обычный, редактирование, игры, экономия батареи) |
+| `Super+Alt+W` · `Super+Alt+B` · `Super+Shift+W` | Wi-Fi · Bluetooth · обои |
+| `Super+Alt+N` · `Super+Ctrl+N` · `Super+Alt+I` | расписание ночного света · ночной свет сейчас · таймеры сна |
+| `Super+Shift+R` · `Super+Shift+U` · `Super+F7` / `F8` / `F9` | радио вкл / выкл · звуки интерфейса вкл / выкл · назад / пауза / вперёд |
+| `Super+Shift+T` · `Super+Alt+U` · `Super+Alt+D` · `Super+Shift+B` | сессии tmux · обновить систему · проверка здоровья · перезапуск панели и служб |
 
 ## Галерея
 
@@ -132,6 +136,8 @@ zsh и Neovim он добавляет несколько чётко помече
 * **Экран блокировки попроще:** скопируйте `~/.config/hypr/hyprlock/static.conf` поверх `~/.config/hypr/hyprlock.conf`.
 * **Погода:** `GITS_WEATHER_LOCATION="Berlin"` (иначе город определяется по IP).
 * **Свои строки** в меню настроек: `~/.config/gits/settings.tsv`.
+* **Мониторы и прочее для конкретной машины:** в `~/.config/hypr/gits/local.lua` (например
+  `hl.monitor({ output = "DP-3", mode = "2560x1440@180", position = "0x0", scale = 1 })`). Он грузится последним, установщик его не трогает.
 
 ## Если что-то выглядит не так
 

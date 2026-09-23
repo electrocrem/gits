@@ -18,7 +18,12 @@ env("GDK_SCALE", "1")
 env("ELECTRON_OZONE_PLATFORM_HINT", "auto")
 env("XCURSOR_THEME", "GitS-Cursors")
 env("XCURSOR_SIZE", "22")
-env("PATH", home .. "/.local/bin:" .. (os.getenv("PATH") or "/usr/local/bin:/usr/bin"))
+-- plus the Flatpak launchers (com.spotify.Client, ...): the system ones are usually there already, the per-user ones (flatpak --user) are not
+local path = home .. "/.local/bin:" .. (os.getenv("PATH") or "/usr/local/bin:/usr/bin")
+for _, d in ipairs({ "/var/lib/flatpak/exports/bin", (os.getenv("XDG_DATA_HOME") or (home .. "/.local/share")) .. "/flatpak/exports/bin" }) do
+    if not (":" .. path .. ":"):find(":" .. d .. ":", 1, true) then path = path .. ":" .. d end
+end
+env("PATH", path)
 
 -- NVIDIA only when the proprietary module is really loaded (hybrid laptops keep the iGPU as the primary)
 local function nvidia_working()

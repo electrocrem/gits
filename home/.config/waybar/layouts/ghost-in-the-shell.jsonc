@@ -26,11 +26,14 @@
         "custom/gits-player"
     ],
     "modules-right": [
+        "custom/gits-updates",
+        "idle_inhibitor#gits",
         "custom/gits-focus",
         "custom/gits-rec",
         "custom/gits-sys",
         "custom/gits-gpu",
         "memory#gits",
+        "disk#gits",
         "network#gits",
         "bluetooth#gits",
         "pulseaudio#gits",
@@ -139,6 +142,34 @@
         "interval": 3,
         "tooltip": true,
         "on-click": "gits-sysmon"
+    },
+
+    // pending updates, hidden when there are none (scripts/gits-updates.sh); checked every 30 min
+    "custom/gits-updates": {
+        "exec": "$XDG_CONFIG_HOME/waybar/scripts/gits-updates.sh",
+        "return-type": "json",
+        "interval": 1800,
+        "tooltip": true,
+        "on-click": "gits-update",
+        "on-click-right": "pkill -RTMIN+9 -x waybar",
+        "signal": 9
+    },
+
+    // caffeine: while on, hypridle neither dims, locks, turns the screen off nor suspends
+    "idle_inhibitor#gits": {
+        "format": "{icon}",
+        "format-icons": { "activated": "󰅶", "deactivated": "󰾪" },
+        "tooltip-format-activated": "CAFFEINE ON: no dim / lock / sleep",
+        "tooltip-format-deactivated": "caffeine off: idle timers work (click to keep awake)"
+    },
+
+    "disk#gits": {
+        "interval": 60,
+        "path": "/",
+        "states": { "warning": 85, "critical": 95 },
+        "format": "󰋊 {percentage_used}%",
+        "tooltip-format": "DISK  {path}\n{used} / {total}  ({percentage_used}%)\nFREE  {free}",
+        "on-click": "gits-open explorer"
     },
 
     "memory#gits": {

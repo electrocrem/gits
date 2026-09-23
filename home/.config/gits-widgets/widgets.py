@@ -9,6 +9,8 @@ Env: GITS_WEATHER_LOCATION  city for wttr.in (default: auto-detect by IP; "off" 
      GITS_WIDGETS_MONITOR   connector name to place the cards on (default: the main monitor, as in hypr/gits/monitors.lua:
                             GITS_MAIN_MONITOR, else a laptop panel (eDP), else the largest one)
      GITS_WIDGETS_GLITCH    0 = no wallpaper glitch bursts (default: on, only while on AC power)
+     GITS_WIDGETS_SECOND    0 = nothing on the other monitors (default: clock, calendar, system rings / graph, network,
+                            GPU, disks and the busiest processes there)
      GITS_WIDGETS_DEMO      1 = screenshot mode: made-up SSID/IP and to-do items, throw-away state and cache dirs
                             (your to-do file and weather cache are neither read nor written)
 """
@@ -1130,6 +1132,221 @@ class NetCard(Card):
 
 
 # --------------------------------------------------------------------------------------------- to-do
+# --------------------------------------------------------------------------------------------- gpu / disks / top (the other monitors)
+def draw_meter(cr, x, y, w, h, frac, hot=False):
+    """A thin segmented bar, like the battery one."""
+    n, gap = max(int(w // 9), 4), 2
+    sw = (w - gap * (n - 1)) / n
+    for i in range(n):
+        if (i + 0.5) / n <= frac:
+            setc(cr, RED if hot else CY)
+        else:
+            setc(cr, CY, 0.16)
+        cr.rectangle(x + i * (sw + gap), y, sw, h)
+        cr.fill()
+
+
+def gpu_sample():
+    """(name, temp °C, load %, vram used MiB, vram total MiB, watts) of the NVIDIA card while it is awake, else of an AMD GPU
+    from sysfs; None without either. An asleep dGPU is not queried: nvidia-smi would wake it (as in waybar's gits-gpu.sh)."""
+    for d in glob.glob("/sys/bus/pci/devices/*"):
+        try:
+            with open(d + "/vendor") as f, open(d + "/class") as g:
+                if f.read().strip() != "0x10de" or not g.read().startswith("0x03"):
+                    continue
+            with open(d + "/power/runtime_status") as f:
+                if f.read().strip() != "active":
+                    break
+            out = subprocess.run(["nvidia-smi", "--query-gpu=name,temperature.gpu,utilization.gpu,memory.used,memory.total,power.draw",
+                                  "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=4).stdout
+            name, *nums = [x.strip() for x in out.splitlines()[0].split(",")]
+            t, u, mu, mt, pw = (float(x) if x.replace(".", "", 1).isdigit() else 0.0 for x in nums)
+            return name.replace("NVIDIA GeForce ", ""), t, u, mu, mt, pw
+        except (OSError, subprocess.SubprocessError, IndexError, ValueError):
+            break
+    for dev in glob.glob("/sys/class/drm/card*/device"):
+        try:
+            with open(dev + "/gpu_busy_percent") as f:
+                u = float(f.read())
+            rd = lambda n: float(open(os.path.join(dev, n)).read()) / 2**20
+            mu, mt = rd("mem_info_vram_used"), rd("mem_info_vram_total")
+            t = 0.0
+            for h in glob.glob(dev + "/hwmon/hwmon*/temp1_input"):
+                t = float(open(h).read()) / 1000
+            return "RADEON", t, u, mu, mt, 0.0
+        except (OSError, ValueError):
+            continue
+    return None
+
+
+class GpuCard(Card):
+    def __init__(self, app, **kw):
+        super().__init__(app, "GPU.CORE // 演算", **kw)
+        self.data, self.busy = None, False
+        self.load = collections.deque([0.0] * Stats.N, maxlen=Stats.N)
+        head = Gtk.Box(spacing=8)
+        self.l_name = label("GPU ASLEEP", "g-cpu", ellipsize=True)
+        self.l_name.set_hexpand(True)
+        self.l_temp = label("", "g-ram", 1.0)
+        head.append(self.l_name)
+        head.append(self.l_temp)
+        self.body.append(head)
+        self.l_meta = label("", "n-meta")
+        self.body.append(self.l_meta)
+        self.da = self.area(self._draw)
+        self.da.set_vexpand(True)
+        self.body.append(self.da)
+        self.update()
+
+    def update(self):
+        if self.busy:
+            return
+        self.busy = True
+
+        def work():
+            d = gpu_sample()
+
+            def done():
+                self.data, self.busy = d, False
+                self.load.append(d[2] if d else 0.0)
+                if d:
+                    name, t, u, mu, mt, pw = d
+                    self.l_name.set_text(f"{name.upper()}  {u:.0f}%")
+                    self.l_temp.set_text(f"{t:.0f}°C")
+                    self.l_meta.set_text(f"VRAM {mu / 1024:.1f}/{mt / 1024:.0f} GB" + (f" · {pw:.0f} W" if pw else ""))
+                else:
+                    self.l_name.set_text("GPU ASLEEP")
+                    self.l_temp.set_text("")
+                    self.l_meta.set_text("not polled: that would wake it")
+                self.da.queue_draw()
+                return False
+
+            GLib.idle_add(done)
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _draw(self, area, cr, w, h):
+        d = self.data
+        draw_meter(cr, 0, 0, w, 5, (d[3] / d[4]) if d and d[4] else 0.0, hot=bool(d) and d[4] and d[3] / d[4] > 0.9)
+        gh = h - 10
+        hist = list(self.load)
+        pts = [(i * w / (len(hist) - 1), h - 1 - (gh - 2) * min(v, 100) / 100) for i, v in enumerate(hist)]
+        cr.move_to(pts[0][0], h)
+        for p in pts:
+            cr.line_to(*p)
+        cr.line_to(pts[-1][0], h)
+        cr.close_path()
+        setc(cr, CY, 0.2)
+        cr.fill()
+        cr.set_line_width(1.5)
+        setc(cr, RED if d and d[1] >= 85 else CYB)
+        cr.move_to(*pts[0])
+        for p in pts[1:]:
+            cr.line_to(*p)
+        cr.stroke()
+
+
+class DiskCard(Card):
+    """Real filesystems (one row per device, btrfs subvolumes folded) with a fill bar, plus read / write speed."""
+    FS = ("ext4", "btrfs", "xfs", "f2fs", "ntfs", "ntfs3", "exfat", "vfat", "zfs", "bcachefs")
+
+    def __init__(self, app, **kw):
+        super().__init__(app, "STORAGE // 記憶", **kw)
+        self.rows, self.last = [], None
+        row = Gtk.Box(spacing=8)
+        self.l_read = label("R 0 B/s", "n-down")
+        self.l_read.set_hexpand(True)
+        self.l_write = label("W 0 B/s", "n-up", 1.0)
+        row.append(self.l_read)
+        row.append(self.l_write)
+        self.body.append(row)
+        self.da = self.area(self._draw)
+        self.da.set_vexpand(True)
+        self.body.append(self.da)
+        self.update()
+
+    def update(self):
+        rows, seen = [], set()
+        for p in psutil.disk_partitions(all=False):
+            if p.fstype not in self.FS or p.device in seen or p.mountpoint.startswith(("/boot", "/efi", "/snap", "/var/lib")):
+                continue
+            seen.add(p.device)
+            try:
+                u = psutil.disk_usage(p.mountpoint)
+            except OSError:
+                continue
+            if u.total >= 2**30:
+                rows.append((p.mountpoint, u.percent, u.free / 2**30))
+        self.rows = sorted(rows, key=lambda r: (r[0] != "/", r[0]))[:4]
+        io, now = psutil.disk_io_counters(), time.monotonic()
+        if io and self.last:
+            dt = max(now - self.last[0], 0.1)
+            self.l_read.set_text("R " + human_rate((io.read_bytes - self.last[1]) / dt))
+            self.l_write.set_text("W " + human_rate((io.write_bytes - self.last[2]) / dt))
+        if io:
+            self.last = (now, io.read_bytes, io.write_bytes)
+        self.da.queue_draw()
+
+    def _draw(self, area, cr, w, h):
+        if not self.rows:
+            return
+        step = h / len(self.rows)
+        for i, (mnt, pct, free) in enumerate(self.rows):
+            y = i * step
+            name = mnt if len(mnt) <= 14 else "…" + mnt[-13:]
+            draw_text(cr, name.upper(), 0, y + 10, 9, FG, bold=True)
+            draw_text(cr, f"{pct:.0f}% · {free:.0f}G FREE", w, y + 10, 9, DIM, bold=True, align="right")
+            draw_meter(cr, 0, y + 15, w, 5, pct / 100, hot=pct >= 90)
+
+
+class TopCard(Card):
+    """The busiest processes by CPU (share of the whole machine), refreshed off the main thread."""
+    N = 5
+
+    def __init__(self, app, **kw):
+        super().__init__(app, "PROC.TOP // 処理", **kw)
+        self.rows, self.busy = [], False
+        self.ncpu = psutil.cpu_count() or 1
+        self.da = self.area(self._draw)
+        self.da.set_vexpand(True)
+        self.body.append(self.da)
+        self.update()
+
+    def update(self):
+        if self.busy:
+            return
+        self.busy = True
+
+        def work():
+            rows = []
+            for p in psutil.process_iter(["name", "memory_info"]):  # process_iter keeps the Process objects: cpu_percent has a baseline
+                try:
+                    c = p.cpu_percent(None) / self.ncpu
+                    rows.append((c, p.info["name"] or "?", (p.info["memory_info"].rss if p.info["memory_info"] else 0) / 2**20))
+                except (psutil.Error, OSError):
+                    pass
+            rows.sort(reverse=True)
+
+            def done():
+                self.rows, self.busy = rows[:self.N], False
+                self.da.queue_draw()
+                return False
+
+            GLib.idle_add(done)
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _draw(self, area, cr, w, h):
+        step = h / self.N
+        for i, (c, name, mem) in enumerate(self.rows):
+            y = i * step + step / 2 + 4
+            setc(cr, RED if c >= 50 else CY, 0.14 + 0.5 * min(c, 100) / 100)
+            cr.rectangle(0, y - 11, w * min(c, 100) / 100, 15)
+            cr.fill()
+            draw_text(cr, name[:18].upper(), 4, y, 10, FG if i == 0 else MID, bold=i == 0)
+            draw_text(cr, f"{c:4.1f}%  {mem:5.0f}M", w - 4, y, 10, CYB if i == 0 else DIM, bold=True, align="right")
+
+
 class TodoCard(Card):
     def __init__(self, app, **kw):
         super().__init__(app, "TASK.QUEUE // 任務", keyboard=True, **kw)
@@ -1291,6 +1508,32 @@ class App:
         y += 132 + gap
         add(TodoCard, m, y, RW, 250, right=True)
 
+        # every other monitor: a smaller set without the cards that run their own threads (player, audio spectrum, to-do)
+        if os.environ.get("GITS_WIDGETS_SECOND", "1") != "0" and mon is not None:
+            mons = Gdk.Display.get_default().get_monitors()
+            for other in (mons.get_item(i) for i in range(mons.get_n_items())):
+                if other == mon:
+                    continue
+                def add2(cls, x, y, w, h, right=False, **kw):
+                    c = cls(self, x=x, y=y, w=w, h=h, right=right, monitor=other, **kw)
+                    self.cards.append(c)
+                y = top
+                add2(ClockCard, m, y, LW, 226)
+                add2(CalendarCard, m, y + 226 + gap, LW, 236)
+                y = top
+                add2(RingsCard, m, y, RW, 132, right=True, stats=self.stats)
+                y += 132 + gap
+                add2(GraphCard, m, y, RW, 132, right=True, stats=self.stats)
+                y += 132 + gap
+                add2(NetCard, m, y, RW, 132, right=True)
+                x2, y = m + LW + gap, top  # the middle column: what the main screen does not show
+                if gpu_sample() is not None or any(open(v).read().strip() == "0x10de" for v in glob.glob("/sys/bus/pci/devices/*/vendor")):
+                    add2(GpuCard, x2, y, MW, 132)
+                    y += 132 + gap
+                add2(DiskCard, x2, y, MW, 150)
+                y += 150 + gap
+                add2(TopCard, x2, y, MW, 150)
+
         for c in self.cards:
             c.present()
         GLib.timeout_add_seconds(1, self.tick1)
@@ -1305,7 +1548,7 @@ class App:
     def tick2(self):
         self.stats.refresh()
         for c in self.cards:
-            if isinstance(c, (RingsCard, GraphCard, BatteryCard, WeatherCard, NetCard)):
+            if isinstance(c, (RingsCard, GraphCard, BatteryCard, WeatherCard, NetCard, GpuCard, DiskCard, TopCard)):
                 c.update()
         return True
 
