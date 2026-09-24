@@ -81,8 +81,8 @@ ASSETS = [
     (".local/share/gits/wallpapers/gits_eye.png", "gits_eye.png"),          # lock screen, SDDM, GRUB, Plymouth
     (".local/share/gits/wallpapers/gits_cyborg.jpg", "gits_cyborg.jpg"),
     (".local/share/gits/wallpapers/gits_teal_wires.jpg", "gits_teal_wires.jpg"),
-    (".config/gits-widgets/lain.gif", "lain-dance.gif"),
-    (".local/share/gits/art/gits/dancer.gif", "fuchikoma-dance.gif"),                           # the radio dancer of the GitS art set                                          # the dancing Lain of the radio popup and the lock screen (lain-dance, MIT)
+    (".config/gits-widgets/lain.gif", "lain-dance.gif"),                                          # the dancing Lain of the radio popup and the lock screen (lain-dance, MIT)
+    (".local/share/gits/art/gits/dancer.gif", "fuchikoma-dance.gif"),                           # the radio dancer of the GitS art set
     (".config/zsh/gits/art.png", "art.png"),                                                     # terminal banner (kitty graphics)
     (".config/zsh/gits/cyborg.txt", "cyborg.txt"), (".config/zsh/gits/lain.txt", "lain.txt"),
     (".config/zsh/gits/shodan.txt", "shodan.txt"),
