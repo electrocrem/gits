@@ -265,7 +265,10 @@ def reload_all():
     run("tmux", "source-file", os.path.join(CONF, "tmux", "tmux.conf"))
     widgets = os.path.join(CONF, "gits-widgets", "run.sh")
     if os.path.exists(os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "gits-widgets.pid")):
-        run(widgets, "restart")
+        if os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):  # started by Hyprland: the session's env (GITS_SERVER...), not this shell's
+            run("hyprctl", "dispatch", f"hl.dsp.exec_cmd('{widgets} restart')")
+        else:
+            run(widgets, "restart")
 
 
 class Probe(Mapper):
