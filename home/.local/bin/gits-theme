@@ -269,12 +269,12 @@ def switch(name, reload=True):
     for k in kept:
         print(f"  left alone (changed by hand): {k}", file=sys.stderr)
     if reload:
-        reload_all(icons)
         wall = theme["wallpaper"]
         if wall:
             wall = wall if os.path.isabs(wall) else os.path.join(HOME, ".local", "share", "gits", "wallpapers", wall)
             if os.path.exists(wall):
                 subprocess.run(["gits-wall", wall], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        reload_all(icons)
 
 
 def reload_all(icons=False):
@@ -292,11 +292,6 @@ def reload_all(icons=False):
             run("gsettings", "set", *key, cur)
     if os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
         run("hyprctl", "reload")
-    # waybar: a restart of its unit (SIGUSR2 reloads the style but left a custom module's child behind as a zombie)
-    if subprocess.run(["systemctl", "--user", "is-active", "--quiet", "gits-bar.service"]).returncode == 0:
-        run("systemctl", "--user", "restart", "gits-bar.service")
-    else:
-        run("pkill", "-USR2", "-x", "waybar")
     run("pkill", "-USR1", "-x", "kitty")           # kitty: reload kitty.conf (and theme.conf)
     run("systemctl", "--user", "try-restart", "gits-notifications.service")
     run("tmux", "source-file", os.path.join(CONF, "tmux", "tmux.conf"))
@@ -306,6 +301,13 @@ def reload_all(icons=False):
             run("hyprctl", "dispatch", f"hl.dsp.exec_cmd('{widgets} restart')")
         else:
             run(widgets, "restart")
+    # waybar LAST: a restart of its unit (SIGUSR2 reloads the style but left a custom module's child behind as a zombie). A popup opened
+    # from the bar (the theme picker) runs inside that unit, and so does this script then: systemd kills the whole unit on restart,
+    # so anything after this line would never run
+    if subprocess.run(["systemctl", "--user", "is-active", "--quiet", "gits-bar.service"]).returncode == 0:
+        run("systemctl", "--user", "restart", "gits-bar.service")
+    else:
+        run("pkill", "-USR2", "-x", "waybar")
 
 
 class Probe(Mapper):
