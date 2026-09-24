@@ -1,0 +1,114 @@
+#!/usr/bin/env python3
+"""gits-wallfit: make pictures fit the screen as wallpapers (gits-wall --fit runs it).
+
+  gits-wallfit [--size WxH] FILE...
+
+Size: WxH, else the largest monitor Hyprland reports, else 2560x1440. A picture already that size is left alone; GIFs too.
+  * close to the screen's shape (within 12 %): cut to fill it, scaled (sharpened a little when enlarged)
+  * any other shape (portrait, square, a narrow strip): shown whole, full height, on a backdrop made from itself — scaled to
+    cover, strongly blurred, darkened, a vignette and some grain — with a soft shadow around it
+The file is rewritten in place (same name and format, so wallpapers remembered by gits-wall stay valid); the original is moved to
+~/Pictures/wallpapers-originals/ first (keeping its folder below ~/Pictures/wallpapers)."""
+import json
+import os
+import shutil
+import subprocess
+import sys
+
+import numpy as np
+from PIL import Image, ImageEnhance, ImageFilter
+
+HOME = os.path.expanduser("~")
+WALLS = os.path.join(HOME, "Pictures", "wallpapers")
+KEEP = os.path.join(HOME, "Pictures", "wallpapers-originals")
+
+
+def screen():
+    try:
+        mons = json.loads(subprocess.run(["hyprctl", "monitors", "-j"], capture_output=True, text=True, timeout=5).stdout)
+        m = max(mons, key=lambda m: m["width"] * m["height"])
+        return m["width"], m["height"]
+    except (OSError, ValueError, KeyError, subprocess.SubprocessError):
+        return 2560, 1440
+
+
+def cover(im, w, h):
+    k = max(w / im.width, h / im.height)
+    s = im.resize((max(w, round(im.width * k)), max(h, round(im.height * k))), Image.LANCZOS)
+    return s.crop(((s.width - w) // 2, (s.height - h) // 2, (s.width - w) // 2 + w, (s.height - h) // 2 + h)), k
+
+
+def sharpen(im, k):
+    return im.filter(ImageFilter.UnsharpMask(1.2 + 0.4 * min(k, 3), 50, 2)) if k > 1.3 else im
+
+
+def backdrop(im, w, h):
+    bg, _ = cover(im, w, h)
+    bg = bg.filter(ImageFilter.GaussianBlur(w / 36))
+    bg = ImageEnhance.Brightness(bg).enhance(0.52)
+    bg = ImageEnhance.Color(bg).enhance(0.85)
+    a = np.asarray(bg).astype(float)
+    y, x = np.mgrid[0:h, 0:w]
+    r = np.sqrt(((x - w / 2) / (w / 2)) ** 2 + ((y - h / 2) / (h / 2)) ** 2)
+    a *= np.clip(1.08 - 0.42 * r ** 1.6, 0.35, 1)[..., None]                 # vignette
+    a += np.random.default_rng(7).normal(0, 3.5, (h, w))[..., None]         # grain, so the blur does not band
+    return Image.fromarray(np.clip(a, 0, 255).astype("uint8"))
+
+
+def framed(im, w, h):
+    k = min(w / im.width, h / im.height)
+    fg = sharpen(im.resize((round(im.width * k), round(im.height * k)), Image.LANCZOS), k)
+    out = backdrop(im, w, h).convert("RGBA")
+    x, y = (w - fg.width) // 2, (h - fg.height) // 2
+    shadow = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    shadow.paste((0, 0, 0, 170), (x - 6, y - 6, x + fg.width + 6, y + fg.height + 6))
+    out.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(28)))
+    out.paste(fg, (x, y))
+    return out.convert("RGB")
+
+
+def fit(path, w, h):
+    im = Image.open(path)
+    if getattr(im, "is_animated", False):
+        return "animated: left alone"
+    if im.size == (w, h):
+        return "already fits"
+    im = im.convert("RGB")
+    shape = (im.width / im.height) / (w / h)
+    if abs(shape - 1) <= 0.12:
+        out, k = cover(im, w, h)
+        out, how = sharpen(out, k), "cut to fill"
+    else:
+        out, how = framed(im, w, h), "whole, on a blurred backdrop"
+    rel = os.path.relpath(os.path.abspath(path), WALLS)
+    keep = os.path.join(KEEP, rel if not rel.startswith("..") else os.path.basename(path))
+    os.makedirs(os.path.dirname(keep), exist_ok=True)
+    if not os.path.exists(keep):
+        shutil.copy2(path, keep)
+    tmp = path + ".fit-tmp"
+    fmt = "PNG" if path.lower().endswith(".png") else "WEBP" if path.lower().endswith(".webp") else "JPEG"
+    out.save(tmp, format=fmt, **({"quality": 94} if fmt != "PNG" else {"optimize": True}))
+    os.replace(tmp, path)
+    return f"{im.width}x{im.height} -> {w}x{h}, {how} (original: {keep})"
+
+
+def main(argv):
+    size = None
+    if len(argv) > 2 and argv[1] == "--size":
+        size = tuple(int(v) for v in argv[2].lower().split("x"))
+        argv = argv[:1] + argv[3:]
+    files = argv[1:]
+    if not files:
+        print(__doc__.split("\n\n")[0], file=sys.stderr)
+        return 2
+    w, h = size or screen()
+    for f in files:
+        try:
+            print(f"{os.path.basename(f)}: {fit(f, w, h)}")
+        except (OSError, ValueError) as e:
+            print(f"{os.path.basename(f)}: {e}", file=sys.stderr)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
