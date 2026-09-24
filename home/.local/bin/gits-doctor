@@ -235,7 +235,8 @@ pgrep -f "[g]its-events.sh" >/dev/null && ok "gits-events running (login / plug 
 python3 -c "import numpy" 2>/dev/null && ok "python-numpy present (audio spectrum card)" || warn "python-numpy missing: no audio spectrum card"
 rmiss=(); for c in mpv socat jq curl parec pactl; do command -v "$c" >/dev/null || rmiss+=("$c"); done
 [[ ${#rmiss[@]} -eq 0 ]] && ok "web radio ready (gits-radio: mpv, socat, jq, curl, parec)" || warn "gits-radio needs: ${rmiss[*]} (sudo pacman -S mpv socat jq curl libpulse)"
-[[ -r $H/.config/gits-widgets/lain.gif ]] && ok "lain.gif present (radio popup, lock screen)" || warn "lain.gif missing in ~/.config/gits-widgets: no dancing Lain (re-run install.sh)"
+[[ -r $H/.config/gits-widgets/lain.gif ]] && ok "lain.gif present (the lock-screen mascot lain)" || warn "lain.gif missing in ~/.config/gits-widgets: no dancing Lain (re-run install.sh)"
+[[ -L $H/.local/share/gits/art/current && -r $H/.local/share/gits/art/current/banner.conf ]] && ok "art set: $(readlink "$H/.local/share/gits/art/current") (banner, fastfetch, Neovim, radio dancer)" || warn "no art set linked at ~/.local/share/gits/art/current (re-run install.sh)"
 command -v gits-theme >/dev/null && ok "colour theme: $(gits-theme current)" || warn "gits-theme missing: rerun ./install.sh"
 [[ -r $H/.local/share/gits-lock/tachikoma-0.txt ]] && ok "lock screen frames built (the Tachikoma)" || warn "lock screen frames missing: python3 ~/.local/share/gits-lock/tachikoma.py"
 if command -v rog-control-center >/dev/null; then

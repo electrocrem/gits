@@ -1,4 +1,6 @@
-# Ghost in the Shell: ASCII banner on interactive kitty shells (art: ~/.config/zsh/gits/art.png via kitty graphics, or {shodan,cyborg,lain}.txt; pick with GITS_BANNER_ART)
+# Terminal banner on interactive kitty shells. The art is the colour theme's set, ~/.local/share/gits/art/current/ (gits-theme points it
+# at the theme's): banner.png via kitty graphics, else its banner.txt; its banner.conf gives the title and the lines. GITS_BANNER_ART=shodan|
+# cyborg|lain picks one of the ASCII pieces next to this file instead.
 # System info sits to the right of the art (fastfetch); tagline is "typed".
 # Inside tmux (started by tmux.zsh) it is shown once, in the first pane of a new session. The picture goes through tmux as
 # kitty "unicode placeholders" (kitten icat --unicode-placeholder --passthrough=tmux: the image lives in kitty, the pane only
@@ -14,13 +16,15 @@ gits_banner() {
         zmodload zsh/datetime 2>/dev/null
         (( EPOCHSECONDS - $(tmux display -p "#{session_created}") < 10 )) || return
     fi
-    local dir=${${(%):-%x}:A:h}
-    local tag foot net=wired://navi-00 title="SECTION 9 // NAVI-00" img_h=0
+    local dir=${${(%):-%x}:A:h} art=${XDG_DATA_HOME:-$HOME/.local/share}/gits/art/current
+    local tag foot net=section9://tachikoma-00 title="SECTION 9 // PUBLIC SECURITY" img_h=0 tag_ascii foot_ascii
+    [[ -r $art/banner.conf ]] && source $art/banner.conf
+    local png=$art/banner.png; [[ -r $png ]] || png=$dir/art.png
     local c=$'\e[36m' d=$'\e[2;36m' w=$'\e[1;97m' r=$'\e[0m'
 
     # image mode: real picture through the kitty graphics protocol, sized to fit the window
     if [[ $art_name == image ]]; then
-        if [[ -n $KITTY_WINDOW_ID && -r $dir/art.png ]] && (( $+commands[fastfetch] )) && [[ -z $TMUX || -n $commands[kitten] ]]; then
+        if [[ -n $KITTY_WINDOW_ID && -r $png ]] && (( $+commands[fastfetch] )) && [[ -z $TMUX || -n $commands[kitten] ]]; then
             img_h=$(( LINES - 6 )); (( img_h > 24 )) && img_h=24
             # ~1.6 cells of width per row, plus padding and a 52 column info block
             (( img_h * 8 / 5 + 3 + 52 > COLUMNS )) && img_h=$(( (COLUMNS - 55) * 5 / 8 ))
@@ -31,7 +35,7 @@ gits_banner() {
         local -a ph=(); local gfx phcol
         if (( img_h )) && [[ -n $TMUX ]]; then
             local out=$(kitten icat --passthrough=tmux --unicode-placeholder --transfer-mode=stream --align=left \
-                --place=$(( img_h * 8 / 5 ))x${img_h}@0x0 $dir/art.png 2>/dev/null)
+                --place=$(( img_h * 8 / 5 ))x${img_h}@0x0 $png 2>/dev/null)
             gfx=${out%%$'\e[38:2:'*}
             local rest=${out#"$gfx"} body
             phcol=${rest%%m*}                                   # "\e[38:2:R:G:B" (image id lives in the foreground colour)
@@ -42,11 +46,13 @@ gits_banner() {
             ph=("${(@f)body}")
             (( ${#gfx} > 100 && ${#ph} >= img_h )) || { img_h=0; ph=(); }
         fi
-        (( img_h )) && { c=$'\e[94m' d=$'\e[34m' } || art_name=${${TMUX:+${GITS_BANNER_ART_TMUX:-cyborg}}:-shodan}   # too small / not kitty: fall back to ASCII
+        (( img_h )) && { c=$'\e[94m' d=$'\e[34m' } || art_name=${${TMUX:+${GITS_BANNER_ART_TMUX:-theme}}:-theme}   # too small / not kitty: fall back to ASCII
     fi
     [[ $art_name == shodan ]] && { c=$'\e[31m' d=$'\e[2;31m' w=$'\e[1;91m' net=shodan://citadel title="CITADEL STATION // SHODAN" }   # SHODAN is red
     local -a raw info=()
-    (( img_h )) || raw=("${(@f)$(<$dir/$art_name.txt)}")
+    if (( ! img_h )); then
+        if [[ $art_name == theme && -r $art/banner.txt ]]; then raw=("${(@f)$(<$art/banner.txt)}"); else raw=("${(@f)$(<$dir/${art_name/theme/cyborg}.txt)}"); fi
+    fi
     local artw=50 line k v i
     # the info column starts right after the widest art line (the old art was 47 columns wide, the braille one 38)
     if (( ${#raw} )); then artw=0; for line in "${raw[@]}"; do (( ${#line} + 3 > artw )) && artw=$(( ${#line} + 3 )); done; fi
@@ -70,7 +76,7 @@ gits_banner() {
             if (( i > foff && i - foff <= ${#fi} )); then print -r -- "${phcol}${ph[i]}${r}   ${fi[i-foff]}"; else print -r -- "${phcol}${ph[i]}${r}"; fi
         done
     elif (( img_h )); then
-        fastfetch -c $dir/fastfetch-image.jsonc --logo $dir/art.png --logo-type kitty-direct \
+        fastfetch -c $dir/fastfetch-image.jsonc --logo $png --logo-type kitty-direct \
             --logo-height $img_h --logo-width $(( img_h * 8 / 5 )) --logo-padding-right 3 2>/dev/null
     else
         # system info: "Key: value" lines from fastfetch, key coloured
@@ -105,12 +111,8 @@ gits_banner() {
     elif [[ $art_name == shodan ]]; then
         tag="look at you, hacker."
         foot="a pathetic creature of meat and bone."
-    elif (( img_h )); then
-        tag="the net is vast and infinite."
-        foot="what if a cyber-brain could possibly generate its own ghost?"
-    else
-        tag="my ghost whispers. the net listens."
-        foot="if you have a ghost, you are human. if not, you are a shell."
+    elif (( ! img_h )) && [[ -n $tag_ascii ]]; then
+        tag=$tag_ascii foot=$foot_ascii
     fi
     print -r -- "${d}  ┌─[ ${c}${net}${d} ]────────────────────────────${r}"
     printf '%s' "${d}  │ ${c}"

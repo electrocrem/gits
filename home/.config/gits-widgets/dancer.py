@@ -1,6 +1,9 @@
-"""Lain dancing, as a sprite for the radio popup (animation from pryanostnik/lain-dance, MIT; the GIF is lain.gif next to this file).
+"""The dancer of the radio popup: the one of the current theme's art set (~/.local/share/gits/art/current/, gits-theme switches it).
 
-    frames = load(height, style)     # list of cairo.ImageSurface, all the same size; [] if Pillow / numpy / the GIF are missing
+A set has either dancer.gif (a drawing on white: Lain, from pryanostnik/lain-dance, MIT) or dancer-0.png, dancer-1.png... (RGBA frames:
+the Tachikoma hologram of tachikoma.py --sprite, the ICE of ice.py --sprite). Without either: lain.gif next to this file.
+
+    frames = load(height, style)     # list of cairo.ImageSurface, all the same size; [] if Pillow / numpy / the frames are missing
     style: "holo" (cyan hologram with scan lines, the default) or "color" (the colours of the drawing)
 
 The surfaces are drawn at 2x the logical size (paint them with cr.scale(0.5, 0.5)): smooth on a scaled screen.
@@ -9,6 +12,19 @@ import os
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 GIF = os.path.join(HERE, "lain.gif")
+ART = os.path.join(os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share")), "gits", "art", "current")
+
+
+def source():
+    """(kind, paths): ("gif", [dancer.gif]) or ("png", [dancer-0.png, ...]) of the current art set, else lain.gif; ("", []) if none."""
+    import glob
+    pngs = sorted(glob.glob(os.path.join(ART, "dancer-*.png")), key=lambda p: int(p.rsplit("-", 1)[1][:-4]))
+    if pngs:
+        return "png", pngs
+    for g in (os.path.join(ART, "dancer.gif"), GIF):
+        if os.path.exists(g):
+            return "gif", [g]
+    return "", []
 
 
 def hexrgb(h):
@@ -16,12 +32,17 @@ def hexrgb(h):
     return np.array([int(h[i:i + 2], 16) for i in (1, 3, 5)], dtype=float)
 
 
-def _pil_frames(height, style):
+def _pil_frames(height, style, src=None):
     import numpy as np
     from PIL import Image, ImageDraw, ImageSequence
-    src = Image.open(GIF)
+    kind, paths = ("gif", [src]) if src else source()
     rgbs, masks = [], []
-    for fr in ImageSequence.Iterator(src):
+    if kind == "png":   # frames that already carry their alpha
+        for p in paths:
+            a = np.asarray(Image.open(p).convert("RGBA")).astype(float)
+            rgbs.append(a[..., :3])
+            masks.append(a[..., 3] > 40)
+    for fr in (ImageSequence.Iterator(Image.open(paths[0])) if kind == "gif" else ()):
         base = Image.new("RGBA", fr.size, (255, 255, 255, 255))
         base.alpha_composite(fr.convert("RGBA"))
         rgb = base.convert("RGB")
@@ -54,23 +75,34 @@ def _pil_frames(height, style):
 
 
 def _cached(height, style):
-    """The processed frames as a strip PNG in the cache: preparing them takes over a second, reading them a few milliseconds."""
+    """The processed frames as a strip PNG in the cache: preparing them takes over a second, reading them a few milliseconds. The
+    name carries the source (another theme's dancer is another strip) and the number of frames; a theme switch rewrites this file,
+    so its colours invalidate the strips too."""
+    import hashlib
     from PIL import Image
+    kind, paths = source()
+    if not paths:
+        return []
+    real = [os.path.realpath(p) for p in paths]
     cache = os.path.join(os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache")), "gits-widgets")
-    path = os.path.join(cache, f"lain-{style}-{height}.png")
-    stamp = max(os.path.getmtime(GIF), os.path.getmtime(os.path.abspath(__file__)))
+    key = hashlib.sha1("\n".join(real).encode()).hexdigest()[:10]
+    path = os.path.join(cache, f"dancer-{key}-{style}-{height}.png")
+    stamp = max([os.path.getmtime(p) for p in real] + [os.path.getmtime(os.path.abspath(__file__))])
     if os.path.exists(path) and os.path.getmtime(path) > stamp:
         strip = Image.open(path).convert("RGBA")
-        n = 8   # the frames of lain.gif
+        n = int(strip.info.get("frames", "8"))
         w = strip.width // n
         return [strip.crop((i * w, 0, (i + 1) * w, strip.height)) for i in range(n)]
     frames = _pil_frames(height, style)
     try:
+        from PIL import PngImagePlugin
         os.makedirs(cache, exist_ok=True)
         strip = Image.new("RGBA", (frames[0].width * len(frames), frames[0].height), (0, 0, 0, 0))
         for i, f in enumerate(frames):
             strip.paste(f, (i * f.width, 0))
-        strip.save(path + ".tmp", format="PNG")
+        meta = PngImagePlugin.PngInfo()
+        meta.add_text("frames", str(len(frames)))
+        strip.save(path + ".tmp", format="PNG", pnginfo=meta)
         os.replace(path + ".tmp", path)
     except OSError:
         pass

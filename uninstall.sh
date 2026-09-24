@@ -120,6 +120,10 @@ st=${XDG_STATE_HOME:-$HOME/.local/state}/gits/state
 compgen -G "$HOME/.config/gits/themes/*.user" >/dev/null && { echo "delete   your theme options (*.user)"; run rm -f "$HOME"/.config/gits/themes/*.user; }
 if ((!DRY)) && [[ -f $st ]] && grep -q '^theme=' "$st"; then sed -i '/^theme=/d' "$st"; [[ -s $st ]] || rm -f "$st"; fi
 
+# art sets: the "current" link and the radio dancer frames built at install time
+[[ -L $HOME/.local/share/gits/art/current ]] && { echo "delete   the current art set link"; run rm -f "$HOME/.local/share/gits/art/current"; }
+compgen -G "$HOME/.local/share/gits/art/*/dancer-*.png" >/dev/null && { echo "delete   generated radio dancer frames"; run rm -f "$HOME"/.local/share/gits/art/*/dancer-*.png; }
+
 # files that were created by the blocks' host (nothing to restore) and are now empty
 for f in "${BLOCKHOSTS[@]}" "$HOME/.config/kded6rc"; do
     [[ -f $f && ! -s $f ]] && run rm -f "$f"

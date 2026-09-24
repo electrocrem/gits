@@ -48,7 +48,7 @@ def parse_theme(path, t):
                 continue
             key, val = m.groups()
             h = re.fullmatch(r"#([0-9A-Fa-f]{6})", val)
-            if key in ("name", "description", "wallpaper", "mascot", "lock_bg"):
+            if key in ("name", "description", "wallpaper", "mascot", "lock_bg", "art"):
                 t[key] = val
             elif key == "swap" and " -> " in val:
                 t["swaps"].append(tuple(val.split(" -> ", 1)))
@@ -63,10 +63,12 @@ def load_theme(name, themes=THEMES, user=True):
     Besides the colour roles a theme may have: `description = ...` (shown by the theme picker), `wallpaper = FILE` (in
     ~/.local/share/gits/wallpapers, or a full path: shown when the theme is chosen), `mascot = NAME` (the lock-screen mascot:
     tachikoma, lain, off, or any ~/.local/share/gits-lock/NAME-0.txt), `lock_bg = FILE` (in ~/.config/hypr/hyprlock/: the lock-screen
-    picture) and any number of `swap = OLD -> NEW` lines: text replaced in every themed file after the recolouring.
+    picture), `art = NAME` (the art set in ~/.local/share/gits/art/NAME: terminal banner, fastfetch, Neovim dashboard, radio dancer;
+    default: the set named like the theme, else gits) and any number of `swap = OLD -> NEW` lines: text replaced in every themed
+    file after the recolouring.
     NAME.user next to it (written by `gits-theme option` and the appearance menu) is read on top: your own accent, mascot..."""
     t = parse_theme(os.path.join(themes, name + ".theme"),
-                    {"name": name, "description": "", "wallpaper": "", "mascot": "", "lock_bg": "", "roles": {}, "swaps": []})
+                    {"name": name, "description": "", "wallpaper": "", "mascot": "", "lock_bg": "", "art": "", "roles": {}, "swaps": []})
     t["user"] = {}
     up = os.path.join(themes, name + ".user")
     if user and os.path.exists(up):
@@ -74,7 +76,7 @@ def load_theme(name, themes=THEMES, user=True):
         t["user"] = {k: v for k, v in u.items() if v}
         t["roles"].update(u["roles"])
         t["swaps"] += u["swaps"]
-        for k in ("wallpaper", "mascot", "lock_bg"):
+        for k in ("wallpaper", "mascot", "lock_bg", "art"):
             if u.get(k):
                 t[k] = u[k]
     if t["mascot"] and t["mascot"] != "tachikoma":   # tachikoma is what gits-lock-mascot shows by default
@@ -343,6 +345,7 @@ def switch(name, reload=True):
     write_json(os.path.join(BASE, ".written.json"), written)
     save_current(name)
     changed += kde_sync()
+    art_set(new_theme, name)
     theme = new_theme
     print(f"theme: {theme['name']} ({changed} files)")
     for k in kept:
@@ -361,6 +364,26 @@ def switch(name, reload=True):
             if os.path.exists(wall):
                 subprocess.run(["gits-wall", wall], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         reload_all(icons)
+
+
+ART = os.path.join(HOME, ".local", "share", "gits", "art")
+
+
+def art_set(theme, name):
+    """Point ~/.local/share/gits/art/current at the theme's art set (its `art =`, else the set named like the theme, else gits)."""
+    for want in (theme.get("art"), name, DEFAULT):
+        if want and os.path.isdir(os.path.join(ART, want)):
+            cur = os.path.join(ART, "current")
+            if os.path.islink(cur) and os.readlink(cur) == want:
+                return
+            if os.path.lexists(cur) and not os.path.islink(cur):
+                return   # a real folder of yours: not ours to replace
+            tmp = cur + ".tmp"
+            if os.path.lexists(tmp):
+                os.remove(tmp)
+            os.symlink(want, tmp)
+            os.replace(tmp, cur)
+            return
 
 
 def kde_sync():
@@ -489,7 +512,7 @@ def select():
     switch(names[i])
 
 
-OPTION_KEYS = ("wallpaper", "mascot", "lock_bg")
+OPTION_KEYS = ("wallpaper", "mascot", "lock_bg", "art")
 
 
 def option(name, key, value=None):

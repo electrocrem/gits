@@ -176,6 +176,10 @@ for f in art.png cyborg.txt lain.txt shodan.txt; do
     s=$(asset "$f") && place "$s" "$HOME/.config/zsh/gits/$f"
 done
 s=$(asset lain.txt) && place "$s" "$HOME/.config/nvim/lua/gits/lain.txt"
+# the GitS art set (terminal banner, fastfetch, Neovim dashboard, radio dancer): ~/.local/share/gits/art/gits, "current" = the theme's set
+ART=$HOME/.local/share/gits/art
+s=$(asset art.png) && place "$s" "$ART/gits/banner.png"
+s=$(asset cyborg.txt) && place "$s" "$ART/gits/banner.txt" && place "$s" "$ART/gits/dashboard.txt"
 s=$(asset lain-dance.gif) && place "$s" "$HOME/.config/gits-widgets/lain.gif"   # the radio popup and the lock screen dance from it
 
 # ------------------------------------------------------------------ hooks into your own config files
@@ -261,6 +265,8 @@ run python3 "$HOME/.local/share/gits-icons/build.py" || warn "icon theme build f
 ((DRY)) || python3 "$REPO/tools/post.py" steam
 run python3 "$HOME/.local/share/gits-sounds/build.py" || warn "UI sounds not built (needs python-numpy)"
 run python3 "$HOME/.local/share/gits-lock/tachikoma.py" >/dev/null || warn "lock screen Tachikoma not built (needs python-numpy): the lock screen has no mascot"
+run python3 "$HOME/.local/share/gits-lock/tachikoma.py" --sprite "$HOME/.local/share/gits/art/gits" >/dev/null || warn "the radio popup's Tachikoma not built (needs python-numpy and python-pillow)"
+[[ -e $HOME/.local/share/gits/art/current ]] || run ln -sfn gits "$HOME/.local/share/gits/art/current"   # gits-theme moves it with the theme
 run python3 "$HOME/.local/share/gits-lock/build.py" >/dev/null || warn "dancing Lain frames not built (needs python-pillow and python-numpy): GITS_LOCK_MASCOT=lain stays blank"
 ((TELEGRAM)) && run python3 "$HOME/.local/share/gits-telegram/build.py"
 

@@ -1,4 +1,4 @@
-// System info shown next to the Lain banner (used by banner.zsh, not the main fastfetch config)
+// System info shown next to the ASCII banner (used by banner.zsh, not the main fastfetch config)
 {
   "logo": null,
   "display": { "pipe": true, "separator": ": " },
