@@ -131,7 +131,8 @@ zsh и Neovim он добавляет несколько чётко помече
 
 * **Цветовая тема:** `Super+I` → *Colour theme* или `gits-theme set NAME`. Тема — это небольшой файл в `~/.config/gits/themes/`,
   который задаёт ролям из `gits.theme` (фон, акцент, красный...) другие цвета; весь рабочий стол перекрашивается по нему,
-  а `gits-theme set gits` возвращает оригиналы в точности.
+  а `gits-theme set gits` возвращает оригиналы в точности. В комплекте: `gits` (Ghost in the Shell) и `lain` (Serial Experiments Lain:
+  лаванда, крем и красный проводов).
 * **Движение окон:** `Super+Shift+Y` — `cyber` (просто и чётко, по умолчанию), `gits` (жёсткий щелчок), `lively` (пружины и отскоки) или `off`.
 * **Обои:** `gits-wall --pick`, либо положите картинки в `~/Pictures/wallpapers` (GIF тоже работают).
 * **Другая радиостанция:** задайте `GITS_RADIO_STREAM` и `GITS_RADIO_API` (любая станция на AzuraCast). Хочется спокойнее Лейн? `GITS_RADIO_LAIN_SPEED=0.5`;

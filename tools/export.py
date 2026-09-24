@@ -49,7 +49,7 @@ MANIFEST = [
     (".config/qt5ct/qt5ct.conf", None), (".config/qt5ct/colors/GitS.conf", None),
     (".config/qt6ct/qt6ct.conf", None), (".config/qt6ct/colors/GitS.conf", None),
     (".config/satty/config.toml", None),
-    (".config/gits/themes", ["gits.theme", "files"]),
+    (".config/gits/themes", ["gits.theme", "lain.theme", "files"]),
     (".config/zsh/gits", ["banner.zsh", "colors.zsh", "tmux.zsh", "fastfetch.jsonc", "fastfetch-image.jsonc"]),
     (".config/starship/starship.toml", None),
     (".config/nvim/colors/gits.lua", None),

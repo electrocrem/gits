@@ -281,7 +281,7 @@ class Probe(Mapper):
 
 def check(root=None):
     """`check [ROOT]` (default $HOME; the repo's home/ in tools/roundtrip.sh): every file under ROOT that holds GitS colours is in
-    themes/files (or listed there as "#-", not yet), and every listed file exists."""
+    themes/files (or listed there as "#-", not yet), every listed file exists, and every theme gives all the roles of gits.theme."""
     root = root or HOME
     themes = os.path.join(root, ".config", "gits", "themes")
     listed = set(themed_files(themes))
@@ -289,6 +289,13 @@ def check(root=None):
         later = {ln[2:].strip() for ln in f if ln.startswith("#-")}
     probe = Probe(load_theme(DEFAULT, themes))
     bad = 0
+    roles = set(load_theme(DEFAULT, themes)["roles"])
+    for f in sorted(os.listdir(themes)):
+        if f.endswith(".theme"):
+            missing = roles - set(load_theme(f[:-6], themes)["roles"])
+            if missing:
+                print(f"{f} lacks the roles: {', '.join(sorted(missing))}")
+                bad += 1
     for rel in sorted(listed):
         if not os.path.exists(os.path.join(root, rel)):
             print(f"listed but missing: {rel}")

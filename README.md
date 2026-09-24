@@ -132,7 +132,7 @@ need sudo, so the commands to undo them are printed at the end.
 
 * **Colour theme:** `Super+I` → *Colour theme*, or `gits-theme set NAME`. A theme is a small file in `~/.config/gits/themes/` that gives
   the roles of `gits.theme` (background, accent, red...) other colours; the whole desktop is recoloured from it and `gits-theme set gits`
-  brings the originals back exactly.
+  brings the originals back exactly. Shipped: `gits` (Ghost in the Shell) and `lain` (Serial Experiments Lain: lavender, cream, wire red).
 * **Window motion:** `Super+Shift+Y` — `cyber` (simple and sharp, the default), `gits` (hard snap), `lively` (springs and bounces), or `off`.
 * **Wallpaper:** `gits-wall --pick`, or drop pictures into `~/Pictures/wallpapers` — GIFs work too.
 * **Another radio station:** set `GITS_RADIO_STREAM` and `GITS_RADIO_API` (any AzuraCast station). Prefer a calmer Lain? `GITS_RADIO_LAIN_SPEED=0.5`;

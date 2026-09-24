@@ -19,3 +19,6 @@ uses these values; the master copy is `home/.config/kitty/theme.conf`.
 | muted text | `#9FC5D6`, dim `#254F5D` |
 
 The 16 terminal colours are in `home/.config/kitty/theme.conf`.
+
+The same colours by role are `home/.config/gits/themes/gits.theme`; other themes (`lain.theme`: lavender `#B79CFF`, cream `#E8DCCB`,
+wire red `#C8102E` on `#0B0A10`) give those roles their own colours and `gits-theme` recolours every file from them.

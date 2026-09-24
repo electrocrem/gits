@@ -1,0 +1,29 @@
+# Serial Experiments Lain: lavender light in a dark room, a cream page, the red of the wires. Navi's phosphor green for the terminal.
+# Same roles as gits.theme (read that file for what each one paints).
+name = Serial Experiments Lain
+
+bg            = #0B0A10
+bg_deep       = #060509
+surface       = #1B1626
+surface_deep  = #14101C
+fg            = #E8DCCB
+fg_gtk        = #EDE3D4
+fg_bright     = #F6EEE2
+muted         = #B6A8C8
+dim           = #4A3F5E
+dim_text      = #726784
+
+accent        = #B79CFF
+accent_bright = #D6C6FF
+accent_2      = #E3A1D6
+
+red           = #C8102E
+red_light     = #E5586E
+green         = #9BE564
+green_light   = #C3F29E
+yellow        = #E8C97A
+yellow_light  = #F4E0A8
+blue          = #6F7FD8
+blue_light    = #97A5F2
+violet        = #9D7BD8
+violet_light  = #C9B3F4
