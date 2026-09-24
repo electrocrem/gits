@@ -11,6 +11,9 @@
 # The lock screen and the login screen have their own pictures.
 default=$HOME/.local/share/gits/wallpapers/gits_smoke.png
 state=${XDG_STATE_HOME:-$HOME/.local/state}/gits/wallpaper
+# the colour theme (gits-theme) remembers its own wallpaper too: wallpaper.<theme>, shown again when you switch back to that theme
+theme=$(sed -n 's/^theme=//p' "${XDG_STATE_HOME:-$HOME/.local/state}/gits/state" 2>/dev/null | head -1); theme=${theme:-gits}
+remember() { mkdir -p "$(dirname "$state")"; printf '%s\n' "$1" >"$state"; printf '%s\n' "$1" >"$state.$theme"; }
 IFS=: read -ra dirs <<<"$HOME/.local/share/gits/wallpapers:$HOME/Pictures/wallpapers:${GITS_WALL_DIRS:-}"
 
 list() { for d in "${dirs[@]}"; do [[ -d $d ]] && find "$d" -maxdepth 2 -type f \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.webp' -o -iname '*.gif' \) -print; done | sort -u; }
@@ -23,18 +26,18 @@ apply() {  # apply FILE [transition]
 
 case ${1:-} in
     --list) list ;;
-    --default) rm -f "$state"; apply "$default" fade ;;
+    --default) rm -f "$state" "$state.$theme"; apply "$default" fade ;;
     --pick)
         mapfile -t files < <(list)
         ((${#files[@]})) || { echo "no pictures found in: ${dirs[*]}" >&2; exit 1; }
         rows=(); for f in "${files[@]}"; do rows+=("$(basename "$f")   ${f%/*}"); done
         idx=$(printf '%s\n' "${rows[@]}" | gits-menu "󰸉  WALLPAPER" "// 壁紙" -format i) || exit 0
         f=${files[idx]}
-        apply "$f" fade && { mkdir -p "$(dirname "$state")"; printf '%s\n' "$f" >"$state"; } ;;
+        apply "$f" fade && remember "$f" ;;
     "")
         f=$default; [[ -r $state ]] && read -r saved <"$state" && [[ -r $saved ]] && f=$saved
         apply "$f" ;;
     *)
         f=$(realpath -- "$1" 2>/dev/null) || f=$1
-        apply "$f" fade && { mkdir -p "$(dirname "$state")"; printf '%s\n' "$f" >"$state"; } ;;
+        apply "$f" fade && remember "$f" ;;
 esac
