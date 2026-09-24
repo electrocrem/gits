@@ -53,11 +53,14 @@ open(sys.argv[1] + "/probe.theme", "w").write("\n".join(out) + "\n")
 PY
 T=$FH/.local/bin/gits-theme
 "$T" set probe --no-reload >/dev/null
-recoloured() { [[ $("$T" current) == probe ]] && ! grep -qi '2ed3d7' "$FH/.config/kitty/theme.conf" "$FH/.config/hypr/gits/options.lua" "$FH/.local/share/color-schemes/GitS.colors" && ! grep -q '46, 211, 215' "$FH/.config/hypr/hyprlock.conf" && grep -q 'PROBE 9' "$FH/.config/hypr/hyprlock.conf"; }
+recoloured() { [[ $("$T" current) == probe ]] && ! grep -qi '2ed3d7' "$FH/.config/kitty/theme.conf" "$FH/.config/hypr/gits/options.lua" "$FH/.local/share/color-schemes/GitS.colors" && ! grep -q '46, 211, 215' "$FH/.config/hypr/hyprlock.conf" && grep -q 'PROBE 9' "$FH/.config/hypr/hyprlock.conf" && ! grep -q '=46,211,215' "$FH/.config/kdeglobals"; }
 recoloured || { echo "the probe theme did not recolour the configs"; exit 1; }
 "$REPO/install.sh" >/dev/null
 recoloured || { echo "a reinstall lost the colour theme"; exit 1; }
-"$T" set gits --no-reload >/dev/null
+echo "# my own line" >>"$FH/.config/kitty/theme.conf"   # a hand edit under another theme: GitS comes back anyway, the edit is kept beside it
+"$T" set gits --no-reload >/dev/null 2>&1
+grep -q "my own line" "$FH/.config/kitty/theme.conf.gits-theme-edited" || { echo "the hand-edited file was not kept as .gits-theme-edited"; exit 1; }
+rm -f "$FH/.config/kitty/theme.conf.gits-theme-edited"
 tsnap >"$FH.gits2"
 diff "$FH.gits" "$FH.gits2" >/dev/null || { diff "$FH.gits" "$FH.gits2" | head; echo "switching back to GitS did not restore the files byte for byte"; exit 1; }
 rm -f "$FH.gits" "$FH.gits2" "$FH/.config/gits/themes/probe.theme"

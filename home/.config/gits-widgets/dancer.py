@@ -11,6 +11,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 GIF = os.path.join(HERE, "lain.gif")
 
 
+def hexrgb(h):
+    import numpy as np
+    return np.array([int(h[i:i + 2], 16) for i in (1, 3, 5)], dtype=float)
+
+
 def _pil_frames(height, style):
     import numpy as np
     from PIL import Image, ImageDraw, ImageSequence
@@ -36,7 +41,7 @@ def _pil_frames(height, style):
             col = 70 + rgb * (185 / 255)
         else:   # hologram: light = bright cyan, ink = deep teal
             t = np.clip(lum, 0, 1)[..., None] ** 0.8
-            col = np.array([8.0, 60.0, 84.0]) * (1 - t) + np.array([150.0, 250.0, 255.0]) * t
+            col = hexrgb("#083C54") * (1 - t) + hexrgb("#96FAFF") * t   # hex, so a colour theme (gits-theme) recolours them
         alpha = fg * 255.0
         if style != "color":   # scan lines
             alpha = alpha * np.where(np.arange(fg.shape[0]) % 3 == 0, 0.62, 1.0)[:, None]

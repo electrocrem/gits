@@ -10,13 +10,18 @@ in the theme. A GitS colour that is not a role is carried along: the hue of the 
 saturation offset it had from that role in GitS. Greys (black, white, masks) never change.
 
 The GitS originals are kept in ~/.local/share/gits/theme-base; `set gits` puts them back byte for byte. While GitS is active the originals
-follow the live files (your edits, a reinstall). While another theme is active, a file you edited by hand is left alone and reported.
+follow the live files (your edits, a reinstall). While another theme is active, a file you edited by hand (it differs from what this
+script last wrote, .written.json) is left alone and reported; going back to GitS restores it anyway and keeps your version as
+FILE.gits-theme-edited.
 Colour forms understood: #RRGGBB[AA], rgba(RRGGBB[AA]) (Hyprland), rgb[a](R, G, B[, A]) with 0-255 or 0-1 channels, key=R,G,B (KDE).
 The choice lives in ~/.local/state/gits/state (theme=NAME); afterwards Hyprland, waybar, kitty, dunst, tmux and the desktop widgets
 reload (--no-reload skips that: the installer and the tests use it). Apps that read their colours at start (GTK, Qt, nvim, btop...) take
 the new theme when they are next opened.
 """
 import colorsys
+import glob
+import hashlib
+import json
 import os
 import re
 import shutil
@@ -94,7 +99,8 @@ def save_current(name):
 
 def themed_files(themes=THEMES, expand=False):
     """The list in themes/files. An entry ending in "/" is a folder (the icon theme, built at install time): with expand=True it
-    becomes every regular file in it (symlinks are left alone: they point at the files)."""
+    becomes every regular file in it (symlinks are left alone: they point at the files). An entry starting with "? " is a copy
+    outside our own files that may not exist (tools/post.py puts them into other apps: Zen's profile...); it may hold a glob."""
     try:
         with open(os.path.join(themes, "files"), encoding="utf-8") as f:
             items = [ln.strip() for ln in f if ln.strip() and not ln.startswith("#")]
@@ -104,6 +110,9 @@ def themed_files(themes=THEMES, expand=False):
         return items
     out = []
     for rel in items:
+        if rel.startswith("? "):
+            out += sorted(os.path.relpath(p, HOME) for p in glob.glob(os.path.join(HOME, rel[2:])) if os.path.isfile(p))
+            continue
         if not rel.endswith("/"):
             out.append(rel)
             continue
@@ -133,6 +142,11 @@ class Mapper:
     def __init__(self, base, theme):
         self.base, self.theme, self.memo = base["roles"], theme["roles"], {}
         self.chroma_roles = [(k, v, lab(v)) for k, v in self.base.items() if not is_grey(v)]
+        # CSS filters that tint by turning the hue (sepia then hue-rotate by N degrees: the launcher's app icons) follow the accent
+        self.hue_delta = 0.0
+        if "accent" in self.base and "accent" in self.theme:
+            hue = lambda c: colorsys.rgb_to_hls(*(v / 255 for v in c))[0] * 360
+            self.hue_delta = (hue(self.theme["accent"]) - hue(self.base["accent"])) % 360
 
     def __call__(self, c):
         if c in self.memo:
@@ -160,6 +174,7 @@ HYPR = re.compile(r"(rgba?\()([0-9A-Fa-f]{6})((?:[0-9A-Fa-f]{2})?\))")
 DEC = re.compile(r"(rgba?\(\s*)(\d{1,3})(\s*,\s*)(\d{1,3})(\s*,\s*)(\d{1,3})(?=\s*[,)])")
 FLT = re.compile(r"(rgba?\(\s*)([01]?\.\d+|[01]\.0|[01])(\s*,\s*)([01]?\.\d+|[01]\.0|[01])(\s*,\s*)([01]?\.\d+|[01]\.0|[01])(?=\s*[,)])")
 KDE = re.compile(r"^([A-Za-z]+=)(\d{1,3}),(\d{1,3}),(\d{1,3})((?:,\d{1,3})?)$", re.M)
+HUE = re.compile(r"hue-rotate\((-?\d+(?:\.\d+)?)deg\)")
 
 
 def hexcase(like, c):
@@ -201,10 +216,32 @@ def recolour(text, m):
     text = HYPR.sub(hy, text)
     text = FLT.sub(fl, text)   # before DEC: "0, 0, 1" would also read as 0-255 channels
     text = DEC.sub(de, text)
-    return KDE.sub(kd, text)
+    text = KDE.sub(kd, text)
+    if m.hue_delta:
+        text = HUE.sub(lambda g: f"hue-rotate({round((float(g.group(1)) + m.hue_delta) % 360)}deg)", text)
+    return text
 
 
 # --------------------------------------------------------------------------------------------- files
+def sha(text):
+    return hashlib.sha1(text.encode("utf-8")).hexdigest()
+
+
+def read_json(p):
+    try:
+        with open(p, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def write_json(p, data):
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    with open(p + ".tmp", "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=0, sort_keys=True)
+    os.replace(p + ".tmp", p)
+
+
 def read(p):
     try:
         with open(p, encoding="utf-8") as f:
@@ -244,6 +281,9 @@ def switch(name, reload=True):
     was_render = None if was == DEFAULT else Renderer(base_theme, load_theme(was))
     new_render = None if name == DEFAULT else Renderer(base_theme, load_theme(name))
     kept, changed, icons = [], 0, False
+    # what this script last wrote into each file (sha1): "edited by hand" = the live file differs from it. Comparing with a fresh
+    # rendering instead took every file for hand-edited after an update of this script that renders differently.
+    written = read_json(os.path.join(BASE, ".written.json"))
     for rel in themed_files(expand=True):
         live, orig = os.path.join(HOME, rel), os.path.join(BASE, rel)
         text = read(live)
@@ -255,15 +295,23 @@ def switch(name, reload=True):
             if text != base:
                 write(orig, text)
             base = text
-        elif text != was_render(base):
-            kept.append(rel)  # edited by hand under another theme: not ours to overwrite
-            continue
+        elif sha(text) != written.get(rel, sha(was_render(base))):
+            if new_render is not None:
+                kept.append(rel)  # edited by hand under another theme: not ours to overwrite
+                continue
+            # back to GitS: the original goes back all the same (else the next switch would take the recoloured file for the
+            # original), your version is kept beside it
+            write(live + ".gits-theme-edited", text)
+            kept.append(rel + " (your version: " + os.path.basename(live) + ".gits-theme-edited)")
         out = base if new_render is None else new_render(base)
+        written[rel] = sha(out)
         if out != text:
             write(live, out, mode_from=live)
             changed += 1
             icons = icons or "/icons/" in "/" + rel
+    write_json(os.path.join(BASE, ".written.json"), written)
     save_current(name)
+    changed += kde_sync()
     theme = load_theme(name)
     print(f"theme: {theme['name']} ({changed} files)")
     for k in kept:
@@ -284,6 +332,43 @@ def switch(name, reload=True):
         reload_all(icons)
 
 
+def kde_sync():
+    """KF apps (Dolphin, Ark...) read their colours from ~/.config/kdeglobals, where tools/post.py copied the GitS scheme. Copy the
+    colour sections of the (now recoloured) scheme there again, the way post.py and Plasma do; every other key of yours stays."""
+    kg, scheme = os.path.join(CONF, "kdeglobals"), os.path.join(HOME, ".local", "share", "color-schemes", "GitS.colors")
+    text, sch = read(kg), read(scheme)
+    if not text or not sch or not re.search(r"^ColorScheme=GitS$", text, re.M):
+        return False
+
+    def sections(t):
+        out, name, body = [], None, []
+        for ln in t.split("\n"):
+            m = re.match(r"^\[(.+)\]$", ln)
+            if m:
+                out.append((name, body))
+                name, body = m.group(1), []
+            else:
+                body.append(ln)
+        out.append((name, body))
+        return out
+    ours = lambda n: n and (n.startswith("Colors:") or n.startswith("ColorEffects:") or n == "WM")
+    old = sections(text)
+    new = {n: b for n, b in sections(sch) if ours(n)}
+    out = []
+    for n, b in old:
+        if n is None and not b:
+            continue   # the file starts with a header: nothing before it (an empty entry here became a blank first line)
+        b = new.pop(n, b) if ours(n) else b
+        out.append(b if n is None else [f"[{n}]"] + b)
+    for n, b in new.items():
+        out.append([f"[{n}]"] + b)
+    res = "\n".join("\n".join(x) for x in out)
+    if res != text:
+        write(kg, res, mode_from=kg)
+        return True
+    return False
+
+
 def reload_all(icons=False):
     """Tell whatever is running to pick the new colours up; everything is optional."""
     def run(*cmd):
@@ -299,6 +384,8 @@ def reload_all(icons=False):
             run("gsettings", "set", *key, cur)
     if os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
         run("hyprctl", "reload")
+    # KF apps that are open repaint with the new palette (what Plasma sends after changing the colour scheme)
+    run("dbus-send", "--session", "--type=signal", "/KGlobalSettings", "org.kde.KGlobalSettings.notifyChange", "int32:0", "int32:0")
     run("pkill", "-USR1", "-x", "kitty")           # kitty: reload kitty.conf (and theme.conf)
     run("systemctl", "--user", "try-restart", "gits-notifications.service")
     run("tmux", "source-file", os.path.join(CONF, "tmux", "tmux.conf"))
@@ -339,7 +426,7 @@ def check(root=None):
     probe = Probe(load_theme(DEFAULT, themes))
     bad = 0
     for rel in sorted(listed):
-        if not rel.endswith("/") and not os.path.exists(os.path.join(root, rel)):
+        if not rel.endswith("/") and not rel.startswith("? ") and not os.path.exists(os.path.join(root, rel)):
             print(f"listed but missing: {rel}")
             bad += 1
     for d, _, fs in os.walk(root):
