@@ -2,12 +2,13 @@
 
 ## Artwork (`assets/`)
 
-`gits_smoke.png`, `gits_eye.png`, `gits_cyborg.jpg`, `gits_teal_wires.jpg`, `art.png` and the ASCII pieces
+`gits_smoke.png`, `gits_eye.png`, `gits_cyborg.jpg`, `gits_teal_wires.jpg`, `art.png`, `fuchikoma-dance.gif` (the dancing Fuchikoma
+of the radio popup) and the ASCII pieces
 `cyborg.txt`, `lain.txt`, `shodan.txt` are fan artwork and character art from third-party franchises (Ghost in the
 Shell, Serial Experiments Lain, System Shock). They are **not** covered by this repository's MIT license, remain the
 property of their respective authors and rights holders, and are included here for personal use of this setup only.
 
-If you fork or redistribute this repository publicly, delete `assets/*.png`, `assets/*.jpg`, `assets/*.txt`. The
+If you fork or redistribute this repository publicly, delete `assets/*.png`, `assets/*.jpg`, `assets/*.txt`, `assets/fuchikoma-dance.gif`. The
 installer then generates original placeholder wallpapers and a generic ASCII banner with `tools/make-assets.py`.
 
 ## Third-party files

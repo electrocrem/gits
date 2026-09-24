@@ -180,6 +180,7 @@ s=$(asset lain.txt) && place "$s" "$HOME/.config/nvim/lua/gits/lain.txt"
 ART=$HOME/.local/share/gits/art
 s=$(asset art.png) && place "$s" "$ART/gits/banner.png"
 s=$(asset cyborg.txt) && place "$s" "$ART/gits/banner.txt" && place "$s" "$ART/gits/dashboard.txt"
+s=$(asset fuchikoma-dance.gif) && place "$s" "$ART/gits/dancer.gif"                # the radio popup's dancer in the GitS theme
 s=$(asset lain-dance.gif) && place "$s" "$HOME/.config/gits-widgets/lain.gif"   # the radio popup and the lock screen dance from it
 
 # ------------------------------------------------------------------ hooks into your own config files
