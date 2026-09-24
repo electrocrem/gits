@@ -62,7 +62,7 @@ MANIFEST = [
     (".local/share/gits-sddm/ghost-in-the-shell", ["Main.qml", "metadata.desktop", "theme.conf"]),
     (".local/share/gits-boot", ["build.py", "install.sh", "fix-grub-savedefault.sh", "plymouth.script.in"]),
     (".local/share/gits-sounds/build.py", None),
-    (".local/share/gits-lock/build.py", None),
+    (".local/share/gits-lock", ["build.py", "tachikoma.py"]),
     (".local/share/gits-snap/setup.sh", None),
     (".local/bin", ["gits-*"]),
     (".vscode-oss/extensions/gits.ghost-in-the-shell-1.0.0", None),

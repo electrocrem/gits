@@ -198,8 +198,8 @@ aliases (including links to links) to the `scalable` directories too. `kiconfind
 
 * **hyprlock cannot animate a picture, but it refreshes text ten times a second.** An `image` widget's `reload_time` takes whole seconds only (`0.125` is a config
   error), `0` means "never" (its `reload_cmd` is not run at all: measured by logging every call) and `1` is the fastest, one frame a second. A `label` with
-  `cmd[update:100]` really runs its command 9.9 times a second. So the dancing Lain on the lock screen is braille text frames (`gits-lock-lain`,
-  `~/.local/share/gits-lock/build.py`); the glitching clock, the cursor and the scanner are labels too. Their scripts use only shell builtins
+  `cmd[update:100]` really runs its command 9.9 times a second. So the lock screen mascot is braille text frames (`gits-lock-mascot`,
+  `~/.local/share/gits-lock/tachikoma.py` and `build.py`); the glitching clock, the cursor and the scanner are labels too. Their scripts use only shell builtins
   (`$EPOCHREALTIME`, `printf '%(%H:%M)T'`): about 30 short processes a second while locked. Test hyprlock ONLY in a nested Hyprland (`tools/lock-shot.sh`).
 * **Spring curves in Hyprland 0.56**: `hl.curve(name, {type = "spring", mass, stiffness, dampening})` and `hl.animation({leaf = ..., spring = name})`. A damping ratio
   (`dampening / (2 * sqrt(stiffness * mass))`) of 0.22 gives a +23% overshoot on a window opening, 0.34 about +16%; the `cyber` preset uses plain exponential
