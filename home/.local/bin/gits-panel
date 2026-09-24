@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# gits-panel [control|media|radio|notify|mixer|note|launch|clip|windows|emoji|keys|themes|close]: the popups under the bar. Running the same one again closes it; the other one replaces it.
+# gits-panel [control|media|radio|notify|mixer|note|launch|clip|windows|emoji|keys|appearance|themes|close]: the popups under the bar. Running the same one again closes it; the other one replaces it.
 #   control  toggles, sliders, power profile, charge limit   (Super+Shift+C, waybar power-profile module)
 #   media    player: cover, seek, transport, volume          (Super+Shift+M, click on the player module)
 #   radio    web radio: cover, live spectrum, listeners, tune in/out (Super+R; the radio itself is `gits-radio`)
@@ -10,7 +10,7 @@
 #   windows  window switcher, most recent first (Super+Tab)
 #   emoji    emoji and symbol picker by name, Enter copies (Super+comma)
 #   keys     every key binding with its description (Super+slash)
-#   themes   colour theme picker: a card per theme, click to switch (gits-theme select, Super+I -> Colour theme)
+#   appearance  colour theme, your accent on top of it, lock-screen mascot, wallpaper (gits-theme select, Super+I -> Appearance; `themes` = the same)
 #   notify   notification centre: history, delete, clear, do-not-disturb (Super+Shift+N, click on the bell)
 pidfile=${XDG_RUNTIME_DIR:-/tmp}/gits-panel.pid
 mode=${1:-control}
@@ -21,8 +21,8 @@ alive=0; [[ $pid =~ ^[0-9]+$ ]] && grep -qa 'panel.py' "/proc/$pid/cmdline" 2>/d
 if ((alive)); then for _ in {1..30}; do kill -0 "$pid" 2>/dev/null || break; sleep 0.05; done; rm -f "$pidfile"; fi
 case $mode in
     close) exit 0 ;;
-    control|media|radio|notify|mixer|note|launch|clip|windows|emoji|keys|themes) ((alive)) && [[ $cur == "$mode" ]] && exit 0 ;;   # pressed again = close
-    *) echo "usage: gits-panel [control|media|radio|notify|mixer|note|launch|clip|windows|emoji|keys|themes|close]" >&2; exit 2 ;;
+    control|media|radio|notify|mixer|note|launch|clip|windows|emoji|keys|appearance|themes) ((alive)) && [[ $cur == "$mode" ]] && exit 0 ;;   # pressed again = close
+    *) echo "usage: gits-panel [control|media|radio|notify|mixer|note|launch|clip|windows|emoji|keys|appearance|themes|close]" >&2; exit 2 ;;
 esac
 python3 "$HOME/.config/gits-widgets/panel.py" "$mode" >"${XDG_RUNTIME_DIR:-/tmp}/gits-panel.log" 2>&1 &
 echo "$! $mode" >"$pidfile"

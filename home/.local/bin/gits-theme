@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """gits-theme: switch the colour theme of the whole desktop.
 
-  gits-theme list | current | select | set NAME [--no-reload] | check [ROOT]
+  gits-theme list | current | select | set NAME [--no-reload] | check [ROOT] | info
+  gits-theme option NAME KEY [VALUE]   your own accent (or any role) / mascot / lock_bg / wallpaper for a theme; no VALUE forgets it,
+                                       KEY --reset forgets them all; `set NAME` applies
   (select = the picker popup, gits-panel themes)
 
 Every themed file (listed in ~/.config/gits/themes/files, paths relative to $HOME) is written in the GitS palette. A theme
@@ -38,28 +40,53 @@ DEFAULT = "gits"
 
 
 # --------------------------------------------------------------------------------------------- themes
-def load_theme(name, themes=THEMES):
-    """{"name", "description", "wallpaper", "roles": {role: (r, g, b)}, "swaps": [(old, new)]}
-
-    Besides the colour roles a theme may have: `description = ...` (shown by the theme picker), `wallpaper = FILE` (in
-    ~/.local/share/gits/wallpapers, or a full path: shown when the theme is chosen) and any number of `swap = OLD -> NEW` lines: text
-    replaced in every themed file after the recolouring (another lock-screen picture, mascot or caption)."""
-    path = os.path.join(themes, name + ".theme")
-    t = {"name": name, "description": "", "wallpaper": "", "roles": {}, "swaps": []}
+def parse_theme(path, t):
     with open(path, encoding="utf-8") as f:
         for ln in f:
-            m = re.match(r"\s*([a-z][a-z0-9_]*)\s*=\s*(.+?)\s*$", ln)
+            m = re.match(r"\s*([a-z][a-z0-9_]*)\s*=\s*(.*?)\s*$", ln)
             if not m:
                 continue
             key, val = m.groups()
             h = re.fullmatch(r"#([0-9A-Fa-f]{6})", val)
-            if key in ("name", "description", "wallpaper"):
+            if key in ("name", "description", "wallpaper", "mascot", "lock_bg"):
                 t[key] = val
             elif key == "swap" and " -> " in val:
                 t["swaps"].append(tuple(val.split(" -> ", 1)))
             elif h:
                 t["roles"][key] = tuple(int(h.group(1)[i:i + 2], 16) for i in (0, 2, 4))
     return t
+
+
+def load_theme(name, themes=THEMES, user=True):
+    """{"name", "description", "wallpaper", "mascot", "lock_bg", "roles": {role: (r, g, b)}, "swaps": [(old, new)], "user": {...}}
+
+    Besides the colour roles a theme may have: `description = ...` (shown by the theme picker), `wallpaper = FILE` (in
+    ~/.local/share/gits/wallpapers, or a full path: shown when the theme is chosen), `mascot = NAME` (the lock-screen mascot:
+    tachikoma, lain, off, or any ~/.local/share/gits-lock/NAME-0.txt), `lock_bg = FILE` (in ~/.config/hypr/hyprlock/: the lock-screen
+    picture) and any number of `swap = OLD -> NEW` lines: text replaced in every themed file after the recolouring.
+    NAME.user next to it (written by `gits-theme option` and the appearance menu) is read on top: your own accent, mascot..."""
+    t = parse_theme(os.path.join(themes, name + ".theme"),
+                    {"name": name, "description": "", "wallpaper": "", "mascot": "", "lock_bg": "", "roles": {}, "swaps": []})
+    t["user"] = {}
+    up = os.path.join(themes, name + ".user")
+    if user and os.path.exists(up):
+        u = parse_theme(up, {"roles": {}, "swaps": []})
+        t["user"] = {k: v for k, v in u.items() if v}
+        t["roles"].update(u["roles"])
+        t["swaps"] += u["swaps"]
+        for k in ("wallpaper", "mascot", "lock_bg"):
+            if u.get(k):
+                t[k] = u[k]
+    if t["mascot"] and t["mascot"] != "tachikoma":   # tachikoma is what gits-lock-mascot shows by default
+        t["swaps"].append(("] gits-lock-mascot", f"] env GITS_LOCK_MASCOT={t['mascot']} gits-lock-mascot"))
+    if t["lock_bg"] and t["lock_bg"] != "gits_lock_bg.png":
+        t["swaps"].append(("hyprlock/gits_lock_bg.png", "hyprlock/" + t["lock_bg"]))
+    return t
+
+
+def is_identity(theme, base):
+    """Would this theme leave the GitS files as they are (GitS itself, without options of yours)?"""
+    return theme["roles"] == base["roles"] and not theme["swaps"]
 
 
 def theme_names():
@@ -277,20 +304,23 @@ def switch(name, reload=True):
     if name not in theme_names():
         sys.exit(f"gits-theme: no theme '{name}' (have: {', '.join(theme_names())})")
     was = current()
-    base_theme = load_theme(DEFAULT)
-    was_render = None if was == DEFAULT else Renderer(base_theme, load_theme(was))
-    new_render = None if name == DEFAULT else Renderer(base_theme, load_theme(name))
+    base_theme = load_theme(DEFAULT, user=False)   # the palette the files are written in: never with your options
+    was_theme, new_theme = load_theme(was), load_theme(name)
+    was_render = Renderer(base_theme, was_theme)
+    new_render = None if is_identity(new_theme, base_theme) else Renderer(base_theme, new_theme)
     kept, changed, icons = [], 0, False
     # what this script last wrote into each file (sha1): "edited by hand" = the live file differs from it. Comparing with a fresh
     # rendering instead took every file for hand-edited after an update of this script that renders differently.
     written = read_json(os.path.join(BASE, ".written.json"))
+    # were the live files the GitS originals after the last switch? (GitS with an accent of yours is not)
+    was_identity = written.pop("__identity__", was == DEFAULT)
     for rel in themed_files(expand=True):
         live, orig = os.path.join(HOME, rel), os.path.join(BASE, rel)
         text = read(live)
         if text is None:
             continue
         base = read(orig)
-        if was == DEFAULT or base is None:
+        if was_identity or base is None:
             # GitS is live, or the file has never been themed (new in the list, e.g. after an update): the live file is the original
             if text != base:
                 write(orig, text)
@@ -309,10 +339,11 @@ def switch(name, reload=True):
             write(live, out, mode_from=live)
             changed += 1
             icons = icons or "/icons/" in "/" + rel
+    written["__identity__"] = new_render is None
     write_json(os.path.join(BASE, ".written.json"), written)
     save_current(name)
     changed += kde_sync()
-    theme = load_theme(name)
+    theme = new_theme
     print(f"theme: {theme['name']} ({changed} files)")
     for k in kept:
         print(f"  left alone (changed by hand): {k}", file=sys.stderr)
@@ -423,7 +454,7 @@ def check(root=None):
     listed = set(themed_files(themes))
     with open(os.path.join(themes, "files"), encoding="utf-8") as f:
         later = {ln[2:].split()[0] for ln in f if ln.startswith("#-") and ln[2:].split()}
-    probe = Probe(load_theme(DEFAULT, themes))
+    probe = Probe(load_theme(DEFAULT, themes, user=False))
     bad = 0
     for rel in sorted(listed):
         if not rel.endswith("/") and not rel.startswith("? ") and not os.path.exists(os.path.join(root, rel)):
@@ -444,7 +475,7 @@ def check(root=None):
 def select():
     """The theme picker popup (gits-panel themes); the plain menu where the popup cannot run."""
     if os.environ.get("WAYLAND_DISPLAY") and shutil.which("gits-panel"):
-        subprocess.Popen(["gits-panel", "themes"], start_new_session=True)
+        subprocess.Popen(["gits-panel", "appearance"], start_new_session=True)
         return
     names = theme_names()
     cur = current()
@@ -458,6 +489,56 @@ def select():
     switch(names[i])
 
 
+OPTION_KEYS = ("wallpaper", "mascot", "lock_bg")
+
+
+def option(name, key, value=None):
+    """Set (or with no value: forget) one of your options for a theme in NAME.user: a colour role (accent...) or mascot / lock_bg /
+    wallpaper. `option NAME --reset` forgets them all. The files follow at the next `set`."""
+    if name not in theme_names():
+        sys.exit(f"gits-theme: no theme '{name}'")
+    up = os.path.join(THEMES, name + ".user")
+    if key == "--reset":
+        if os.path.exists(up):
+            os.remove(up)
+        return
+    roles = load_theme(DEFAULT, user=False)["roles"]
+    if key not in roles and key not in OPTION_KEYS:
+        sys.exit(f"gits-theme: '{key}' is not a colour role ({', '.join(roles)}) nor one of {', '.join(OPTION_KEYS)}")
+    if value is not None and key in roles and not re.fullmatch(r"#[0-9A-Fa-f]{6}", value):
+        sys.exit("gits-theme: a colour is #RRGGBB")
+    lines = []
+    if os.path.exists(up):
+        with open(up, encoding="utf-8") as f:
+            lines = [ln for ln in f if not re.match(rf"\s*{key}\s*=", ln)]
+    if value is not None:
+        lines.append(f"{key} = {value}\n")
+    body = [ln for ln in lines if ln.strip() and not ln.startswith("#")]
+    if body:
+        with open(up, "w", encoding="utf-8") as f:
+            f.write("# your options for this theme (gits-theme option / the appearance menu); delete the file to forget them\n")
+            f.writelines(body)
+    elif os.path.exists(up):
+        os.remove(up)
+
+
+def info():
+    """Everything the appearance menu shows, as JSON: themes (effective colours, your options), mascots, current theme."""
+    hx = lambda c: "#%02X%02X%02X" % c
+    lock = os.path.join(HOME, ".local", "share", "gits-lock")
+    mascots = sorted({f[:-6] for f in os.listdir(lock) if f.endswith("-0.txt")}) if os.path.isdir(lock) else []
+    out = {"current": current(), "mascots": mascots + ["off"], "themes": []}
+    for n in theme_names():
+        t, plain = load_theme(n), load_theme(n, user=False)
+        user = {k: hx(v) for k, v in t["user"].get("roles", {}).items()}
+        user.update({k: v for k, v in t["user"].items() if k in OPTION_KEYS})
+        out["themes"].append({"id": n, "name": t["name"], "description": t["description"], "wallpaper": t["wallpaper"],
+                              "mascot": t["mascot"] or "tachikoma", "theme_mascot": plain["mascot"] or "tachikoma", "lock_bg": t["lock_bg"],
+                              "roles": {k: hx(v) for k, v in t["roles"].items()},
+                              "theme_roles": {k: hx(v) for k, v in plain["roles"].items()}, "user": user})
+    print(json.dumps(out, ensure_ascii=False))
+
+
 def main(argv):
     cmd = argv[1] if len(argv) > 1 else "select"
     if cmd == "list":
@@ -469,6 +550,10 @@ def main(argv):
         switch(argv[2], reload="--no-reload" not in argv)
     elif cmd == "select":
         select()
+    elif cmd == "option" and len(argv) > 3:
+        option(argv[2], argv[3], argv[4] if len(argv) > 4 else None)
+    elif cmd == "info":
+        info()
     elif cmd == "check":
         return check(argv[2] if len(argv) > 2 else None)
     else:
