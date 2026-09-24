@@ -2,7 +2,7 @@
 {
   "display": { "separator": " │ ", "color": { "keys": "blue", "separator": "blue" }, "key": { "width": 10 } },
   "modules": [
-    { "type": "custom", "format": "\u001b[34m┌─[ \u001b[94mSECTION 9 // NAVI-00\u001b[34m ]" },
+    { "type": "command", "key": " ", "keyWidth": 0, "text": "cat ~/.local/share/gits/art/current/title 2>/dev/null || echo 'SECTION 9 // PUBLIC SECURITY'", "format": "\u001b[34m┌─[ \u001b[94m{}\u001b[34m ]" },
     { "type": "custom", "format": "\u001b[34m│" },
     { "type": "os", "key": "OS" },
     { "type": "kernel", "key": "KERNEL" },

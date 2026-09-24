@@ -19,7 +19,7 @@ ROWS = int(sys.argv[2]) if len(sys.argv) > 2 else 26
 # braille dot bits: (dx, dy) -> bit
 BITS = {(0, 0): 0x01, (0, 1): 0x02, (0, 2): 0x04, (1, 0): 0x08, (1, 1): 0x10, (1, 2): 0x20, (0, 3): 0x40, (1, 3): 0x80}
 
-frames = dancer._pil_frames(300, "holo")
+frames = dancer._pil_frames(300, "holo", src=dancer.GIF)   # always Lain: the lock screen mascot "lain", whatever the theme's dancer
 W, H = COLS * 2, ROWS * 4
 for n, im in enumerate(frames):
     a = np.asarray(im).astype(float)

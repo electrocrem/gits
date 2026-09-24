@@ -2,10 +2,15 @@
 -- The colourscheme itself lives in colors/gits.lua + lua/gits/, the lualine theme in lua/lualine/themes/gits.lua.
 local c = require("gits.palette")
 
--- Dashboard art: ~/.config/nvim/lua/gits/lain.txt, coloured the same way as the terminal banner
+-- Dashboard art: the colour theme's art set (~/.local/share/gits/art/current/dashboard.txt), else ~/.config/nvim/lua/gits/lain.txt;
+-- coloured the same way as the terminal banner
 -- (hair dim, eyes bright, hairclip red, the rest cyan).
 local function art_items()
-  local path = vim.fn.stdpath("config") .. "/lua/gits/lain.txt"
+  local data = os.getenv("XDG_DATA_HOME") or (os.getenv("HOME") .. "/.local/share")
+  local path = data .. "/gits/art/current/dashboard.txt"
+  if vim.fn.filereadable(path) == 0 then
+    path = vim.fn.stdpath("config") .. "/lua/gits/lain.txt"
+  end
   local ok, lines = pcall(vim.fn.readfile, path)
   if not ok then
     return {}

@@ -4,7 +4,9 @@
 A Tachikoma (the think-tank of Ghost in the Shell) modelled from a few signed-distance primitives (abdomen pod, cabin, three eye pods,
 four legs on wheels, manipulators, the rear launcher), ray-marched with numpy and turned slowly on a holo platform. Every braille
 character is a 2x4 block of dots: the shading is an ordered (Bayer) dither, so the lit side is dense and the far side sparse.
-  tachikoma.py [COLUMNS [ROWS [FRAMES]]]   default 52 x 24, 24 frames (3 s a turn at 8 frames a second).  Needs numpy."""
+  tachikoma.py [COLUMNS [ROWS [FRAMES]]]   default 52 x 24, 24 frames (3 s a turn at 8 frames a second).  Needs numpy.
+  tachikoma.py --sprite DIR                 dancer-0.png ... dancer-15.png in DIR instead: the hologram as RGBA frames for the radio
+                                            popup of the GitS theme (gits-widgets/dancer.py); needs Pillow too."""
 import math
 import os
 import sys
@@ -12,6 +14,9 @@ import sys
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+SPRITE = sys.argv[2] if len(sys.argv) > 2 and sys.argv[1] == "--sprite" else None
+if SPRITE:
+    sys.argv = sys.argv[:1]
 COLS = int(sys.argv[1]) if len(sys.argv) > 1 else 52
 ROWS = int(sys.argv[2]) if len(sys.argv) > 2 else 24
 FRAMES = int(sys.argv[3]) if len(sys.argv) > 3 else 24
@@ -142,7 +147,25 @@ def braille(lum):
     return "\n".join(lines)
 
 
+def sprite(out, frames=16, w=240, h=190):
+    """The hologram as RGBA frames: brightness as grey, coverage as alpha (dancer.py tints them like the dancing Lain)."""
+    from PIL import Image
+    os.makedirs(out, exist_ok=True)
+    for old in os.listdir(out):
+        if old.startswith("dancer-") and old.endswith(".png"):
+            os.remove(os.path.join(out, old))
+    for n in range(frames):
+        f = n / frames
+        lum = render(math.radians(-30) + f * 2 * math.pi, f * 4 * math.pi, w, h)
+        g = (np.clip(lum, 0, 1) * 255).astype("uint8")
+        a = (np.clip(lum * 4, 0, 1) * 255).astype("uint8")
+        Image.fromarray(np.dstack([g, g, g, a]), "RGBA").save(os.path.join(out, f"dancer-{n}.png"))
+    print(f"{frames} sprite frames of {w}x{h} in {out}")
+
+
 def main():
+    if SPRITE:
+        return sprite(SPRITE)
     for old in os.listdir(HERE):
         if old.startswith("tachikoma-") and old.endswith(".txt"):
             os.remove(os.path.join(HERE, old))
