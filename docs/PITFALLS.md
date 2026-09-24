@@ -57,12 +57,25 @@ sync with `GitS-Cursors`. `kquitapp6 kded6` makes it segfault (harmless, it rest
 * dunst: put extra rules in `dunstrc.d/` (drop-ins) instead of editing `dunstrc`.
   rofi ignores `display-columns` in a theme file, hence the wrapper script for the action menu.
 
+* **Colour themes (`gits-theme`) recolour copies, never the originals.** The GitS files are kept in `~/.local/share/gits/theme-base` and a theme
+  is always rendered from them, so `set gits` is byte for byte (tools/roundtrip.sh checks it). The colours are written five ways across the
+  configs (`#RRGGBB[AA]`, Hyprland `rgba(RRGGBBAA)`, `rgba(R, G, B, a)`, `rgba(0.18, 0.83, 0.84)` in Python, KDE `Key=R,G,B`); a new file
+  with GitS colours must go into `~/.config/gits/themes/files` (`gits-theme check home` fails otherwise). The installer switches back to
+  GitS before copying and to the chosen theme after it: otherwise every themed file would be "your edit" and get backed up.
+* **Waybar and SIGUSR2**: reloading the style with `pkill -USR2 waybar` left a custom module's child behind as a zombie; restart
+  `gits-bar.service` instead.
+
 ## Icons
 
 `GitS-Icons` (`home/.local/share/gits-icons/build.py`) inherits Tela-circle-grey and recolours only the `places` icons.
 Qt resolves `inode-directory` (what Dolphin asks for) through an alias that the base theme has in every size; if the
 alias is copied only to the small fixed sizes Qt picks the flat 16 px glyph even for big icons, so the builder copies
 aliases (including links to links) to the `scalable` directories too. `kiconfinder6 <name>` shows which file wins.
+
+* **Tests must not see your XDG dirs.** tools/roundtrip.sh sets `HOME` to a throw-away directory, but a session exports
+  `XDG_CONFIG_HOME` / `XDG_DATA_HOME` pointing at the real ones, and anything honouring them (post.py flatpak) then works on your real
+  files. The test unsets them. `flatpak ... --user` (even `override --show`) creates a whole per-user installation: post.py marks it
+  `flatpak.gits-created` so uninstall.sh can remove it.
 
 ## Boot
 

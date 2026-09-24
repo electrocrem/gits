@@ -71,6 +71,7 @@ and confirms afterwards that your session was never locked.
 
 | What | How |
 |---|---|
+| Colour theme | `gits-theme select` (Super+I → Colour theme), `gits-theme set NAME`; themes are `~/.config/gits/themes/NAME.theme` (the roles of `gits.theme` with other colours) |
 | Window animations | `gits-anim` menu (`Super+Shift+Y`): `cyber` (default), `gits`, `lively` (springs), `off`; the neon border runner is opt-in: `touch ~/.local/state/gits-neon-border` |
 | Wallpaper | `gits-wall --pick`, or drop pictures (GIFs too) into `~/Pictures/wallpapers` |
 | Radio station | `GITS_RADIO_STREAM` (stream URL), `GITS_RADIO_API` (an AzuraCast now-playing URL), `GITS_RADIO_NAME`, `GITS_RADIO_VOLUME` |

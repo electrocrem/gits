@@ -72,6 +72,9 @@ restore_bak "$HOME/.config/kcminputrc"
 for m in "$HOME/.config/kdeglobals" "$HOME/.config/kcminputrc" "$HOME/.config/vesktop/settings/settings.json" "${XDG_DATA_HOME:-$HOME/.local/share}/flatpak/overrides/global"; do
     [[ -f $m.gits-created ]] && { echo "delete   $m"; run rm -f "$m" "$m.gits-created"; }
 done
+# a per-user Flatpak installation that only exists because post.py flatpak made the override
+fp=${XDG_DATA_HOME:-$HOME/.local/share}/flatpak
+[[ -f $fp.gits-created ]] && { echo "delete   $fp"; run rm -rf "$fp" "$fp.gits-created"; }
 # Spotify patched by Spicetify with the GitS theme: put the original files back
 if command -v spicetify >/dev/null && grep -qs '^current_theme *= *GitS' "$HOME/.config/spicetify/config-xpui.ini"; then
     echo "restore  Spotify (spicetify restore)"
@@ -107,6 +110,14 @@ if compgen -G "$HOME/.local/share/gits-sounds/*.wav" >/dev/null; then
     run rm -f "$HOME"/.local/share/gits-sounds/*.wav
     run rmdir "$HOME/.local/share/gits-sounds" 2>/dev/null || true
 fi
+
+# colour themes (gits-theme): the GitS originals it kept and its line in the state file (the themed files were restored or deleted above)
+if [[ -d $HOME/.local/share/gits/theme-base ]]; then
+    echo "delete   colour theme originals"
+    run rm -rf "$HOME/.local/share/gits/theme-base"
+fi
+st=${XDG_STATE_HOME:-$HOME/.local/state}/gits/state
+if ((!DRY)) && [[ -f $st ]] && grep -q '^theme=' "$st"; then sed -i '/^theme=/d' "$st"; [[ -s $st ]] || rm -f "$st"; fi
 
 # files that were created by the blocks' host (nothing to restore) and are now empty
 for f in "${BLOCKHOSTS[@]}" "$HOME/.config/kded6rc"; do

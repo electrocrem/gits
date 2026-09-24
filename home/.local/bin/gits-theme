@@ -1,0 +1,341 @@
+#!/usr/bin/env python3
+"""gits-theme: switch the colour theme of the whole desktop.
+
+  gits-theme list | current | select | set NAME [--no-reload] | check [ROOT]
+
+Every themed file (listed in ~/.config/gits/themes/files, paths relative to $HOME) is written in the GitS palette. A theme
+(~/.config/gits/themes/NAME.theme) gives the same roles as gits.theme other colours; switching maps each GitS colour to its role's colour
+in the theme. A GitS colour that is not a role is carried along: the hue of the nearest role in the theme, with the same lightness and
+saturation offset it had from that role in GitS. Greys (black, white, masks) never change.
+
+The GitS originals are kept in ~/.local/share/gits/theme-base; `set gits` puts them back byte for byte. While GitS is active the originals
+follow the live files (your edits, a reinstall). While another theme is active, a file you edited by hand is left alone and reported.
+Colour forms understood: #RRGGBB[AA], rgba(RRGGBB[AA]) (Hyprland), rgb[a](R, G, B[, A]) with 0-255 or 0-1 channels, key=R,G,B (KDE).
+The choice lives in ~/.local/state/gits/state (theme=NAME); afterwards Hyprland, waybar, kitty, dunst, tmux and the desktop widgets
+reload (--no-reload skips that: the installer and the tests use it). Apps that read their colours at start (GTK, Qt, nvim, btop...) take
+the new theme when they are next opened.
+"""
+import colorsys
+import os
+import re
+import shutil
+import subprocess
+import sys
+
+# the themed files are where install.sh puts them, under $HOME (not $XDG_CONFIG_HOME): so is everything this script keeps beside them
+HOME = os.path.expanduser("~")
+CONF = os.path.join(HOME, ".config")
+THEMES = os.path.join(CONF, "gits", "themes")
+BASE = os.path.join(HOME, ".local", "share", "gits", "theme-base")
+STATE = os.path.join(os.environ.get("XDG_STATE_HOME", os.path.join(HOME, ".local", "state")), "gits", "state")
+DEFAULT = "gits"
+
+
+# --------------------------------------------------------------------------------------------- themes
+def load_theme(name, themes=THEMES):
+    """{"name": title, "roles": {role: (r, g, b)}}"""
+    path = os.path.join(themes, name + ".theme")
+    roles, title = {}, name
+    with open(path, encoding="utf-8") as f:
+        for ln in f:
+            m = re.match(r"\s*([a-z][a-z0-9_]*)\s*=\s*(.+?)\s*$", ln)
+            if not m:
+                continue
+            key, val = m.groups()
+            h = re.fullmatch(r"#([0-9A-Fa-f]{6})", val)
+            if key == "name":
+                title = val
+            elif h:
+                roles[key] = tuple(int(h.group(1)[i:i + 2], 16) for i in (0, 2, 4))
+    return {"name": title, "roles": roles}
+
+
+def theme_names():
+    try:
+        return sorted(f[:-6] for f in os.listdir(THEMES) if f.endswith(".theme"))
+    except OSError:
+        return []
+
+
+def current():
+    try:
+        with open(STATE) as f:
+            for ln in f:
+                if ln.startswith("theme="):
+                    return ln.strip().split("=", 1)[1] or DEFAULT
+    except OSError:
+        pass
+    return DEFAULT
+
+
+def save_current(name):
+    os.makedirs(os.path.dirname(STATE), exist_ok=True)
+    lines = []
+    try:
+        with open(STATE) as f:
+            lines = [ln for ln in f if not ln.startswith("theme=")]
+    except OSError:
+        pass
+    if name != DEFAULT:
+        lines.append(f"theme={name}\n")
+    if lines:
+        with open(STATE, "w") as f:
+            f.writelines(lines)
+    elif os.path.exists(STATE):
+        os.remove(STATE)  # nothing else in it: leave no trace of the default
+
+
+def themed_files(themes=THEMES):
+    try:
+        with open(os.path.join(themes, "files"), encoding="utf-8") as f:
+            return [ln.strip() for ln in f if ln.strip() and not ln.startswith("#")]
+    except OSError:
+        return []
+
+
+# --------------------------------------------------------------------------------------------- colour mapping
+def is_grey(c):
+    return max(c) - min(c) < 10
+
+
+def lab(c):
+    def lin(v):
+        v /= 255
+        return v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4
+    r, g, b = (lin(v) for v in c)
+    x, y, z = (r * .4124 + g * .3576 + b * .1805) / .95047, r * .2126 + g * .7152 + b * .0722, (r * .0193 + g * .1192 + b * .9505) / 1.08883
+    f = lambda t: t ** (1 / 3) if t > 0.008856 else 7.787 * t + 16 / 116
+    return 116 * f(y) - 16, 500 * (f(x) - f(y)), 200 * (f(y) - f(z))
+
+
+class Mapper:
+    """GitS colour -> theme colour, memoised."""
+
+    def __init__(self, base, theme):
+        self.base, self.theme, self.memo = base["roles"], theme["roles"], {}
+        self.chroma_roles = [(k, v, lab(v)) for k, v in self.base.items() if not is_grey(v)]
+
+    def __call__(self, c):
+        if c in self.memo:
+            return self.memo[c]
+        out = c
+        exact = [k for k, v in self.base.items() if v == c and k in self.theme]
+        if exact:
+            out = self.theme[exact[0]]
+        elif not is_grey(c) and self.chroma_roles:
+            lc = lab(c)
+            k, rv, _ = min(self.chroma_roles, key=lambda r: sum((a - b) ** 2 for a, b in zip(lc, r[2])))
+            if k in self.theme:
+                ch, cl, cs = colorsys.rgb_to_hls(*(v / 255 for v in c))
+                rh, rl, rs = colorsys.rgb_to_hls(*(v / 255 for v in rv))
+                th, tl, ts = colorsys.rgb_to_hls(*(v / 255 for v in self.theme[k]))
+                l = min(max(tl + (cl - rl), 0), 1)
+                s = min(max(ts * (cs / rs) if rs > 0.01 else ts, 0), 1)
+                out = tuple(round(v * 255) for v in colorsys.hls_to_rgb(th, l, s))
+        self.memo[c] = out
+        return out
+
+
+HEX = re.compile(r"(?<![0-9A-Za-z_])#([0-9A-Fa-f]{6})((?:[0-9A-Fa-f]{2})?)(?![0-9A-Za-z_])")
+HYPR = re.compile(r"(rgba?\()([0-9A-Fa-f]{6})((?:[0-9A-Fa-f]{2})?\))")
+DEC = re.compile(r"(rgba?\(\s*)(\d{1,3})(\s*,\s*)(\d{1,3})(\s*,\s*)(\d{1,3})(?=\s*[,)])")
+FLT = re.compile(r"(rgba?\(\s*)([01]?\.\d+|[01]\.0|[01])(\s*,\s*)([01]?\.\d+|[01]\.0|[01])(\s*,\s*)([01]?\.\d+|[01]\.0|[01])(?=\s*[,)])")
+KDE = re.compile(r"^([A-Za-z]+=)(\d{1,3}),(\d{1,3}),(\d{1,3})((?:,\d{1,3})?)$", re.M)
+
+
+def hexcase(like, c):
+    h = "%02x%02x%02x" % c
+    return h.upper() if like.isupper() or (like.upper() == like and any(ch.isalpha() for ch in like)) else h
+
+
+def recolour(text, m):
+    def hx(g):
+        c = tuple(int(g.group(1)[i:i + 2], 16) for i in (0, 2, 4))
+        return "#" + hexcase(g.group(1), m(c)) + g.group(2)
+
+    def hy(g):
+        c = tuple(int(g.group(2)[i:i + 2], 16) for i in (0, 2, 4))
+        return g.group(1) + hexcase(g.group(2), m(c)) + g.group(3)
+
+    def de(g):
+        c = (int(g.group(2)), int(g.group(4)), int(g.group(6)))
+        if max(c) > 255:
+            return g.group(0)
+        o = m(c)
+        return f"{g.group(1)}{o[0]}{g.group(3)}{o[1]}{g.group(5)}{o[2]}"
+
+    def fl(g):
+        vals = [g.group(2), g.group(4), g.group(6)]
+        c = tuple(round(float(v) * 255) for v in vals)
+        o = m(c)
+        if o == c:
+            return g.group(0)
+        prec = max(len(v.split(".")[1]) if "." in v else 0 for v in vals) or 2
+        f = [f"{v / 255:.{prec}f}" for v in o]
+        return f"{g.group(1)}{f[0]}{g.group(3)}{f[1]}{g.group(5)}{f[2]}"
+
+    def kd(g):
+        o = m((int(g.group(2)), int(g.group(3)), int(g.group(4))))
+        return f"{g.group(1)}{o[0]},{o[1]},{o[2]}{g.group(5)}"
+
+    text = HEX.sub(hx, text)
+    text = HYPR.sub(hy, text)
+    text = FLT.sub(fl, text)   # before DEC: "0, 0, 1" would also read as 0-255 channels
+    text = DEC.sub(de, text)
+    return KDE.sub(kd, text)
+
+
+# --------------------------------------------------------------------------------------------- files
+def read(p):
+    try:
+        with open(p, encoding="utf-8") as f:
+            return f.read()
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
+def write(p, text, mode_from=None):
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    tmp = p + ".gits-theme-tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(text)
+    if mode_from and os.path.exists(mode_from):
+        shutil.copymode(mode_from, tmp)
+    os.replace(tmp, p)
+
+
+def render(name, text, base_theme):
+    if name == DEFAULT:
+        return text
+    return recolour(text, Mapper(base_theme, load_theme(name)))
+
+
+def switch(name, reload=True):
+    if name not in theme_names():
+        sys.exit(f"gits-theme: no theme '{name}' (have: {', '.join(theme_names())})")
+    was = current()
+    base_theme = load_theme(DEFAULT)
+    was_mapper = None if was == DEFAULT else Mapper(base_theme, load_theme(was))
+    new_mapper = None if name == DEFAULT else Mapper(base_theme, load_theme(name))
+    kept, changed = [], 0
+    for rel in themed_files():
+        live, orig = os.path.join(HOME, rel), os.path.join(BASE, rel)
+        text = read(live)
+        if text is None:
+            continue
+        base = read(orig)
+        if was == DEFAULT or base is None:
+            if base is None and was != DEFAULT:
+                kept.append(rel + " (no GitS original kept)")
+                continue
+            if text != base:  # GitS is live: the live file is the original (your edit or a reinstall)
+                write(orig, text)
+            base = text
+        elif text != recolour(base, was_mapper):
+            kept.append(rel)  # edited by hand under another theme: not ours to overwrite
+            continue
+        out = base if new_mapper is None else recolour(base, new_mapper)
+        if out != text:
+            write(live, out, mode_from=live)
+            changed += 1
+    save_current(name)
+    print(f"theme: {load_theme(name)['name']} ({changed} files)")
+    for k in kept:
+        print(f"  left alone (changed by hand): {k}", file=sys.stderr)
+    if reload:
+        reload_all()
+
+
+def reload_all():
+    """Tell whatever is running to pick the new colours up; everything is optional."""
+    def run(*cmd):
+        try:
+            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+        except (OSError, subprocess.SubprocessError):
+            pass
+    if os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
+        run("hyprctl", "reload")
+    # waybar: a restart of its unit (SIGUSR2 reloads the style but left a custom module's child behind as a zombie)
+    if subprocess.run(["systemctl", "--user", "is-active", "--quiet", "gits-bar.service"]).returncode == 0:
+        run("systemctl", "--user", "restart", "gits-bar.service")
+    else:
+        run("pkill", "-USR2", "-x", "waybar")
+    run("pkill", "-USR1", "-x", "kitty")           # kitty: reload kitty.conf (and theme.conf)
+    run("systemctl", "--user", "try-restart", "gits-notifications.service")
+    run("tmux", "source-file", os.path.join(CONF, "tmux", "tmux.conf"))
+    widgets = os.path.join(CONF, "gits-widgets", "run.sh")
+    if os.path.exists(os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "gits-widgets.pid")):
+        run(widgets, "restart")
+
+
+class Probe(Mapper):
+    """A made-up theme with every role's hue turned half way round: whatever it changes holds GitS colours."""
+
+    def __init__(self, base):
+        roles = {}
+        for k, c in base["roles"].items():
+            h, l, s = colorsys.rgb_to_hls(*(v / 255 for v in c))
+            roles[k] = tuple(round(v * 255) for v in colorsys.hls_to_rgb((h + 0.5) % 1, l, s))
+        super().__init__(base, {"roles": roles})
+
+
+def check(root=None):
+    """`check [ROOT]` (default $HOME; the repo's home/ in tools/roundtrip.sh): every file under ROOT that holds GitS colours is in
+    themes/files (or listed there as "#-", not yet), and every listed file exists."""
+    root = root or HOME
+    themes = os.path.join(root, ".config", "gits", "themes")
+    listed = set(themed_files(themes))
+    with open(os.path.join(themes, "files"), encoding="utf-8") as f:
+        later = {ln[2:].strip() for ln in f if ln.startswith("#-")}
+    probe = Probe(load_theme(DEFAULT, themes))
+    bad = 0
+    for rel in sorted(listed):
+        if not os.path.exists(os.path.join(root, rel)):
+            print(f"listed but missing: {rel}")
+            bad += 1
+    for d, _, fs in os.walk(root):
+        for f in fs:
+            rel = os.path.relpath(os.path.join(d, f), root)
+            if rel in listed or rel in later or "__pycache__" in rel or rel.startswith(os.path.join(".config", "gits", "themes")):
+                continue
+            t = read(os.path.join(root, rel))
+            if t and recolour(t, probe) != t:
+                print(f"holds GitS colours but is not in themes/files: {rel}")
+                bad += 1
+    return 1 if bad else 0
+
+
+def select():
+    names = theme_names()
+    cur = current()
+    rows = [("● " if n == cur else "  ") + f"{load_theme(n)['name']}  [{n}]" for n in names]
+    try:
+        p = subprocess.run(["gits-menu", "\U000F03D8  COLOUR THEME", "// 配色", "-format", "i"], input="\n".join(rows),
+                           capture_output=True, text=True)
+        i = int(p.stdout.strip())
+    except (OSError, ValueError):
+        return
+    switch(names[i])
+
+
+def main(argv):
+    cmd = argv[1] if len(argv) > 1 else "select"
+    if cmd == "list":
+        for n in theme_names():
+            print(("* " if n == current() else "  ") + n)
+    elif cmd == "current":
+        print(current())
+    elif cmd == "set" and len(argv) > 2:
+        switch(argv[2], reload="--no-reload" not in argv)
+    elif cmd == "select":
+        select()
+    elif cmd == "check":
+        return check(argv[2] if len(argv) > 2 else None)
+    else:
+        print(__doc__.split("\n\n")[0], file=sys.stderr)
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

@@ -14,6 +14,12 @@ HOME = os.path.expanduser("~")
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CHECK = "--check" in sys.argv
 
+# under another colour theme the live files are recoloured copies: the repo must only ever get the GitS originals
+_state = os.path.join(os.environ.get("XDG_STATE_HOME", os.path.join(HOME, ".local/state")), "gits", "state")
+_theme = next((ln.strip()[6:] for ln in open(_state) if ln.startswith("theme=")), "gits") if os.path.exists(_state) else "gits"
+if _theme != "gits":
+    sys.exit(f"export.py: the colour theme is '{_theme}': run  gits-theme set gits  first, then export")
+
 # (source relative to $HOME, [glob filters]).  A directory is copied recursively; filters, if given, are matched
 # against the file name (relative to the directory) and select which files to take.
 MANIFEST = [
@@ -43,6 +49,7 @@ MANIFEST = [
     (".config/qt5ct/qt5ct.conf", None), (".config/qt5ct/colors/GitS.conf", None),
     (".config/qt6ct/qt6ct.conf", None), (".config/qt6ct/colors/GitS.conf", None),
     (".config/satty/config.toml", None),
+    (".config/gits/themes", ["gits.theme", "files"]),
     (".config/zsh/gits", ["banner.zsh", "colors.zsh", "tmux.zsh", "fastfetch.jsonc", "fastfetch-image.jsonc"]),
     (".config/starship/starship.toml", None),
     (".config/nvim/colors/gits.lua", None),
