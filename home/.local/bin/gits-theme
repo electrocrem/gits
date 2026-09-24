@@ -2,6 +2,7 @@
 """gits-theme: switch the colour theme of the whole desktop.
 
   gits-theme list | current | select | set NAME [--no-reload] | check [ROOT]
+  (select = the picker popup, gits-panel themes)
 
 Every themed file (listed in ~/.config/gits/themes/files, paths relative to $HOME) is written in the GitS palette. A theme
 (~/.config/gits/themes/NAME.theme) gives the same roles as gits.theme other colours; switching maps each GitS colour to its role's colour
@@ -33,9 +34,13 @@ DEFAULT = "gits"
 
 # --------------------------------------------------------------------------------------------- themes
 def load_theme(name, themes=THEMES):
-    """{"name": title, "roles": {role: (r, g, b)}}"""
+    """{"name", "description", "wallpaper", "roles": {role: (r, g, b)}, "swaps": [(old, new)]}
+
+    Besides the colour roles a theme may have: `description = ...` (shown by the theme picker), `wallpaper = FILE` (in
+    ~/.local/share/gits/wallpapers, or a full path: shown when the theme is chosen) and any number of `swap = OLD -> NEW` lines: text
+    replaced in every themed file after the recolouring (another lock-screen picture, mascot or caption)."""
     path = os.path.join(themes, name + ".theme")
-    roles, title = {}, name
+    t = {"name": name, "description": "", "wallpaper": "", "roles": {}, "swaps": []}
     with open(path, encoding="utf-8") as f:
         for ln in f:
             m = re.match(r"\s*([a-z][a-z0-9_]*)\s*=\s*(.+?)\s*$", ln)
@@ -43,11 +48,13 @@ def load_theme(name, themes=THEMES):
                 continue
             key, val = m.groups()
             h = re.fullmatch(r"#([0-9A-Fa-f]{6})", val)
-            if key == "name":
-                title = val
+            if key in ("name", "description", "wallpaper"):
+                t[key] = val
+            elif key == "swap" and " -> " in val:
+                t["swaps"].append(tuple(val.split(" -> ", 1)))
             elif h:
-                roles[key] = tuple(int(h.group(1)[i:i + 2], 16) for i in (0, 2, 4))
-    return {"name": title, "roles": roles}
+                t["roles"][key] = tuple(int(h.group(1)[i:i + 2], 16) for i in (0, 2, 4))
+    return t
 
 
 def theme_names():
@@ -85,12 +92,24 @@ def save_current(name):
         os.remove(STATE)  # nothing else in it: leave no trace of the default
 
 
-def themed_files(themes=THEMES):
+def themed_files(themes=THEMES, expand=False):
+    """The list in themes/files. An entry ending in "/" is a folder (the icon theme, built at install time): with expand=True it
+    becomes every regular file in it (symlinks are left alone: they point at the files)."""
     try:
         with open(os.path.join(themes, "files"), encoding="utf-8") as f:
-            return [ln.strip() for ln in f if ln.strip() and not ln.startswith("#")]
+            items = [ln.strip() for ln in f if ln.strip() and not ln.startswith("#")]
     except OSError:
         return []
+    if not expand:
+        return items
+    out = []
+    for rel in items:
+        if not rel.endswith("/"):
+            out.append(rel)
+            continue
+        for d, _, fs in os.walk(os.path.join(HOME, rel)):
+            out += [os.path.relpath(os.path.join(d, f), HOME) for f in sorted(fs) if not os.path.islink(os.path.join(d, f))]
+    return out
 
 
 # --------------------------------------------------------------------------------------------- colour mapping
@@ -204,10 +223,17 @@ def write(p, text, mode_from=None):
     os.replace(tmp, p)
 
 
-def render(name, text, base_theme):
-    if name == DEFAULT:
+class Renderer:
+    """GitS original -> the file under a theme: recoloured, then the theme's text swaps."""
+
+    def __init__(self, base, theme):
+        self.mapper, self.swaps = Mapper(base, theme), theme["swaps"]
+
+    def __call__(self, text):
+        text = recolour(text, self.mapper)
+        for old, new in self.swaps:
+            text = text.replace(old, new)
         return text
-    return recolour(text, Mapper(base_theme, load_theme(name)))
 
 
 def switch(name, reload=True):
@@ -215,44 +241,55 @@ def switch(name, reload=True):
         sys.exit(f"gits-theme: no theme '{name}' (have: {', '.join(theme_names())})")
     was = current()
     base_theme = load_theme(DEFAULT)
-    was_mapper = None if was == DEFAULT else Mapper(base_theme, load_theme(was))
-    new_mapper = None if name == DEFAULT else Mapper(base_theme, load_theme(name))
-    kept, changed = [], 0
-    for rel in themed_files():
+    was_render = None if was == DEFAULT else Renderer(base_theme, load_theme(was))
+    new_render = None if name == DEFAULT else Renderer(base_theme, load_theme(name))
+    kept, changed, icons = [], 0, False
+    for rel in themed_files(expand=True):
         live, orig = os.path.join(HOME, rel), os.path.join(BASE, rel)
         text = read(live)
         if text is None:
             continue
         base = read(orig)
         if was == DEFAULT or base is None:
-            if base is None and was != DEFAULT:
-                kept.append(rel + " (no GitS original kept)")
-                continue
-            if text != base:  # GitS is live: the live file is the original (your edit or a reinstall)
+            # GitS is live, or the file has never been themed (new in the list, e.g. after an update): the live file is the original
+            if text != base:
                 write(orig, text)
             base = text
-        elif text != recolour(base, was_mapper):
+        elif text != was_render(base):
             kept.append(rel)  # edited by hand under another theme: not ours to overwrite
             continue
-        out = base if new_mapper is None else recolour(base, new_mapper)
+        out = base if new_render is None else new_render(base)
         if out != text:
             write(live, out, mode_from=live)
             changed += 1
+            icons = icons or "/icons/" in "/" + rel
     save_current(name)
-    print(f"theme: {load_theme(name)['name']} ({changed} files)")
+    theme = load_theme(name)
+    print(f"theme: {theme['name']} ({changed} files)")
     for k in kept:
         print(f"  left alone (changed by hand): {k}", file=sys.stderr)
     if reload:
-        reload_all()
+        reload_all(icons)
+        wall = theme["wallpaper"]
+        if wall:
+            wall = wall if os.path.isabs(wall) else os.path.join(HOME, ".local", "share", "gits", "wallpapers", wall)
+            if os.path.exists(wall):
+                subprocess.run(["gits-wall", wall], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
-def reload_all():
+def reload_all(icons=False):
     """Tell whatever is running to pick the new colours up; everything is optional."""
     def run(*cmd):
         try:
             subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
         except (OSError, subprocess.SubprocessError):
             pass
+    if icons:  # GTK apps reload an icon theme only when its name changes: flip to hicolor and back
+        key = ("org.gnome.desktop.interface", "icon-theme")
+        cur = subprocess.run(["gsettings", "get", *key], capture_output=True, text=True).stdout.strip().strip("'")
+        if cur:
+            run("gsettings", "set", *key, "hicolor")
+            run("gsettings", "set", *key, cur)
     if os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
         run("hyprctl", "reload")
     # waybar: a restart of its unit (SIGUSR2 reloads the style but left a custom module's child behind as a zombie)
@@ -289,11 +326,11 @@ def check(root=None):
     themes = os.path.join(root, ".config", "gits", "themes")
     listed = set(themed_files(themes))
     with open(os.path.join(themes, "files"), encoding="utf-8") as f:
-        later = {ln[2:].strip() for ln in f if ln.startswith("#-")}
+        later = {ln[2:].split()[0] for ln in f if ln.startswith("#-") and ln[2:].split()}
     probe = Probe(load_theme(DEFAULT, themes))
     bad = 0
     for rel in sorted(listed):
-        if not os.path.exists(os.path.join(root, rel)):
+        if not rel.endswith("/") and not os.path.exists(os.path.join(root, rel)):
             print(f"listed but missing: {rel}")
             bad += 1
     for d, _, fs in os.walk(root):
@@ -309,6 +346,10 @@ def check(root=None):
 
 
 def select():
+    """The theme picker popup (gits-panel themes); the plain menu where the popup cannot run."""
+    if os.environ.get("WAYLAND_DISPLAY") and shutil.which("gits-panel"):
+        subprocess.Popen(["gits-panel", "themes"], start_new_session=True)
+        return
     names = theme_names()
     cur = current()
     rows = [("● " if n == cur else "  ") + f"{load_theme(n)['name']}  [{n}]" for n in names]

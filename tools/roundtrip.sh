@@ -43,7 +43,7 @@ tsnap() { snap | grep -vE ' \./\.local/share/gits/theme-base/| \./\.local/state/
 tsnap >"$FH.gits"
 python3 - "$FH/.config/gits/themes" <<'PY'   # a made-up theme: every GitS colour with its hue turned half way round
 import colorsys, re, sys
-out = ["name = Probe"]
+out = ["name = Probe", "swap = SECTION 9 -> PROBE 9"]
 for ln in open(sys.argv[1] + "/gits.theme"):
     m = re.match(r"\s*([a-z_]+)\s*=\s*#([0-9A-Fa-f]{6})", ln)
     if m:
@@ -53,7 +53,7 @@ open(sys.argv[1] + "/probe.theme", "w").write("\n".join(out) + "\n")
 PY
 T=$FH/.local/bin/gits-theme
 "$T" set probe --no-reload >/dev/null
-recoloured() { [[ $("$T" current) == probe ]] && ! grep -qi '2ed3d7' "$FH/.config/kitty/theme.conf" "$FH/.config/hypr/gits/options.lua" "$FH/.local/share/color-schemes/GitS.colors" && ! grep -q '46, 211, 215' "$FH/.config/hypr/hyprlock.conf"; }
+recoloured() { [[ $("$T" current) == probe ]] && ! grep -qi '2ed3d7' "$FH/.config/kitty/theme.conf" "$FH/.config/hypr/gits/options.lua" "$FH/.local/share/color-schemes/GitS.colors" && ! grep -q '46, 211, 215' "$FH/.config/hypr/hyprlock.conf" && grep -q 'PROBE 9' "$FH/.config/hypr/hyprlock.conf"; }
 recoloured || { echo "the probe theme did not recolour the configs"; exit 1; }
 "$REPO/install.sh" >/dev/null
 recoloured || { echo "a reinstall lost the colour theme"; exit 1; }
@@ -61,7 +61,7 @@ recoloured || { echo "a reinstall lost the colour theme"; exit 1; }
 tsnap >"$FH.gits2"
 diff "$FH.gits" "$FH.gits2" >/dev/null || { diff "$FH.gits" "$FH.gits2" | head; echo "switching back to GitS did not restore the files byte for byte"; exit 1; }
 rm -f "$FH.gits" "$FH.gits2" "$FH/.config/gits/themes/probe.theme"
-echo "colour themes OK: recoloured, kept over a reinstall, GitS restored byte for byte"
+echo "colour themes OK: recoloured and text swapped, kept over a reinstall, GitS restored byte for byte"
 "$REPO/uninstall.sh" >/dev/null
 
 snap >"$FH.after"

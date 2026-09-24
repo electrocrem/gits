@@ -130,7 +130,7 @@ need sudo, so the commands to undo them are printed at the end.
 
 ## Make it yours
 
-* **Colour theme:** `Super+I` → *Colour theme*, or `gits-theme set NAME`. A theme is a small file in `~/.config/gits/themes/` that gives
+* **Colour theme:** `Super+I` → *Colour theme* opens a picker (a card per theme: wallpaper, colours), or `gits-theme set NAME`. A theme is a small file in `~/.config/gits/themes/` that gives
   the roles of `gits.theme` (background, accent, red...) other colours; the whole desktop is recoloured from it and `gits-theme set gits`
   brings the originals back exactly.
 * **Window motion:** `Super+Shift+Y` — `cyber` (simple and sharp, the default), `gits` (hard snap), `lively` (springs and bounces), or `off`.
