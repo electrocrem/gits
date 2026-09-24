@@ -1797,8 +1797,19 @@ class AppearancePopup(Popup):
             self.mascots[m] = b
             mrow.append(b)
         root.append(mrow)
+        # radio dancer
+        root.append(label("RADIO DANCER", "ap-sec"))
+        drow = Gtk.Box(spacing=6)
+        self.dancers = {}
+        for d in [{"id": "", "name": "theme"}] + self.info.get("dancers", []):
+            b = Gtk.Button(label=d["name"].upper())
+            b.add_css_class("ap-toggle")
+            b.connect("clicked", lambda _b, i=d["id"]: self._pick_dancer(i))
+            self.dancers[d["id"]] = b
+            drow.append(b)
+        root.append(drow)
         # wallpaper
-        root.append(label("WALLPAPER  ·  shown at once, remembered for the current theme", "ap-sec"))
+        root.append(label("WALLPAPER  ·  for the theme selected above; shown at once when it is the current one", "ap-sec"))
         self.walls = Gtk.FlowBox()
         self.walls.set_selection_mode(Gtk.SelectionMode.NONE)
         self.walls.set_max_children_per_line(6)
@@ -1812,17 +1823,11 @@ class AppearancePopup(Popup):
         sc.set_child(self.walls)
         root.append(sc)
         self.wall_buttons = {}
-        try:
-            with open(os.path.join(STATE, "gits", "wallpaper")) as f:
-                self.cur_wall = f.read().strip()
-        except OSError:
-            self.cur_wall = ""
+        self.walls_of = dict(self.info.get("wallpapers", {}))   # the wallpaper each theme remembers (gits-wall --theme)
         files = [f for f in sh(["gits-wall", "--list"], real=True).split("\n") if f]
         for f in files:
             b = Gtk.Button()
             b.add_css_class("ap-wall")
-            if f == self.cur_wall:
-                b.add_css_class("sel")
             b.set_tooltip_text(os.path.basename(f))
             pic = Gtk.Picture()
             pic.set_size_request(118, 66)
@@ -1919,6 +1924,8 @@ class AppearancePopup(Popup):
         t = self.themes.get(tid, {})
         self.accent = t.get("user", {}).get("accent")          # None = the theme's own
         self.mascot = t.get("mascot", "tachikoma")
+        self.dancer = t.get("user", {}).get("dancer", "")     # "" = the theme's own
+        self._show_wall()
         self.chip_default.da.queue_draw()
         self._show_choices()
 
@@ -1929,8 +1936,11 @@ class AppearancePopup(Popup):
             self.hex.set_text(self.accent)
         for m, b in self.mascots.items():
             (b.add_css_class if m == self.mascot else b.remove_css_class)("sel")
+        for d, b in self.dancers.items():
+            (b.add_css_class if d == self.dancer else b.remove_css_class)("sel")
         t = self.themes.get(self.sel, {})
-        changed = self.sel != self.cur or self.accent != t.get("user", {}).get("accent") or self.mascot != t.get("mascot", "tachikoma")
+        changed = (self.sel != self.cur or self.accent != t.get("user", {}).get("accent") or self.mascot != t.get("mascot", "tachikoma")
+                   or self.dancer != t.get("user", {}).get("dancer", ""))
         self.status.set_text(("APPLY: " + t.get("name", self.sel)) if changed else t.get("description", ""))
 
     def _pick_accent(self, colour):
@@ -1951,11 +1961,25 @@ class AppearancePopup(Popup):
         self.mascot = m
         self._show_choices()
 
+    def _pick_dancer(self, d):
+        self.dancer = d
+        self._show_choices()
+
+    def _show_wall(self):
+        """Mark the wallpaper the selected theme would show: the one it remembers, else its own."""
+        t = self.themes.get(self.sel, {})
+        own = t.get("wallpaper", "")
+        own = own if os.path.isabs(own) else os.path.join(HOME, ".local/share/gits/wallpapers", own)
+        want = self.walls_of.get(self.sel) or own
+        for k, (b, _p) in getattr(self, "wall_buttons", {}).items():
+            (b.add_css_class if k == want else b.remove_css_class)("sel")
+
     def _pick_wall(self, f):
-        fire(["gits-wall", f])
-        for k, (b, _p) in self.wall_buttons.items():
-            (b.add_css_class if k == f else b.remove_css_class)("sel")
-        self.status.set_text("wallpaper: " + os.path.basename(f))
+        fire(["gits-wall", "--theme", self.sel, f])   # shown at once if the selected theme is the current one
+        self.walls_of[self.sel] = f
+        self._show_wall()
+        t = self.themes.get(self.sel, {})
+        self.status.set_text(f"wallpaper for {t.get('name', self.sel)}: " + os.path.basename(f))
 
     def _load_thumbs(self):
         for _ in range(3):
@@ -1989,6 +2013,7 @@ class AppearancePopup(Popup):
             cmds += [["gits-theme", "option", tid, "accent"], ["gits-theme", "option", tid, "accent_bright"]]
         # the theme's own mascot: no option of yours; another one: remembered in the theme's .user file
         cmds.append(["gits-theme", "option", tid, "mascot"] + ([] if self.mascot == t.get("theme_mascot") else [self.mascot]))
+        cmds.append(["gits-theme", "option", tid, "dancer"] + ([self.dancer] if self.dancer else []))
         cmds.append(["gits-theme", "set", tid])
         self._run(cmds, "APPLYING " + t.get("name", tid).upper() + " …")
 

@@ -4,6 +4,7 @@
 #   gits-wall --pick    choose from a menu (the wallpaper folders below), fade to the new one
 #   gits-wall --list    print the pictures the menu would offer
 #   gits-wall --default forget the choice and go back to gits_smoke.png
+#   gits-wall --theme NAME FILE   remember FILE for the colour theme NAME (the appearance menu); shown now if NAME is the current theme
 #   gits-wall           apply the remembered wallpaper (this is what gits-wallpaper.service runs at login)
 # Folders searched: ~/.local/share/gits/wallpapers and ~/Pictures/wallpapers (add more with GITS_WALL_DIRS="dir:dir").
 # An animated GIF is drawn all the time: measured in awww-daemon, a 24-frame loop costs about 2% of one core and ~20 MB, a 68-frame 1280x800 loop
@@ -26,6 +27,10 @@ apply() {  # apply FILE [transition]
 
 case ${1:-} in
     --list) list ;;
+    --theme)
+        [[ -n ${2:-} && -r ${3:-} ]] || { echo "usage: gits-wall --theme NAME FILE" >&2; exit 2; }
+        f=$(realpath -- "$3"); mkdir -p "$(dirname "$state")"
+        if [[ $2 == "$theme" ]]; then apply "$f" fade && remember "$f"; else printf '%s\n' "$f" >"$state.$2"; fi ;;
     --default) rm -f "$state" "$state.$theme"; apply "$default" fade ;;
     --pick)
         mapfile -t files < <(list)

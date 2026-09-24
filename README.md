@@ -130,8 +130,8 @@ need sudo, so the commands to undo them are printed at the end.
 
 ## Make it yours
 
-* **Look:** `Super+I` → *Appearance*: the colour theme, your own accent colour on top of it, the lock-screen mascot and the wallpaper
-  in one window. Or `gits-theme set NAME` / `gits-theme option NAME accent '#FF2E97'`. A theme is a small file in `~/.config/gits/themes/` that gives
+* **Look:** `Super+I` → *Appearance*: the colour theme, your own accent colour on top of it, the lock-screen mascot, the radio's dancer
+  and each theme's wallpaper in one window. Or `gits-theme set NAME` / `gits-theme option NAME accent '#FF2E97'`. A theme is a small file in `~/.config/gits/themes/` that gives
   the roles of `gits.theme` (background, accent, red...) other colours; the whole desktop is recoloured from it and `gits-theme set gits`
   brings the originals back exactly.
 * **Window motion:** `Super+Shift+Y` — `cyber` (simple and sharp, the default), `gits` (hard snap), `lively` (springs and bounces), or `off`.

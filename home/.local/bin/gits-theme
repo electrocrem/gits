@@ -48,7 +48,7 @@ def parse_theme(path, t):
                 continue
             key, val = m.groups()
             h = re.fullmatch(r"#([0-9A-Fa-f]{6})", val)
-            if key in ("name", "description", "wallpaper", "mascot", "lock_bg", "art"):
+            if key in ("name", "description", "wallpaper", "mascot", "lock_bg", "art", "dancer"):
                 t[key] = val
             elif key == "swap" and " -> " in val:
                 t["swaps"].append(tuple(val.split(" -> ", 1)))
@@ -64,11 +64,11 @@ def load_theme(name, themes=THEMES, user=True):
     ~/.local/share/gits/wallpapers, or a full path: shown when the theme is chosen), `mascot = NAME` (the lock-screen mascot:
     tachikoma, lain, off, or any ~/.local/share/gits-lock/NAME-0.txt), `lock_bg = FILE` (in ~/.config/hypr/hyprlock/: the lock-screen
     picture), `art = NAME` (the art set in ~/.local/share/gits/art/NAME: terminal banner, fastfetch, Neovim dashboard, radio dancer;
-    default: the set named like the theme, else gits) and any number of `swap = OLD -> NEW` lines: text replaced in every themed
-    file after the recolouring.
+    default: the set named like the theme, else gits), `dancer = SET|lain|off` (the radio popup's dancer; default: the art set's own,
+    else Lain) and any number of `swap = OLD -> NEW` lines: text replaced in every themed file after the recolouring.
     NAME.user next to it (written by `gits-theme option` and the appearance menu) is read on top: your own accent, mascot..."""
     t = parse_theme(os.path.join(themes, name + ".theme"),
-                    {"name": name, "description": "", "wallpaper": "", "mascot": "", "lock_bg": "", "art": "", "roles": {}, "swaps": []})
+                    {"name": name, "description": "", "wallpaper": "", "mascot": "", "lock_bg": "", "art": "", "dancer": "", "roles": {}, "swaps": []})
     t["user"] = {}
     up = os.path.join(themes, name + ".user")
     if user and os.path.exists(up):
@@ -76,7 +76,7 @@ def load_theme(name, themes=THEMES, user=True):
         t["user"] = {k: v for k, v in u.items() if v}
         t["roles"].update(u["roles"])
         t["swaps"] += u["swaps"]
-        for k in ("wallpaper", "mascot", "lock_bg", "art"):
+        for k in ("wallpaper", "mascot", "lock_bg", "art", "dancer"):
             if u.get(k):
                 t[k] = u[k]
     if t["mascot"] and t["mascot"] != "tachikoma":   # tachikoma is what gits-lock-mascot shows by default
@@ -346,6 +346,13 @@ def switch(name, reload=True):
     save_current(name)
     changed += kde_sync()
     art_set(new_theme, name)
+    choice = os.path.join(os.path.dirname(STATE), "dancer")   # read by gits-widgets/dancer.py when the radio popup opens
+    if new_theme.get("dancer"):
+        os.makedirs(os.path.dirname(choice), exist_ok=True)
+        with open(choice, "w") as f:
+            f.write(new_theme["dancer"] + "\n")
+    elif os.path.exists(choice):
+        os.remove(choice)
     theme = new_theme
     print(f"theme: {theme['name']} ({changed} files)")
     for k in kept:
@@ -512,7 +519,7 @@ def select():
     switch(names[i])
 
 
-OPTION_KEYS = ("wallpaper", "mascot", "lock_bg", "art")
+OPTION_KEYS = ("wallpaper", "mascot", "lock_bg", "art", "dancer")
 
 
 def option(name, key, value=None):
@@ -550,13 +557,31 @@ def info():
     hx = lambda c: "#%02X%02X%02X" % c
     lock = os.path.join(HOME, ".local", "share", "gits-lock")
     mascots = sorted({f[:-6] for f in os.listdir(lock) if f.endswith("-0.txt")}) if os.path.isdir(lock) else []
-    out = {"current": current(), "mascots": mascots + ["off"], "themes": []}
+    dancers = []
+    for s in sorted(os.listdir(ART)) if os.path.isdir(ART) else []:
+        d = os.path.join(ART, s)
+        if s != "current" and not os.path.islink(d) and (os.path.exists(os.path.join(d, "dancer.gif")) or os.path.exists(os.path.join(d, "dancer-0.png"))):
+            conf = read(os.path.join(d, "banner.conf")) or ""
+            m = re.search(r'^dancer_name="?([^"\n]+)', conf, re.M)
+            dancers.append({"id": s, "name": m.group(1) if m else s})
+    if "lain" not in [x["id"] for x in dancers]:
+        dancers.append({"id": "lain", "name": "lain"})
+    walls = {}
+    for n in theme_names():
+        try:
+            with open(os.path.join(os.path.dirname(STATE), "wallpaper." + n)) as f:
+                walls[n] = f.read().strip()
+        except OSError:
+            pass
+    out = {"current": current(), "mascots": mascots + ["off"], "dancers": dancers + [{"id": "off", "name": "off"}],
+           "wallpapers": walls, "themes": []}
     for n in theme_names():
         t, plain = load_theme(n), load_theme(n, user=False)
         user = {k: hx(v) for k, v in t["user"].get("roles", {}).items()}
         user.update({k: v for k, v in t["user"].items() if k in OPTION_KEYS})
         out["themes"].append({"id": n, "name": t["name"], "description": t["description"], "wallpaper": t["wallpaper"],
                               "mascot": t["mascot"] or "tachikoma", "theme_mascot": plain["mascot"] or "tachikoma", "lock_bg": t["lock_bg"],
+                              "dancer": t["dancer"], "theme_dancer": plain["dancer"],
                               "roles": {k: hx(v) for k, v in t["roles"].items()},
                               "theme_roles": {k: hx(v) for k, v in plain["roles"].items()}, "user": user})
     print(json.dumps(out, ensure_ascii=False))
