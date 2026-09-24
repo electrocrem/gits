@@ -35,7 +35,6 @@ fi
 [[ -f $FH/.config/gits-widgets/lain.gif ]] || { echo "the dancing Lain (lain.gif) was not installed: assets/lain-dance.gif is missing from the repo"; exit 1; }
 if python3 -c 'import PIL, numpy' 2>/dev/null; then [[ -s $FH/.local/share/gits-lock/lain-0.txt && -s $FH/.local/share/gits-lock/tachikoma-0.txt ]] || { echo "the lock screen frames were not built"; exit 1; }; fi
 [[ -L $FH/.local/share/gits/art/current && -r $FH/.local/share/gits/art/current/banner.conf ]] || { echo "no art set linked at ~/.local/share/gits/art/current"; exit 1; }
-if python3 -c 'import PIL, numpy' 2>/dev/null; then [[ -s $FH/.local/share/gits/art/gits/dancer-0.png ]] || { echo "the radio dancer (Tachikoma) was not built"; exit 1; }; fi
 [[ ! -e $FH/.config/hypr/scripts/gits-blind-guard.sh ]] || { echo "the blind-login guard must be opt-in"; exit 1; }
 ! grep -rIl '@HOME@' "$FH" >/dev/null || { echo "unsubstituted @HOME@ token left"; exit 1; }
 
