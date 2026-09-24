@@ -933,7 +933,8 @@ class RadioPage(ArtMixin, Gtk.Box):
     SPEED = float(os.environ.get("GITS_RADIO_LAIN_SPEED", "1") or 1)   # 1 = lively, 0.5 = calm, 1.5 = frantic
     FLASH = os.environ.get("GITS_RADIO_FLASH", "1") != "0"   # the stage flashing on the beats; 0 = off (for anyone who dislikes flicker)
     SEG, SGAP = 3, 1   # LED segment height / gap of the spectrum, px
-    CY, CYB, RED, FG = (0.18, 0.83, 0.84), (0.55, 0.95, 0.97), (0.94, 0.31, 0.31), (0.86, 0.94, 0.96)
+    # as #hex so a colour theme (gits-theme) recolours them; cairo wants 0..1 floats
+    CY, CYB, RED, FG = (tuple(int(h[i:i + 2], 16) / 255 for i in (1, 3, 5)) for h in ("#2ED3D7", "#8CF2F7", "#F04F4F", "#DBF0F5"))
 
     def __init__(self):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=7)

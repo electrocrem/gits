@@ -62,7 +62,7 @@ def _pil_frames(height, style, src=None):
             col = 70 + rgb * (185 / 255)
         else:   # hologram: light = bright cyan, ink = deep teal
             t = np.clip(lum, 0, 1)[..., None] ** 0.8
-            col = hexrgb("#083C54") * (1 - t) + hexrgb("#96FAFF") * t   # hex, so a colour theme (gits-theme) recolours them
+            col = hexrgb("#0C1A33") * (1 - t) + hexrgb("#5EF1F5") * t   # surface and bright accent: a colour theme (gits-theme) recolours them
         alpha = fg * 255.0
         if style != "color":   # scan lines
             alpha = alpha * np.where(np.arange(fg.shape[0]) % 3 == 0, 0.62, 1.0)[:, None]
