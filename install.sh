@@ -252,7 +252,8 @@ say "building the icon theme (cyan folders on top of Tela-circle-grey)"
 run python3 "$HOME/.local/share/gits-icons/build.py" || warn "icon theme build failed (needs Tela-circle-grey: AUR tela-circle-icon-theme-grey): the theme falls back to it"
 ((DRY)) || python3 "$REPO/tools/post.py" steam
 run python3 "$HOME/.local/share/gits-sounds/build.py" || warn "UI sounds not built (needs python-numpy)"
-run python3 "$HOME/.local/share/gits-lock/build.py" >/dev/null || warn "lock screen frames not built (needs python-pillow and python-numpy): the dancing Lain stays blank"
+run python3 "$HOME/.local/share/gits-lock/tachikoma.py" >/dev/null || warn "lock screen Tachikoma not built (needs python-numpy): the lock screen has no mascot"
+run python3 "$HOME/.local/share/gits-lock/build.py" >/dev/null || warn "dancing Lain frames not built (needs python-pillow and python-numpy): GITS_LOCK_MASCOT=lain stays blank"
 ((TELEGRAM)) && run python3 "$HOME/.local/share/gits-telegram/build.py"
 
 # ------------------------------------------------------------------ activation

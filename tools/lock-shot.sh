@@ -13,6 +13,9 @@ TMP=$(mktemp -d); orig=$(hyprctl activeworkspace -j | jq -r .id); outer_sig=$HYP
 NP="" LP=""
 cleanup() {
     [[ -n $LP ]] && kill "$LP" 2>/dev/null; sleep 0.4; [[ -n $NP ]] && kill "$NP" 2>/dev/null; sleep 1.2
+    # the nested Hyprland can crash on the way out and leave its socket behind: the next run would then not find a new one
+    [[ -n ${nested_wl:-} && $nested_wl != "$outer_wl" ]] && ! kill -0 "$NP" 2>/dev/null && rm -f "$XDG_RUNTIME_DIR/$nested_wl" "$XDG_RUNTIME_DIR/$nested_wl.lock"
+    [[ -n ${nested_sig:-} && $nested_sig != "$outer_sig" ]] && rm -rf "$XDG_RUNTIME_DIR/hypr/$nested_sig"
     hyprctl dispatch "hl.dsp.focus({ workspace = $orig })" >/dev/null 2>&1
     echo "your session locked? $(loginctl show-session "$XDG_SESSION_ID" -p LockedHint --value)"; rm -rf "$TMP"
 }
