@@ -168,7 +168,8 @@ for f in art.png cyborg.txt lain.txt shodan.txt; do
     s=$(asset "$f") && place "$s" "$HOME/.config/zsh/gits/$f"
 done
 s=$(asset lain.txt) && place "$s" "$HOME/.config/nvim/lua/gits/lain.txt"
-s=$(asset lain-dance.gif) && place "$s" "$HOME/.config/gits-widgets/lain.gif"   # the radio popup and the lock screen dance from it
+s=$(asset lain-dance.gif) && place "$s" "$HOME/.config/gits-widgets/lain.gif"   # the radio popup dances from it (and GITS_LOCK_MASCOT=lain)
+s=$(asset fuchikoma-dance.gif) && place "$s" "$HOME/.local/share/gits-lock/tachikoma.gif"   # the lock screen mascot, in colour
 
 # ------------------------------------------------------------------ hooks into your own config files
 say "hooking into zsh and neovim"
