@@ -38,6 +38,7 @@ set_value() {  # profile stage minutes: keep dim <= lock <= off <= sleep (0 = ne
             ((i > idx && cur < m)) && val[$p.$o]=$m
         done
     fi
+    return 0  # the last (( )) above is often false: without this `gits-idle set` never reached save
 }
 
 generate() {  # profile -> hypridle listener text
