@@ -265,7 +265,6 @@ run python3 "$HOME/.local/share/gits-icons/build.py" || warn "icon theme build f
 ((DRY)) || python3 "$REPO/tools/post.py" steam
 run python3 "$HOME/.local/share/gits-sounds/build.py" || warn "UI sounds not built (needs python-numpy)"
 run python3 "$HOME/.local/share/gits-lock/tachikoma.py" >/dev/null || warn "lock screen Tachikoma not built (needs python-numpy): the lock screen has no mascot"
-run python3 "$HOME/.local/share/gits-lock/tachikoma.py" --sprite "$HOME/.local/share/gits/art/gits" >/dev/null || warn "the radio popup's Tachikoma not built (needs python-numpy and python-pillow)"
 [[ -e $HOME/.local/share/gits/art/current ]] || run ln -sfn gits "$HOME/.local/share/gits/art/current"   # gits-theme moves it with the theme
 run python3 "$HOME/.local/share/gits-lock/build.py" >/dev/null || warn "dancing Lain frames not built (needs python-pillow and python-numpy): GITS_LOCK_MASCOT=lain stays blank"
 ((TELEGRAM)) && run python3 "$HOME/.local/share/gits-telegram/build.py"

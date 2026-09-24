@@ -1,7 +1,7 @@
 """The dancer of the radio popup: the one of the current theme's art set (~/.local/share/gits/art/current/, gits-theme switches it).
 
-A set has either dancer.gif (a drawing on white: Lain, from pryanostnik/lain-dance, MIT) or dancer-0.png, dancer-1.png... (RGBA frames:
-the Tachikoma hologram of tachikoma.py --sprite, the ICE of ice.py --sprite). Without either: lain.gif next to this file.
+A set may have dancer.gif (a drawing on white) or dancer-0.png, dancer-1.png... (RGBA frames, e.g. tachikoma.py --sprite). Without
+either (the default in every theme): the dancing Lain, lain.gif next to this file (pryanostnik/lain-dance, MIT).
 
     frames = load(height, style)     # list of cairo.ImageSurface, all the same size; [] if Pillow / numpy / the frames are missing
     style: "holo" (cyan hologram with scan lines, the default) or "color" (the colours of the drawing)
