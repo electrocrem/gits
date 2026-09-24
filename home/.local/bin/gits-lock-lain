@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-# hyprlock label: the braille frame of the dancing Lain for this instant (8 frames, 8 a second). No forks besides the subshell: it runs 8 times a second.
-d=${XDG_DATA_HOME:-$HOME/.local/share}/gits-lock
-n=$(( (${EPOCHREALTIME/./} / 125000) % 8 ))
-echo "$(<"$d/lain-$n.txt")"

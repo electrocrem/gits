@@ -93,3 +93,8 @@ entry.t-entry placeholder { color: @dim; }
 /* audio spectrum */
 .au-src { font-size: 10px; font-weight: 800; color: @cyb; letter-spacing: 1px; }
 .au-db { font-size: 9px; color: @dim; }
+
+/* home server (GITS_SERVER) */
+.s-state { font-size: 9px; font-weight: 800; letter-spacing: 2px; color: @cy; margin-top: 4px; }
+.s-docker { font-size: 9px; font-weight: 700; letter-spacing: 1px; color: @mid; }
+.s-state.bad, .s-docker.bad { color: @red; }

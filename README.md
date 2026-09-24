@@ -139,6 +139,9 @@ need sudo, so the commands to undo them are printed at the end.
   no flash on the beat: `GITS_RADIO_FLASH=0`; her own colours: `GITS_RADIO_LAIN=color`.
 * **A plainer lock screen:** copy `~/.config/hypr/hyprlock/static.conf` over `~/.config/hypr/hyprlock.conf`.
 * **Weather card:** `GITS_WEATHER_LOCATION="Berlin"` (it guesses by IP otherwise).
+* **Home server card:** `hl.env("GITS_SERVER", "pi")` in `local.lua` (a Host from `~/.ssh/config`, or `user@host`) shows a Raspberry Pi or any
+  Linux box on the desktop: CPU, RAM, temperature, disks, Docker containers and undervoltage. It needs key login and `python3` on the server,
+  nothing is installed there. `GITS_SERVER_NAME` changes the name on the card.
 * **Add your own rows** to the settings menu in `~/.config/gits/settings.tsv`.
 * **Monitors and other per-machine settings:** put them in `~/.config/hypr/gits/local.lua` (for example
   `hl.monitor({ output = "DP-3", mode = "2560x1440@180", position = "0x0", scale = 1 })`). It loads last and the installer never touches it.

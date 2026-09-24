@@ -138,6 +138,9 @@ zsh и Neovim он добавляет несколько чётко помече
   без вспышек на ударе: `GITS_RADIO_FLASH=0`; свои цвета у неё: `GITS_RADIO_LAIN=color`.
 * **Экран блокировки попроще:** скопируйте `~/.config/hypr/hyprlock/static.conf` поверх `~/.config/hypr/hyprlock.conf`.
 * **Погода:** `GITS_WEATHER_LOCATION="Berlin"` (иначе город определяется по IP).
+* **Домашний сервер на рабочем столе:** `hl.env("GITS_SERVER", "pi")` в `local.lua` (Host из `~/.ssh/config` или `user@host`) — карточка
+  с процессором, памятью, температурой, дисками, контейнерами Docker и недонапряжением Raspberry Pi. Нужен вход по ключу и `python3` на сервере,
+  ставить туда ничего не надо. Имя на карточке: `GITS_SERVER_NAME`.
 * **Свои строки** в меню настроек: `~/.config/gits/settings.tsv`.
 * **Мониторы и прочее для конкретной машины:** в `~/.config/hypr/gits/local.lua` (например
   `hl.monitor({ output = "DP-3", mode = "2560x1440@180", position = "0x0", scale = 1 })`). Он грузится последним, установщик его не трогает.
