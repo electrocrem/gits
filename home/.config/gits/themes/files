@@ -45,3 +45,11 @@
 .local/bin/gits-shot
 .local/share/color-schemes/GitS.colors
 .vscode-oss/extensions/gits.ghost-in-the-shell-1.0.0/themes/ghost-in-the-shell-color-theme.json
+.config/gits-widgets/dancer.py
+
+# copies tools/post.py puts into other apps ("? " = may not exist, globs allowed); ~/.config/kdeglobals is kept in step by gits-theme itself
+? .var/app/app.zen_browser.zen/.zen/*/chrome/userChrome.css
+? .var/app/app.zen_browser.zen/.zen/*/chrome/userContent.css
+? .zen/*/chrome/userChrome.css
+? .zen/*/chrome/userContent.css
+? .logseq/plugins/nord-theme/custom.css
