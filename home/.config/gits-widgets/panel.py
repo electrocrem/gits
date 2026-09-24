@@ -1742,8 +1742,9 @@ class AppearancePopup(Popup):
     """Appearance (gits-panel appearance, Super+I -> Appearance): the colour theme, your own accent on top of it, the lock-screen
     mascot and the wallpaper, in one place. Theme / accent / mascot are applied together with APPLY (one recolouring, `gits-theme
     option` + `set`); a wallpaper is shown at once (gits-wall remembers it for the current theme)."""
-    CARD_W = 800
+    CARD_W = 860
     SWATCH = ("bg", "surface", "fg", "accent", "accent_bright", "accent_2", "red", "green", "yellow", "violet")
+    PREVIEW = (352, 198)   # the big preview beside the wallpaper grid
     # written without "#" on purpose: gits-theme recolours every #RRGGBB in this file, and these must stay what they say
     ACCENTS = tuple((n, "#" + c) for n, c in (("CYAN", "2ED3D7"), ("LAVENDER", "B79CFF"), ("MATRIX", "3BFF8E"), ("MAGENTA", "FF2E97"),
                                               ("AMBER", "FFB000"), ("RED", "E5432B"), ("BLUE", "459BF1"), ("CREAM", "E8DCCB")))
@@ -1812,8 +1813,8 @@ class AppearancePopup(Popup):
         root.append(label("WALLPAPER  ·  for the theme selected above; shown at once when it is the current one", "ap-sec"))
         self.walls = Gtk.FlowBox()
         self.walls.set_selection_mode(Gtk.SelectionMode.NONE)
-        self.walls.set_max_children_per_line(6)
-        self.walls.set_min_children_per_line(6)
+        self.walls.set_max_children_per_line(4)
+        self.walls.set_min_children_per_line(4)
         self.walls.set_row_spacing(6)
         self.walls.set_column_spacing(6)
         sc = Gtk.ScrolledWindow()
@@ -1821,7 +1822,23 @@ class AppearancePopup(Popup):
         sc.set_min_content_height(250)
         sc.set_max_content_height(250)
         sc.set_child(self.walls)
-        root.append(sc)
+        sc.set_hexpand(True)
+        wrow = Gtk.Box(spacing=10)
+        wrow.append(sc)
+        # the big preview: whatever the pointer is over, else the wallpaper the selected theme would show
+        pv = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        self.preview = Gtk.Picture()
+        self.preview.set_size_request(*self.PREVIEW)
+        self.preview.add_css_class("th-thumb")
+        self.preview_name = label("", "th-status")
+        self.preview_name.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
+        self.preview_name.set_max_width_chars(40)
+        pv.append(self.preview)
+        pv.append(self.preview_name)
+        pv.append(label("hover to preview · click to choose", "th-status"))
+        wrow.append(pv)
+        root.append(wrow)
+        self._previews = {}
         self.wall_buttons = {}
         self.walls_of = dict(self.info.get("wallpapers", {}))   # the wallpaper each theme remembers (gits-wall --theme)
         files = [f for f in sh(["gits-wall", "--list"], real=True).split("\n") if f]
@@ -1833,6 +1850,10 @@ class AppearancePopup(Popup):
             pic.set_size_request(118, 66)
             b.set_child(pic)
             b.connect("clicked", lambda _b, f=f: self._pick_wall(f))
+            hover = Gtk.EventControllerMotion()
+            hover.connect("enter", lambda *_a, f=f: self._preview(f))
+            hover.connect("leave", lambda *_a: self._preview(None))
+            b.add_controller(hover)
             self.walls.append(b)
             self.wall_buttons[f] = (b, pic)
         self._pending = list(files)
@@ -1965,14 +1986,30 @@ class AppearancePopup(Popup):
         self.dancer = d
         self._show_choices()
 
-    def _show_wall(self):
-        """Mark the wallpaper the selected theme would show: the one it remembers, else its own."""
+    def _theme_wall(self):
         t = self.themes.get(self.sel, {})
         own = t.get("wallpaper", "")
         own = own if os.path.isabs(own) else os.path.join(HOME, ".local/share/gits/wallpapers", own)
-        want = self.walls_of.get(self.sel) or own
+        return self.walls_of.get(self.sel) or own
+
+    def _show_wall(self):
+        """Mark the wallpaper the selected theme would show: the one it remembers, else its own."""
+        want = self._theme_wall()
         for k, (b, _p) in getattr(self, "wall_buttons", {}).items():
             (b.add_css_class if k == want else b.remove_css_class)("sel")
+        if hasattr(self, "preview"):
+            self._preview(None)
+
+    def _preview(self, f):
+        """Show f big (None: the selected theme's wallpaper). Decoded once per picture, at the preview's size."""
+        f = f or self._theme_wall()
+        if not f or not os.path.exists(f):
+            return
+        if f not in self._previews:
+            self._previews[f] = thumb(f, *self.PREVIEW)
+        if self._previews[f]:
+            self.preview.set_paintable(self._previews[f])
+        self.preview_name.set_text(os.path.basename(f))
 
     def _pick_wall(self, f):
         fire(["gits-wall", "--theme", self.sel, f])   # shown at once if the selected theme is the current one

@@ -20,7 +20,7 @@ entries=$(cat <<'ROWS'
 󰓅  Workflow (default / gaming / editing / powersaver)	gits-workflow select
 󱂬  Window animations	gits-anim select
 󰏘  Appearance (colour theme, accent, lock-screen mascot, wallpaper)	gits-panel appearance
-󰸉  Wallpaper (pick; GIFs too)	gits-wall --pick
+󰸉  Wallpaper (pick with a preview; GIFs too)	gits-panel appearance
 󰌌  Key bindings	gits-panel keys
 󰢮  ROG Control Center	gits-rog
 󰤄  Sleep and power timers (dim / lock / screen off / sleep)	gits-idle menu
