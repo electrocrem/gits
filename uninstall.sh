@@ -117,6 +117,7 @@ if [[ -d $HOME/.local/share/gits/theme-base ]]; then
     run rm -rf "$HOME/.local/share/gits/theme-base"
 fi
 st=${XDG_STATE_HOME:-$HOME/.local/state}/gits/state
+compgen -G "$HOME/.config/gits/themes/*.user" >/dev/null && { echo "delete   your theme options (*.user)"; run rm -f "$HOME"/.config/gits/themes/*.user; }
 if ((!DRY)) && [[ -f $st ]] && grep -q '^theme=' "$st"; then sed -i '/^theme=/d' "$st"; [[ -s $st ]] || rm -f "$st"; fi
 
 # files that were created by the blocks' host (nothing to restore) and are now empty

@@ -71,7 +71,7 @@ and confirms afterwards that your session was never locked.
 
 | What | How |
 |---|---|
-| Colour theme | the picker (`gits-panel themes`, Super+I → Colour theme) or `gits-theme set NAME`; themes are `~/.config/gits/themes/NAME.theme`: the roles of `gits.theme` with other colours, plus optional `description`, `wallpaper = FILE` and `swap = OLD -> NEW` lines (text swapped in the themed files: another lock-screen picture, mascot, caption). The icon theme is recoloured too |
+| Colour theme | the appearance menu (`gits-panel appearance`, Super+I → Appearance: theme, your accent, lock-screen mascot, wallpaper) or `gits-theme set NAME` / `gits-theme option NAME KEY VALUE` (your options live in `NAME.user`); themes are `~/.config/gits/themes/NAME.theme`: the roles of `gits.theme` with other colours, plus optional `description`, `wallpaper = FILE`, `mascot = NAME`, `lock_bg = FILE` and `swap = OLD -> NEW` lines (text swapped in the themed files: another lock-screen picture, mascot, caption). The icon theme is recoloured too |
 | Window animations | `gits-anim` menu (`Super+Shift+Y`): `cyber` (default), `gits`, `lively` (springs), `off`; the neon border runner is opt-in: `touch ~/.local/state/gits-neon-border` |
 | Wallpaper | `gits-wall --pick`, or drop pictures (GIFs too) into `~/Pictures/wallpapers` |
 | Radio station | `GITS_RADIO_STREAM` (stream URL), `GITS_RADIO_API` (an AzuraCast now-playing URL), `GITS_RADIO_NAME`, `GITS_RADIO_VOLUME` |

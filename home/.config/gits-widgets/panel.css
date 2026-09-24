@@ -142,12 +142,26 @@ list { background: transparent; }
 .lrow:selected .l-icon { filter: grayscale(1) brightness(0.12); }
 .lrow:selected .l-sub, .lrow:selected .l-tag { color: #0C1A33; }
 
-/* colour theme picker (gits-panel themes) */
-button.theme-card { padding: 8px; border: 1px solid alpha(#2ED3D7, 0.22); background: alpha(#0C1A33, 0.55); }
-button.theme-card:hover, button.theme-card:focus { border-color: #2ED3D7; background: alpha(#2ED3D7, 0.10); }
-button.theme-card.current { border-left: 3px solid #2ED3D7; }
+/* appearance (gits-panel appearance): themes, accent, mascot, wallpaper */
+button.theme-card { padding: 6px; border: 1px solid alpha(#2ED3D7, 0.22); background: alpha(#0C1A33, 0.55); }
+button.theme-card:hover { border-color: alpha(#2ED3D7, 0.7); }
+button.theme-card.sel { border: 1px solid #2ED3D7; background: alpha(#2ED3D7, 0.12); }
 .th-thumb { border: 1px solid alpha(#2ED3D7, 0.35); }
-.th-name { font-size: 13px; font-weight: 800; letter-spacing: 1px; color: #C8F4FF; }
-.th-desc { font-size: 10px; color: #9FC5D6; }
-.th-active { font-size: 9px; font-weight: 800; letter-spacing: 2px; color: #060A14; background: #2ED3D7; padding: 1px 6px; }
-.th-status { font-size: 9px; letter-spacing: 1px; color: #596977; margin-top: 2px; }
+.th-name { font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #C8F4FF; }
+.th-active { font-size: 8px; font-weight: 800; letter-spacing: 2px; color: #060A14; background: #2ED3D7; padding: 1px 5px; }
+.th-status { font-size: 9px; letter-spacing: 1px; color: #596977; }
+.ap-sec { font-size: 9px; font-weight: 700; letter-spacing: 2px; color: alpha(#2ED3D7, 0.85); margin-top: 6px; }
+button.ap-chip, button.ap-toggle { padding: 5px 8px; border: 1px solid alpha(#2ED3D7, 0.25); background: transparent; }
+button.ap-chip:hover, button.ap-toggle:hover { border-color: #2ED3D7; }
+button.ap-chip.sel, button.ap-toggle.sel { border-color: #5EF1F5; background: alpha(#2ED3D7, 0.18); }
+.ap-chip-name { font-size: 9px; font-weight: 700; letter-spacing: 1px; color: #9FC5D6; }
+button.ap-toggle { font-size: 10px; font-weight: 700; letter-spacing: 1px; color: #9FC5D6; }
+button.ap-toggle.sel { color: #C8F4FF; }
+entry.ap-hex { background: transparent; color: #C8F4FF; border: 1px solid alpha(#2ED3D7, 0.25); padding: 3px 6px; min-height: 0; font-size: 11px; }
+entry.ap-hex:focus { border-color: #2ED3D7; }
+button.ap-wall { padding: 1px; border: 1px solid alpha(#2ED3D7, 0.15); }
+button.ap-wall:hover { border-color: #2ED3D7; }
+button.ap-wall.sel { border: 2px solid #5EF1F5; padding: 0; }
+button.ap-apply { padding: 6px 18px; background: #2ED3D7; color: #060A14; font-size: 11px; font-weight: 800; letter-spacing: 2px; }
+button.ap-apply:hover { background: #5EF1F5; }
+button.ap-apply:disabled { background: alpha(#2ED3D7, 0.3); }

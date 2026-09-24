@@ -1713,113 +1713,287 @@ class MenuPopup(Popup):
         self.dismiss()
 
 
-def load_themes():
-    """[(name, theme dict)] from gits-theme itself (one parser for the theme files), and the current theme's name."""
-    from importlib.machinery import SourceFileLoader
+def theme_info():
+    """`gits-theme info`: themes with their effective colours and your options, the mascots, the current theme."""
     try:
-        gt = SourceFileLoader("gits_theme", shutil.which("gits-theme") or HOME + "/.local/bin/gits-theme").load_module()
-        return [(n, gt.load_theme(n)) for n in gt.theme_names()], gt.current()
-    except (OSError, ImportError, SyntaxError):
-        return [], "gits"
+        return json.loads(sh(["gits-theme", "info"], timeout=8, real=True) or "{}")
+    except ValueError:
+        return {}
 
 
-class ThemePopup(Popup):
-    """The colour theme picker (gits-panel themes, Super+I -> Colour theme): one card per theme with its wallpaper, name, description
-    and a strip of its colours. Click (or Enter) switches with `gits-theme set`; the popup waits for it and closes."""
-    CARD_W = 540
-    SWATCH = ("bg", "surface", "fg", "muted", "accent", "accent_bright", "accent_2", "red", "green", "yellow", "blue", "violet")
+def lighter(hexc, k=0.45):
+    c = [int(hexc[i:i + 2], 16) for i in (1, 3, 5)]
+    return "#%02X%02X%02X" % tuple(round(v + (255 - v) * k) for v in c)
+
+
+def thumb(path, w, h):
+    """A picture decoded small and cut to exactly w x h (cover), as a texture; None if it cannot be read."""
+    try:
+        pb = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, w * 3, h * 3, True)
+        k = max(w / pb.get_width(), h / pb.get_height())
+        pb = pb.scale_simple(max(w, round(pb.get_width() * k)), max(h, round(pb.get_height() * k)), GdkPixbuf.InterpType.BILINEAR)
+        return Gdk.Texture.new_for_pixbuf(pb.new_subpixbuf((pb.get_width() - w) // 2, (pb.get_height() - h) // 2, w, h))
+    except GLib.Error:
+        return None
+
+
+class AppearancePopup(Popup):
+    """Appearance (gits-panel appearance, Super+I -> Appearance): the colour theme, your own accent on top of it, the lock-screen
+    mascot and the wallpaper, in one place. Theme / accent / mascot are applied together with APPLY (one recolouring, `gits-theme
+    option` + `set`); a wallpaper is shown at once (gits-wall remembers it for the current theme)."""
+    CARD_W = 800
+    SWATCH = ("bg", "surface", "fg", "accent", "accent_bright", "accent_2", "red", "green", "yellow", "violet")
+    # written without "#" on purpose: gits-theme recolours every #RRGGBB in this file, and these must stay what they say
+    ACCENTS = tuple((n, "#" + c) for n, c in (("CYAN", "2ED3D7"), ("LAVENDER", "B79CFF"), ("MATRIX", "3BFF8E"), ("MAGENTA", "FF2E97"),
+                                              ("AMBER", "FFB000"), ("RED", "E5432B"), ("BLUE", "459BF1"), ("CREAM", "E8DCCB")))
 
     def __init__(self, monitor):
         super().__init__(monitor, center=True)
-        themes, self.cur = load_themes()
+        self.info = theme_info()
+        self.themes = {t["id"]: t for t in self.info.get("themes", [])}
+        self.cur = self.info.get("current", "gits")
+        self.sel = self.cur if self.cur in self.themes else next(iter(self.themes), "gits")
         root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         root.add_css_class("panel")
         head = Gtk.Box(spacing=6)
-        head.append(label("\U000F03D8  COLOUR THEME", "m-head"))
+        head.append(label("\U000F03D8  APPEARANCE", "m-head"))
         sp = Gtk.Box()
         sp.set_hexpand(True)
         head.append(sp)
-        head.append(label("// 配色", "m-tag"))
+        head.append(label("// 外観", "m-tag"))
         root.append(head)
-        self.buttons = []
-        for name, t in themes:
-            root.append(self._card(name, t))
-        self.status = label("click a theme · Esc closes", "th-status")
-        root.append(self.status)
+        # themes
+        root.append(label("THEME", "ap-sec"))
+        row = Gtk.Box(spacing=8)
+        self.cards = {}
+        for tid, t in self.themes.items():
+            row.append(self._theme_card(tid, t))
+        root.append(row)
+        # accent
+        root.append(label("ACCENT  ·  rings, borders, icons, the selection", "ap-sec"))
+        arow = Gtk.Box(spacing=6)
+        self.chips = {}
+        self.chip_default = self._chip("THEME", None)
+        arow.append(self.chip_default)
+        for name, c in self.ACCENTS:
+            arow.append(self._chip(name, c))
+        self.hex = Gtk.Entry()
+        self.hex.set_placeholder_text("#RRGGBB")
+        self.hex.set_max_width_chars(8)
+        self.hex.set_width_chars(8)
+        self.hex.add_css_class("ap-hex")
+        self.hex.connect("activate", self._hex_entered)
+        arow.append(self.hex)
+        root.append(arow)
+        # mascot
+        root.append(label("LOCK SCREEN MASCOT", "ap-sec"))
+        mrow = Gtk.Box(spacing=6)
+        self.mascots = {}
+        for m in self.info.get("mascots", []):
+            b = Gtk.Button(label=m.upper())
+            b.add_css_class("ap-toggle")
+            b.connect("clicked", lambda _b, m=m: self._pick_mascot(m))
+            self.mascots[m] = b
+            mrow.append(b)
+        root.append(mrow)
+        # wallpaper
+        root.append(label("WALLPAPER  ·  shown at once, remembered for the current theme", "ap-sec"))
+        self.walls = Gtk.FlowBox()
+        self.walls.set_selection_mode(Gtk.SelectionMode.NONE)
+        self.walls.set_max_children_per_line(6)
+        self.walls.set_min_children_per_line(6)
+        self.walls.set_row_spacing(6)
+        self.walls.set_column_spacing(6)
+        sc = Gtk.ScrolledWindow()
+        sc.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        sc.set_min_content_height(250)
+        sc.set_max_content_height(250)
+        sc.set_child(self.walls)
+        root.append(sc)
+        self.wall_buttons = {}
+        try:
+            with open(os.path.join(STATE, "gits", "wallpaper")) as f:
+                self.cur_wall = f.read().strip()
+        except OSError:
+            self.cur_wall = ""
+        files = [f for f in sh(["gits-wall", "--list"], real=True).split("\n") if f]
+        for f in files:
+            b = Gtk.Button()
+            b.add_css_class("ap-wall")
+            if f == self.cur_wall:
+                b.add_css_class("sel")
+            b.set_tooltip_text(os.path.basename(f))
+            pic = Gtk.Picture()
+            pic.set_size_request(118, 66)
+            b.set_child(pic)
+            b.connect("clicked", lambda _b, f=f: self._pick_wall(f))
+            self.walls.append(b)
+            self.wall_buttons[f] = (b, pic)
+        self._pending = list(files)
+        GLib.idle_add(self._load_thumbs)   # a few thumbnails per idle turn: the popup opens at once, pictures fill in
+        # footer
+        foot = Gtk.Box(spacing=8)
+        self.status = label("", "th-status")
+        self.status.set_hexpand(True)
+        foot.append(self.status)
+        reset = Gtk.Button(label="RESET THEME OPTIONS")
+        reset.add_css_class("ap-toggle")
+        reset.connect("clicked", lambda _b: self._reset())
+        foot.append(reset)
+        self.apply_btn = Gtk.Button(label="APPLY")
+        self.apply_btn.add_css_class("ap-apply")
+        self.apply_btn.connect("clicked", lambda _b: self._apply())
+        foot.append(self.apply_btn)
+        root.append(foot)
         self.set_child(root)
-        for b in self.buttons:
-            if b.theme == self.cur:
-                GLib.idle_add(lambda b=b: (b.grab_focus(), False)[1])
+        self._select_theme(self.sel)
 
-    def _card(self, name, t):
+    # -- building blocks
+    def _theme_card(self, tid, t):
         btn = Gtk.Button()
         btn.add_css_class("theme-card")
-        btn.theme = name
-        if name == self.cur:
-            btn.add_css_class("current")
-        row = Gtk.Box(spacing=12)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         pic = Gtk.Picture()
+        pic.set_size_request(176, 99)
         pic.add_css_class("th-thumb")
-        pic.set_size_request(160, 90)
-        pic.set_valign(Gtk.Align.CENTER)
         wall = t.get("wallpaper", "")
         path = wall if os.path.isabs(wall) else os.path.join(HOME, ".local/share/gits/wallpapers", wall)
-        if wall and os.path.exists(path):
-            try:   # decoded small and cut to exactly 160x90 (cover): the picture's natural size is then the frame's
-                pb = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, 480, 480, True)
-                k = max(160 / pb.get_width(), 90 / pb.get_height())
-                pb = pb.scale_simple(max(160, round(pb.get_width() * k)), max(90, round(pb.get_height() * k)), GdkPixbuf.InterpType.BILINEAR)
-                pb = pb.new_subpixbuf((pb.get_width() - 160) // 2, (pb.get_height() - 90) // 2, 160, 90)
-                pic.set_paintable(Gdk.Texture.new_for_pixbuf(pb))
-            except GLib.Error:
-                pass
-        row.append(pic)
-        col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        col.set_hexpand(True)
-        top = Gtk.Box(spacing=6)
+        tex = thumb(path, 176, 99) if wall and os.path.exists(path) else None
+        if tex:
+            pic.set_paintable(tex)
+        box.append(pic)
+        top = Gtk.Box(spacing=4)
         nm = label(t["name"].upper(), "th-name")
+        nm.set_ellipsize(Pango.EllipsizeMode.END)
+        nm.set_max_width_chars(16)
         nm.set_hexpand(True)
         top.append(nm)
-        if name == self.cur:
+        if tid == self.cur:
             top.append(label("ACTIVE", "th-active"))
-        col.append(top)
-        desc = label(t.get("description", ""), "th-desc")
-        desc.set_wrap(True)
-        desc.set_max_width_chars(40)
-        col.append(desc)
-        roles = t["roles"]
-        cols = [roles[k] for k in self.SWATCH if k in roles]
+        box.append(top)
         da = Gtk.DrawingArea()
-        da.set_content_height(14)
-        da.set_valign(Gtk.Align.END)
-        da.set_vexpand(True)
-
-        def draw(_a, cr, w, h, cols=cols):
-            n = max(len(cols), 1)
-            for i, c in enumerate(cols):
-                cr.set_source_rgb(*(v / 255 for v in c))
-                cr.rectangle(i * w / n, 0, w / n - 2, h)
-                cr.fill()
-        da.set_draw_func(draw)
-        col.append(da)
-        row.append(col)
-        btn.set_child(row)
-        btn.connect("clicked", lambda _b: self._apply(name, t["name"]))
-        self.buttons.append(btn)
+        da.set_content_height(10)
+        da.set_draw_func(lambda _a, cr, w, h, tid=tid: self._draw_swatch(cr, w, h, self.themes[tid]["roles"]))
+        box.append(da)
+        btn.set_child(box)
+        btn.connect("clicked", lambda _b: self._select_theme(tid))
+        self.cards[tid] = (btn, da)
         return btn
 
-    def _apply(self, name, title):
-        if name == self.cur:
-            self.dismiss()
-            return
-        for b in self.buttons:
+    def _draw_swatch(self, cr, w, h, roles):
+        cols = [roles[k] for k in self.SWATCH if k in roles]
+        n = max(len(cols), 1)
+        for i, c in enumerate(cols):
+            cr.set_source_rgb(*(int(c[j:j + 2], 16) / 255 for j in (1, 3, 5)))
+            cr.rectangle(i * w / n, 0, w / n - 2, h)
+            cr.fill()
+
+    def _chip(self, name, colour):
+        b = Gtk.Button()
+        b.add_css_class("ap-chip")
+        box = Gtk.Box(spacing=5)
+        da = Gtk.DrawingArea()
+        da.set_content_width(14)
+        da.set_content_height(14)
+
+        def draw(_a, cr, w, h):
+            c = colour or self.themes.get(self.sel, {}).get("theme_roles", {}).get("accent", "#888888")
+            cr.set_source_rgb(*(int(c[j:j + 2], 16) / 255 for j in (1, 3, 5)))
+            cr.rectangle(0, 0, w, h)
+            cr.fill()
+        da.set_draw_func(draw)
+        box.append(da)
+        box.append(label(name, "ap-chip-name"))
+        b.set_child(box)
+        b.da = da
+        b.connect("clicked", lambda _b: self._pick_accent(colour))
+        self.chips[colour] = b
+        return b
+
+    # -- choices
+    def _select_theme(self, tid):
+        self.sel = tid
+        for k, (b, _d) in self.cards.items():
+            (b.add_css_class if k == tid else b.remove_css_class)("sel")
+        t = self.themes.get(tid, {})
+        self.accent = t.get("user", {}).get("accent")          # None = the theme's own
+        self.mascot = t.get("mascot", "tachikoma")
+        self.chip_default.da.queue_draw()
+        self._show_choices()
+
+    def _show_choices(self):
+        for c, b in self.chips.items():
+            (b.add_css_class if c == self.accent else b.remove_css_class)("sel")
+        if self.accent and self.accent not in self.chips:
+            self.hex.set_text(self.accent)
+        for m, b in self.mascots.items():
+            (b.add_css_class if m == self.mascot else b.remove_css_class)("sel")
+        t = self.themes.get(self.sel, {})
+        changed = self.sel != self.cur or self.accent != t.get("user", {}).get("accent") or self.mascot != t.get("mascot", "tachikoma")
+        self.status.set_text(("APPLY: " + t.get("name", self.sel)) if changed else t.get("description", ""))
+
+    def _pick_accent(self, colour):
+        self.accent = colour
+        self.hex.set_text("")
+        self._show_choices()
+
+    def _hex_entered(self, entry):
+        v = entry.get_text().strip()
+        v = v if v.startswith("#") else "#" + v
+        if re.fullmatch(r"#[0-9A-Fa-f]{6}", v):
+            self.accent = v.upper()
+            self._show_choices()
+        else:
+            self.status.set_text("a colour is #RRGGBB")
+
+    def _pick_mascot(self, m):
+        self.mascot = m
+        self._show_choices()
+
+    def _pick_wall(self, f):
+        fire(["gits-wall", f])
+        for k, (b, _p) in self.wall_buttons.items():
+            (b.add_css_class if k == f else b.remove_css_class)("sel")
+        self.status.set_text("wallpaper: " + os.path.basename(f))
+
+    def _load_thumbs(self):
+        for _ in range(3):
+            if not self._pending:
+                return False
+            f = self._pending.pop(0)
+            tex = thumb(f, 118, 66)
+            if tex:
+                self.wall_buttons[f][1].set_paintable(tex)
+        return True
+
+    # -- doing it
+    def _run(self, cmds, msg):
+        for b in list(self.chips.values()) + [self.apply_btn]:
             b.set_sensitive(False)
-        self.status.set_text(f"SWITCHING TO {title.upper()} …")
+        self.status.set_text(msg)
 
         def work():
-            sh(["gits-theme", "set", name], timeout=120)
+            for c in cmds:
+                sh(c, timeout=120)
             GLib.idle_add(lambda: (self.dismiss(), False)[1])
         threading.Thread(target=work, daemon=True).start()
+
+    def _apply(self):
+        t, tid = self.themes.get(self.sel, {}), self.sel
+        cmds = []
+        if self.accent and self.accent != t.get("theme_roles", {}).get("accent"):
+            cmds += [["gits-theme", "option", tid, "accent", self.accent],
+                     ["gits-theme", "option", tid, "accent_bright", lighter(self.accent)]]
+        else:
+            cmds += [["gits-theme", "option", tid, "accent"], ["gits-theme", "option", tid, "accent_bright"]]
+        # the theme's own mascot: no option of yours; another one: remembered in the theme's .user file
+        cmds.append(["gits-theme", "option", tid, "mascot"] + ([] if self.mascot == t.get("theme_mascot") else [self.mascot]))
+        cmds.append(["gits-theme", "set", tid])
+        self._run(cmds, "APPLYING " + t.get("name", tid).upper() + " …")
+
+    def _reset(self):
+        self._run([["gits-theme", "option", self.sel, "--reset"], ["gits-theme", "set", self.sel]],
+                  "FORGETTING YOUR OPTIONS FOR " + self.themes.get(self.sel, {}).get("name", self.sel).upper() + " …")
 
 
 class MixerPopup(Popup):
@@ -2421,8 +2595,8 @@ def main():
         win = LauncherPopup(mon, mode)
     elif mode == "note":
         win = NotePopup(mon)
-    elif mode == "themes":
-        win = ThemePopup(mon)
+    elif mode in ("appearance", "themes"):
+        win = AppearancePopup(mon)
     elif mode == "mixer":
         cx = int(sh(["hyprctl", "cursorpos"]).split(",")[0] or 640) if not DEMO else 700
         width = mon.get_geometry().width if mon else 1280
