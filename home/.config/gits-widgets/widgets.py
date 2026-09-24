@@ -3,7 +3,7 @@
 
 GTK4 + gtk4-layer-shell, one process, one layer-shell window per card on the BOTTOM layer (above the
 wallpaper, below every window; BACKGROUND would be covered by a later-started wallpaper daemon). Cards: clock, calendar, media player (playerctl), weather (wttr.in),
-battery, CPU/RAM/SSD rings, CPU/RAM history graph, network throughput, audio spectrum (parec + numpy), to-do list.
+battery, CPU/RAM/SSD rings, CPU/RAM history graph, network throughput, audio spectrum (parec + numpy), to-do list, a home server over ssh.
 
 Env: GITS_WEATHER_LOCATION  city for wttr.in (default: auto-detect by IP; "off" disables the request)
      GITS_WIDGETS_MONITOR   connector name to place the cards on (default: the main monitor, as in hypr/gits/monitors.lua:
@@ -11,6 +11,9 @@ Env: GITS_WEATHER_LOCATION  city for wttr.in (default: auto-detect by IP; "off" 
      GITS_WIDGETS_GLITCH    0 = no wallpaper glitch bursts (default: on, only while on AC power)
      GITS_WIDGETS_SECOND    0 = nothing on the other monitors (default: clock, calendar, system rings / graph, network,
                             GPU, disks and the busiest processes there)
+     GITS_SERVER            ssh destination of a home server (a Host from ~/.ssh/config or user@host; key login, python3 on it):
+                            adds the NODE.LINK card with its CPU / RAM / temperature, disks and Docker containers (default: none)
+     GITS_SERVER_NAME       the name on that card (default: the server's hostname)
      GITS_WIDGETS_DEMO      1 = screenshot mode: made-up SSID/IP and to-do items, throw-away state and cache dirs
                             (your to-do file and weather cache are neither read nor written)
 """
@@ -1347,6 +1350,250 @@ class TopCard(Card):
             draw_text(cr, f"{c:4.1f}%  {mem:5.0f}M", w - 4, y, 10, CYB if i == 0 else DIM, bold=True, align="right")
 
 
+# --------------------------------------------------------------------------------------------- remote server (GITS_SERVER)
+# Sent to the server over ssh and run there by `python3 -` (stdlib only, nothing is installed): one JSON line every 2 s.
+# Docker is polled every 30 s with `docker`, else `sudo -n docker`; without either the card just has no container line.
+SERVER_PROBE = r'''
+import json, os, subprocess, time
+FS = {"ext4", "btrfs", "xfs", "f2fs", "vfat", "exfat", "ntfs3", "zfs", "bcachefs"}
+SKIP = ("lo", "docker", "veth", "br-", "virbr")
+def cpu():
+    with open("/proc/stat") as f:
+        v = [int(x) for x in f.readline().split()[1:]]
+    return sum(v), v[3] + v[4]
+def net():
+    rx = tx = 0
+    with open("/proc/net/dev") as f:
+        for ln in f.readlines()[2:]:
+            name, rest = ln.split(":", 1)
+            if not name.strip().startswith(SKIP):
+                c = rest.split()
+                rx, tx = rx + int(c[0]), tx + int(c[8])
+    return rx, tx
+def run(cmd):
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+        return p.stdout if p.returncode == 0 else None
+    except (OSError, subprocess.SubprocessError):
+        return None
+def slow():
+    out = run(["docker", "ps", "-a", "--format", "{{.Names}}\t{{.State}}"])
+    if out is None:
+        out = run(["sudo", "-n", "docker", "ps", "-a", "--format", "{{.Names}}\t{{.State}}"])
+    dk = None if out is None else [ln.split("\t") for ln in out.splitlines() if "\t" in ln]
+    th = run(["vcgencmd", "get_throttled"])
+    return dk, (th.strip().split("=")[-1] if th else None)
+host = os.uname().nodename
+t0, i0 = cpu()
+n0, s0 = net(), time.monotonic()
+docker, throttled, k = None, None, 0
+while True:
+    time.sleep(2)
+    if k % 15 == 0:
+        docker, throttled = slow()
+    k += 1
+    t, i = cpu()
+    c = 100 * (1 - (i - i0) / max(t - t0, 1))
+    t0, i0 = t, i
+    n, s = net(), time.monotonic()
+    rx, tx = (max(n[0] - n0[0], 0) / (s - s0), max(n[1] - n0[1], 0) / (s - s0))
+    n0, s0 = n, s
+    mem = {}
+    with open("/proc/meminfo") as f:
+        for ln in f:
+            key, val = ln.split(":")
+            mem[key] = int(val.split()[0])
+    try:
+        with open("/sys/class/thermal/thermal_zone0/temp") as f:
+            temp = int(f.read()) / 1000
+    except (OSError, ValueError):
+        temp = None
+    with open("/proc/uptime") as f:
+        up = float(f.read().split()[0])
+    disks, seen = [], set()
+    with open("/proc/mounts") as f:
+        for ln in f:
+            dev, mnt, fs = ln.split()[:3]
+            mnt = mnt.replace("\\040", " ")
+            if fs not in FS or dev in seen or mnt.startswith(("/boot", "/efi", "/snap", "/var/lib")):
+                continue
+            seen.add(dev)
+            st = os.statvfs(mnt)
+            total, free = st.f_blocks * st.f_frsize, st.f_bavail * st.f_frsize
+            if total >= 2**30:
+                disks.append([mnt, total, free])
+    print(json.dumps({"host": host, "cpu": c, "ram": 100 * (1 - mem["MemAvailable"] / mem["MemTotal"]),
+                      "ram_total": mem["MemTotal"] * 1024, "temp": temp, "up": up, "load": os.getloadavg()[0],
+                      "rx": rx, "tx": tx, "disks": disks, "docker": docker, "throttled": throttled}), flush=True)
+'''
+
+
+def fmt_uptime(sec):
+    d, h, m = int(sec // 86400), int(sec % 86400 // 3600), int(sec % 3600 // 60)
+    return f"{d}D {h:02d}H" if d else f"{h}H {m:02d}M"
+
+
+class ServerLink(threading.Thread):
+    """One long-lived `ssh <dest> python3 -` streaming SERVER_PROBE lines; reconnects with a growing pause."""
+
+    def __init__(self, dest):
+        super().__init__(daemon=True)
+        self.dest = dest
+        self.data, self.seen, self.error = None, 0.0, "CONNECTING"
+        self.cpu_hist = collections.deque([0.0] * Stats.N, maxlen=Stats.N)
+        self.proc, self._quit = None, False
+
+    def stop(self):
+        self._quit = True
+        if self.proc:
+            self.proc.kill()
+
+    def run(self):
+        pause = 5
+        while not self._quit:
+            try:
+                self.proc = subprocess.Popen(
+                    ["ssh", "-T", "-o", "BatchMode=yes", "-o", "ConnectTimeout=6", "-o", "ServerAliveInterval=5",
+                     "-o", "ServerAliveCountMax=2", self.dest, "python3", "-u", "-"],
+                    stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                self.proc.stdin.write(SERVER_PROBE)
+                self.proc.stdin.close()
+                for line in self.proc.stdout:
+                    try:
+                        d = json.loads(line)
+                    except ValueError:
+                        continue
+                    self.cpu_hist.append(d["cpu"])
+                    self.data, self.seen, self.error, pause = d, time.monotonic(), "", 5
+                err = self.proc.stderr.read().strip().splitlines()
+                self.proc.wait()
+                self.error = (err[-1] if err else f"ssh exited {self.proc.returncode}")[:60]
+            except OSError as e:
+                self.error = str(e)[:60]
+            if self._quit:
+                return
+            time.sleep(pause)
+            pause = min(pause * 2, 60)
+
+    def online(self):
+        return self.data is not None and time.monotonic() - self.seen < 8
+
+
+class ServerCard(Card):
+    """A home server over ssh (GITS_SERVER): CPU / RAM / temperature rings, a CPU trace, disks, Docker containers.
+
+    Undervoltage / throttling (Raspberry Pi `vcgencmd get_throttled` != 0x0) turns the status red."""
+
+    def __init__(self, app, dest, **kw):
+        super().__init__(app, "NODE.LINK // 端末", **kw)
+        self.link = None
+        if not DEMO:
+            self.link = ServerLink(dest)
+            self.link.start()
+        head = Gtk.Box(spacing=8)
+        self.l_name = label(os.environ.get("GITS_SERVER_NAME", "") or dest.split("@")[-1].upper(), "n-down", ellipsize=True)
+        self.l_name.set_hexpand(True)
+        self.l_state = label("LINKING", "s-state", 1.0)
+        head.append(self.l_name)
+        head.append(self.l_state)
+        self.body.append(head)
+        self.l_meta = label("", "n-meta", ellipsize=True)
+        self.body.append(self.l_meta)
+        self.da = self.area(self._draw)
+        self.da.set_vexpand(True)
+        self.body.append(self.da)
+        self.l_docker = label("", "s-docker", ellipsize=True)
+        self.body.append(self.l_docker)
+        self.update()
+
+    def _state(self):
+        """(data or None, online, error, cpu history)"""
+        if DEMO:
+            t = time.monotonic()
+            d = {"host": "tachikoma", "cpu": 18 + 9 * math.sin(t / 3), "ram": 47.0, "ram_total": 4 * 2**30, "temp": 51.0,
+                 "up": 3 * 86400 + 5 * 3600, "load": 0.42, "rx": 310e3, "tx": 42e3, "throttled": "0x0",
+                 "disks": [["/", 62e9, 41e9], ["/mnt/media", 1e12, 850e9], ["/mnt/backup", 235e9, 233e9]],
+                 "docker": [["jellyfin", "running"]] * 9 + [["pihole", "running"]]}
+            hist = [18 + 9 * math.sin((t - 2 * (Stats.N - i)) / 3) for i in range(Stats.N)]
+            return d, True, "", hist
+        ln = self.link
+        return ln.data, ln.online(), ln.error, list(ln.cpu_hist)
+
+    def update(self):
+        d, online, err, _ = self._state()
+        warn = online and d.get("throttled") not in (None, "0x0")
+        self.l_state.set_text("UNDERVOLT" if warn else "ONLINE" if online else "OFFLINE")
+        (self.l_state.add_css_class if warn or not online else self.l_state.remove_css_class)("bad")
+        if d and not os.environ.get("GITS_SERVER_NAME"):
+            self.l_name.set_text(d["host"].upper())
+        if online:
+            self.l_meta.set_text(f"UP {fmt_uptime(d['up'])} · ↓{human_rate(d['rx'])} ↑{human_rate(d['tx'])}")
+        else:
+            self.l_meta.set_text(err.upper() if err else "NO SIGNAL")
+        dk = d.get("docker") if d else None
+        if online and dk is not None:
+            down = [n for n, s in dk if s != "running"]
+            up = len(dk) - len(down)
+            self.l_docker.set_text(f"DOCKER {up}/{len(dk)} UP" + (" · DOWN: " + ", ".join(down).upper() if down else ""))
+            (self.l_docker.add_css_class if down else self.l_docker.remove_css_class)("bad")
+        else:
+            self.l_docker.set_text("")
+        self.da.queue_draw()
+
+    def _draw(self, area, cr, w, h):
+        d, online, _, hist = self._state()
+        a = 1.0 if online else 0.35  # a lost link keeps the last numbers, dimmed
+        temp = (d or {}).get("temp")
+        items = (("CPU", (d or {}).get("cpu", 0.0), f"{(d or {}).get('cpu', 0.0):.0f}%", 85),
+                 ("RAM", (d or {}).get("ram", 0.0), f"{(d or {}).get('ram', 0.0):.0f}%", 85),
+                 ("TEMP", (temp or 0.0) / 90 * 100, f"{temp:.0f}°" if temp is not None else "--", 75 / 90 * 100))
+        cell = w / 3
+        r = min(cell / 2 - 10, 26)
+        a0, sweep = math.radians(135), math.radians(270)
+        for i, (name, v, txt, hot) in enumerate(items):
+            cx, cy = cell * i + cell / 2, r + 3
+            cr.set_line_width(4)
+            setc(cr, CY, 0.16)
+            cr.arc(cx, cy, r, a0, a0 + sweep)
+            cr.stroke()
+            setc(cr, RED if v >= hot else CY, a)
+            cr.arc(cx, cy, r, a0, a0 + sweep * min(max(v, 0), 100) / 100)
+            cr.stroke()
+            draw_text(cr, txt, cx, cy + 4, 11, FG, bold=True, align="center", alpha=a)
+            draw_text(cr, name, cx, cy + r + 8, 8, DIM, bold=True, align="center")
+        # CPU trace
+        gy, gh = 2 * r + 20, 26
+        pts = [(i * w / (len(hist) - 1), gy + gh - 1 - (gh - 2) * min(v, 100) / 100) for i, v in enumerate(hist)]
+        cr.move_to(pts[0][0], gy + gh)
+        for p in pts:
+            cr.line_to(*p)
+        cr.line_to(pts[-1][0], gy + gh)
+        cr.close_path()
+        setc(cr, CY, 0.18 * a)
+        cr.fill()
+        cr.set_line_width(1.2)
+        setc(cr, CYB, a)
+        cr.move_to(*pts[0])
+        for p in pts[1:]:
+            cr.line_to(*p)
+        cr.stroke()
+        # disks
+        disks = (d or {}).get("disks") or []
+        y = gy + gh + 8
+        step = min(24, (h - y) / max(len(disks), 1))
+        for mnt, total, free in disks[:max(int((h - y) // 20), 0)]:
+            pct = 100 * (1 - free / total) if total else 0
+            name = mnt if len(mnt) <= 12 else "…" + mnt[-11:]
+            draw_text(cr, name.upper(), 0, y + 9, 9, FG, bold=True, alpha=a)
+            draw_text(cr, f"{pct:.0f}% · {free / 2**30:.0f}G FREE", w, y + 9, 9, DIM, bold=True, align="right")
+            draw_meter(cr, 0, y + 13, w, 4, pct / 100, hot=pct >= 90)
+            y += step
+
+    def shutdown(self):
+        if self.link:
+            self.link.stop()
+
+
 class TodoCard(Card):
     def __init__(self, app, **kw):
         super().__init__(app, "TASK.QUEUE // 任務", keyboard=True, **kw)
@@ -1497,6 +1744,10 @@ class App:
         add(WeatherCard, x2, y, MW, 108)
         y += 108 + gap
         add(NetCard, x2, y, MW, 132)
+        server = os.environ.get("GITS_SERVER", "")
+        if DEMO or (server and server.lower() != "off"):
+            y += 132 + gap
+            add(ServerCard, x2, y, MW, 262, dest=server or "tachikoma")
         y = top
         bats = sorted(glob.glob("/sys/class/power_supply/BAT*"))
         if bats:
@@ -1548,7 +1799,7 @@ class App:
     def tick2(self):
         self.stats.refresh()
         for c in self.cards:
-            if isinstance(c, (RingsCard, GraphCard, BatteryCard, WeatherCard, NetCard, GpuCard, DiskCard, TopCard)):
+            if isinstance(c, (RingsCard, GraphCard, BatteryCard, WeatherCard, NetCard, GpuCard, DiskCard, TopCard, ServerCard)):
                 c.update()
         return True
 

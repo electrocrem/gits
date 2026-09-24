@@ -77,6 +77,7 @@ and confirms afterwards that your session was never locked.
 | Dancing Lain in the radio popup | `GITS_RADIO_LAIN=holo|color|off`, `GITS_RADIO_LAIN_SPEED=1`, `GITS_RADIO_FLASH=0` (no flash on the beat) |
 | Plain lock screen | copy `~/.config/hypr/hyprlock/static.conf` over `~/.config/hypr/hyprlock.conf` |
 | Weather card | `GITS_WEATHER_LOCATION="Berlin"` (default: by IP; `off` stops the request) |
+| Home server card | `GITS_SERVER=pi` (ssh destination with key login and python3; Docker via `docker` or `sudo -n docker`), `GITS_SERVER_NAME` |
 | Glitch bursts on the wallpaper | `GITS_WIDGETS_GLITCH=0` |
 | tmux in every terminal | `export GITS_TMUX=1` (off by default) |
 | Your own rows in Super+I | `~/.config/gits/settings.tsv` |
