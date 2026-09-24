@@ -1,7 +1,7 @@
 """The dancer of the radio popup: the one of the current theme's art set (~/.local/share/gits/art/current/, gits-theme switches it).
 
-A set may have dancer.gif (a drawing on white) or dancer-0.png, dancer-1.png... (RGBA frames, e.g. tachikoma.py --sprite). Without
-either (the default in every theme): the dancing Lain, lain.gif next to this file (pryanostnik/lain-dance, MIT).
+A set may have dancer.gif (a figure on white or on black: the GitS set's dancing Fuchikoma) or dancer-0.png, dancer-1.png... (RGBA
+frames, e.g. tachikoma.py --sprite). Without either: the dancing Lain, lain.gif next to this file (pryanostnik/lain-dance, MIT).
 
     frames = load(height, style)     # list of cairo.ImageSurface, all the same size; [] if Pillow / numpy / the frames are missing
     style: "holo" (cyan hologram with scan lines, the default) or "color" (the colours of the drawing)
@@ -46,6 +46,11 @@ def _pil_frames(height, style, src=None):
         base = Image.new("RGBA", fr.size, (255, 255, 255, 255))
         base.alpha_composite(fr.convert("RGBA"))
         rgb = base.convert("RGB")
+        a = np.asarray(rgb).astype(float)
+        if max(max(rgb.getpixel(c)) for c in ((0, 0), (rgb.width - 1, 0), (0, rgb.height - 1), (rgb.width - 1, rgb.height - 1))) < 40:
+            masks.append(a.sum(axis=2) > 60)   # a figure on black (the dancing Fuchikoma): everything that is not dark
+            rgbs.append(a)
+            continue
         flood = rgb.copy()   # the background is the white that touches the border; white inside the figure stays
         for corner in ((0, 0), (flood.width - 1, 0), (0, flood.height - 1), (flood.width - 1, flood.height - 1)):
             if min(flood.getpixel(corner)) > 200 and flood.getpixel(corner) != (255, 0, 255):
