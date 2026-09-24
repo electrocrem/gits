@@ -144,6 +144,14 @@ asset() { [[ -f $ASSETS/$1 ]] && echo "$ASSETS/$1"; }
 
 # ------------------------------------------------------------------ files
 say "copying configuration"
+# another colour theme than GitS (gits-theme): the files below are GitS, so put the GitS originals back first and switch again at the end
+THEME=$(sed -n 's/^theme=//p' "${XDG_STATE_HOME:-$HOME/.local/state}/gits/state" 2>/dev/null | head -1 || true)
+if [[ -n $THEME && $THEME != gits && -x $HOME/.local/bin/gits-theme ]]; then
+    say "colour theme $THEME: back to GitS while copying"
+    run "$HOME/.local/bin/gits-theme" set gits --no-reload >/dev/null
+else
+    THEME=
+fi
 # ~/.config/gtk-4.0 used to be a link into a GTK theme directory: writing through it would edit that theme, so replace the link
 if [[ -L $HOME/.config/gtk-4.0 ]]; then
     if ((DRY)); then echo "   (dry) replace the link ~/.config/gtk-4.0"; else mkdir -p "$BK/.config"; mv "$HOME/.config/gtk-4.0" "$BK/.config/gtk-4.0"; record "$HOME/.config/gtk-4.0"; fi
@@ -255,6 +263,8 @@ run python3 "$HOME/.local/share/gits-sounds/build.py" || warn "UI sounds not bui
 run python3 "$HOME/.local/share/gits-lock/tachikoma.py" >/dev/null || warn "lock screen Tachikoma not built (needs python-numpy): the lock screen has no mascot"
 run python3 "$HOME/.local/share/gits-lock/build.py" >/dev/null || warn "dancing Lain frames not built (needs python-pillow and python-numpy): GITS_LOCK_MASCOT=lain stays blank"
 ((TELEGRAM)) && run python3 "$HOME/.local/share/gits-telegram/build.py"
+
+[[ -n $THEME ]] && { run "$HOME/.local/bin/gits-theme" set "$THEME" --no-reload >/dev/null || warn "colour theme $THEME not applied again: run  gits-theme set $THEME"; }
 
 # ------------------------------------------------------------------ activation
 say "session units"

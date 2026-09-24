@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # gits-settings: one menu for ALL the settings of this desktop (Super+I, the ALL SETTINGS button of the control panel).
-# System settings apps, the look and feel selectors (tiling layout, workflow, animations), the ASUS bits.
+# System settings apps, the look and feel selectors (colour theme, tiling layout, workflow, animations), the ASUS bits.
 # Add your own: append a "label<TAB>command" line to ~/.config/gits/settings.tsv.
 extra=${XDG_CONFIG_HOME:-$HOME/.config}/gits/settings.tsv
 entries=$(cat <<'ROWS'
@@ -19,6 +19,7 @@ entries=$(cat <<'ROWS'
 󰆍  Tiling layout (dwindle / master / monocle / scrolling)	gits-layout select
 󰓅  Workflow (default / gaming / editing / powersaver)	gits-workflow select
 󱂬  Window animations	gits-anim select
+󰏘  Colour theme (the whole desktop)	gits-theme select
 󰸉  Wallpaper (pick; GIFs too)	gits-wall --pick
 󰌌  Key bindings	gits-panel keys
 󰢮  ROG Control Center	gits-rog

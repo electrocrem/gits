@@ -236,6 +236,7 @@ python3 -c "import numpy" 2>/dev/null && ok "python-numpy present (audio spectru
 rmiss=(); for c in mpv socat jq curl parec pactl; do command -v "$c" >/dev/null || rmiss+=("$c"); done
 [[ ${#rmiss[@]} -eq 0 ]] && ok "web radio ready (gits-radio: mpv, socat, jq, curl, parec)" || warn "gits-radio needs: ${rmiss[*]} (sudo pacman -S mpv socat jq curl libpulse)"
 [[ -r $H/.config/gits-widgets/lain.gif ]] && ok "lain.gif present (radio popup, lock screen)" || warn "lain.gif missing in ~/.config/gits-widgets: no dancing Lain (re-run install.sh)"
+command -v gits-theme >/dev/null && ok "colour theme: $(gits-theme current)" || warn "gits-theme missing: rerun ./install.sh"
 [[ -r $H/.local/share/gits-lock/tachikoma-0.txt ]] && ok "lock screen frames built (the Tachikoma)" || warn "lock screen frames missing: python3 ~/.local/share/gits-lock/tachikoma.py"
 if command -v rog-control-center >/dev/null; then
     pgrep -f "^(/usr/bin/)?rog-control-center" >/dev/null && ok "ROG Control Center running" || warn "ROG Control Center installed but not running"

@@ -20,7 +20,7 @@ snap() { (cd "${1:-$FH}" && find . -type f -not -path './.local/share/gits-insta
 snap >"$FH.before"
 
 export HOME=$FH GITS_SKIP_PREFLIGHT=1
-unset ZDOTDIR   # the caller's own zsh dir must not leak into the test
+unset ZDOTDIR XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME   # the caller's own dirs must not leak into the test
 "$REPO/install.sh" >/dev/null
 echo "-- edited" >>"$FH/.config/hypr/gits/options.lua"; sleep 1      # a second run must back up our own older copy
 "$REPO/install.sh" >/dev/null
@@ -36,6 +36,32 @@ fi
 if python3 -c 'import PIL, numpy' 2>/dev/null; then [[ -s $FH/.local/share/gits-lock/lain-0.txt && -s $FH/.local/share/gits-lock/tachikoma-0.txt ]] || { echo "the lock screen frames were not built"; exit 1; }; fi
 [[ ! -e $FH/.config/hypr/scripts/gits-blind-guard.sh ]] || { echo "the blind-login guard must be opt-in"; exit 1; }
 ! grep -rIl '@HOME@' "$FH" >/dev/null || { echo "unsubstituted @HOME@ token left"; exit 1; }
+
+# colour themes: every file holding GitS colours is listed; a theme recolours them, survives a reinstall, and GitS comes back byte for byte
+python3 "$REPO/home/.local/bin/gits-theme" check "$REPO/home" || { echo "home/.config/gits/themes/files is incomplete"; exit 1; }
+tsnap() { snap | grep -vE ' \./\.local/share/gits/theme-base/| \./\.local/state/gits/state$| \./\.config/gits/themes/probe\.theme$'; }
+tsnap >"$FH.gits"
+python3 - "$FH/.config/gits/themes" <<'PY'   # a made-up theme: every GitS colour with its hue turned half way round
+import colorsys, re, sys
+out = ["name = Probe"]
+for ln in open(sys.argv[1] + "/gits.theme"):
+    m = re.match(r"\s*([a-z_]+)\s*=\s*#([0-9A-Fa-f]{6})", ln)
+    if m:
+        h, l, s = colorsys.rgb_to_hls(*(int(m.group(2)[i:i + 2], 16) / 255 for i in (0, 2, 4)))
+        out.append(m.group(1) + " = #%02X%02X%02X" % tuple(round(v * 255) for v in colorsys.hls_to_rgb((h + 0.5) % 1, l, s)))
+open(sys.argv[1] + "/probe.theme", "w").write("\n".join(out) + "\n")
+PY
+T=$FH/.local/bin/gits-theme
+"$T" set probe --no-reload >/dev/null
+recoloured() { [[ $("$T" current) == probe ]] && ! grep -qi '2ed3d7' "$FH/.config/kitty/theme.conf" "$FH/.config/hypr/gits/options.lua" "$FH/.local/share/color-schemes/GitS.colors" && ! grep -q '46, 211, 215' "$FH/.config/hypr/hyprlock.conf"; }
+recoloured || { echo "the probe theme did not recolour the configs"; exit 1; }
+"$REPO/install.sh" >/dev/null
+recoloured || { echo "a reinstall lost the colour theme"; exit 1; }
+"$T" set gits --no-reload >/dev/null
+tsnap >"$FH.gits2"
+diff "$FH.gits" "$FH.gits2" >/dev/null || { diff "$FH.gits" "$FH.gits2" | head; echo "switching back to GitS did not restore the files byte for byte"; exit 1; }
+rm -f "$FH.gits" "$FH.gits2" "$FH/.config/gits/themes/probe.theme"
+echo "colour themes OK: recoloured, kept over a reinstall, GitS restored byte for byte"
 "$REPO/uninstall.sh" >/dev/null
 
 snap >"$FH.after"

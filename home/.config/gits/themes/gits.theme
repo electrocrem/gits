@@ -1,0 +1,30 @@
+# Ghost in the Shell: CRT cyan on navy-black, a red accent for "the eye" and for alerts (docs/PALETTE.md).
+# Every themed file (see `files`) is written in these colours. Another theme names the same roles with its own colours and
+# `gits-theme set NAME` maps each colour below to that role's colour; any other colour of these files follows its nearest role.
+name = Ghost in the Shell
+
+bg            = #060A14
+bg_deep       = #03060D
+surface       = #0C1A33
+surface_deep  = #0A1226
+fg            = #C8F4FF
+fg_gtk        = #D0FDFF
+fg_bright     = #DDF9FF
+muted         = #9FC5D6
+dim           = #254F5D
+dim_text      = #596977
+
+accent        = #2ED3D7
+accent_bright = #5EF1F5
+accent_2      = #398FF0
+
+red           = #E5432B
+red_light     = #FF7A5C
+green         = #34D399
+green_light   = #6EE7B7
+yellow        = #E8C547
+yellow_light  = #F5DC7E
+blue          = #3B74D0
+blue_light    = #459BF1
+violet        = #7C6CE0
+violet_light  = #A99CF5

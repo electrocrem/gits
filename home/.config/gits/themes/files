@@ -1,0 +1,45 @@
+# Files `gits-theme` recolours, relative to $HOME (`gits-theme check` in tools/roundtrip.sh keeps this list complete).
+# Lines starting with "#-" hold GitS colours but are not recoloured yet: they are built into pictures at install time
+# (icons, cursor, boot splash, login screen), so a theme needs a rebuild step for them.
+#- .local/share/gits-boot/build.py
+#- .local/share/gits-cursor/build.py
+#- .local/share/gits-icons/build.py
+#- .local/share/gits-sddm/ghost-in-the-shell/Main.qml
+#- .local/share/gits-telegram/build.py
+
+.config/Kvantum/GitS/GitS.kvconfig
+.config/Kvantum/GitS/GitS.svg
+.config/bat/themes/GitS.tmTheme
+.config/btop/themes/gits.theme
+.config/dunst/dunst.conf
+.config/dunst/dunstrc
+.config/gits-widgets/osd.py
+.config/gits-widgets/panel.css
+.config/gits-widgets/panel.py
+.config/gits-widgets/style.css
+.config/gits-widgets/widgets.py
+.config/gtk-3.0/gtk.css
+.config/gtk-4.0/gtk.css
+.config/hypr/gits/options.lua
+.config/hypr/hyprlock.conf
+.config/hypr/hyprlock/static.conf
+.config/kitty/theme.conf
+.config/lazygit/config.yml
+.config/nvim/lua/gits/init.lua
+.config/nvim/lua/gits/palette.lua
+.config/qt5ct/colors/GitS.conf
+.config/qt6ct/colors/GitS.conf
+.config/satty/config.toml
+.config/spicetify/Themes/GitS/color.ini
+.config/spicetify/Themes/GitS/user.css
+.config/tmux/tmux.conf
+.config/vesktop/themes/gits.css
+.config/waybar/styles/ghost-in-the-shell.css
+.config/wlogout/style_1.css
+.config/yazi/theme.toml
+.config/zsh/gits/colors.zsh
+.local/bin/gits-rec
+.local/bin/gits-sessions
+.local/bin/gits-shot
+.local/share/color-schemes/GitS.colors
+.vscode-oss/extensions/gits.ghost-in-the-shell-1.0.0/themes/ghost-in-the-shell-color-theme.json

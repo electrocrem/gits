@@ -321,11 +321,15 @@ def flatpak():
         return
     # GTK apps inside take the theme name from the settings portal, but an old global ICON_THEME override (a previous rice) wins
     # for the apps that read it; the theme itself and its base (Tela-circle-grey, /usr/share/icons) are visible via /run/host
+    root = os.path.join(os.environ.get("XDG_DATA_HOME", os.path.join(HOME, ".local/share")), "flatpak")
+    g = os.path.join(root, "overrides/global")
+    if not os.path.isdir(root):  # any `flatpak ... --user` (even --show) creates the whole per-user installation: uninstall.sh removes it again
+        os.makedirs(os.path.dirname(root), exist_ok=True)
+        open(root + ".gits-created", "w").close()
     cur = subprocess.run(["flatpak", "override", "--user", "--show"], capture_output=True, text=True).stdout
     if "ICON_THEME=GitS-Icons" in cur and "xdg-data/icons:ro" in cur:
         print("flatpak: already set")
         return
-    g = os.path.join(os.environ.get("XDG_DATA_HOME", os.path.join(HOME, ".local/share")), "flatpak/overrides/global")
     if os.path.exists(g):
         backup(g)
     else:
