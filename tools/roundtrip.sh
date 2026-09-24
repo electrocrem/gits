@@ -65,7 +65,8 @@ rm -f "$FH/.config/kitty/theme.conf.gits-theme-edited"
 tsnap >"$FH.gits2"
 diff "$FH.gits" "$FH.gits2" >/dev/null || { diff "$FH.gits" "$FH.gits2" | head; echo "switching back to GitS did not restore the files byte for byte"; exit 1; }
 # your own options on top of a theme: GitS with a magenta accent and no mascot, then forgotten again: byte for byte once more
-"$T" option gits accent '#FF2E97' && "$T" option gits mascot off && "$T" set gits --no-reload >/dev/null
+"$T" option gits accent '#FF2E97' && "$T" option gits mascot off && "$T" option gits dancer lain && "$T" set gits --no-reload >/dev/null
+[[ $(cat "$FH/.local/state/gits/dancer" 2>/dev/null) == lain ]] || { echo "the dancer option was not written for the radio"; exit 1; }
 grep -qi 'ff2e97' "$FH/.config/kitty/theme.conf" && grep -q 'GITS_LOCK_MASCOT=off' "$FH/.config/hypr/hyprlock.conf" || { echo "the accent / mascot options did not reach the files"; exit 1; }
 "$T" info | python3 -c 'import json,sys; d=json.load(sys.stdin); g=[t for t in d["themes"] if t["id"]=="gits"][0]; assert g["user"]["accent"]=="#FF2E97" and g["mascot"]=="off"' || { echo "gits-theme info does not show the options"; exit 1; }
 "$T" option gits --reset && "$T" set gits --no-reload >/dev/null

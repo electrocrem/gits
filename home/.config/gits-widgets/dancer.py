@@ -12,19 +12,62 @@ import os
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 GIF = os.path.join(HERE, "lain.gif")
-ART = os.path.join(os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share")), "gits", "art", "current")
+ROOT = os.path.join(os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share")), "gits", "art")
+ART = os.path.join(ROOT, "current")
+# the dancer you picked for the theme (gits-theme writes it from the theme's `dancer =`): an art set's name, "lain" or "off"
+CHOICE = os.path.join(os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")), "gits", "dancer")
+
+
+def _in(d):
+    import glob
+    pngs = sorted(glob.glob(os.path.join(d, "dancer-*.png")), key=lambda p: int(p.rsplit("-", 1)[1][:-4]))
+    if pngs:
+        return "png", pngs
+    if os.path.exists(os.path.join(d, "dancer.gif")):
+        return "gif", [os.path.join(d, "dancer.gif")]
+    return "", []
 
 
 def source():
-    """(kind, paths): ("gif", [dancer.gif]) or ("png", [dancer-0.png, ...]) of the current art set, else lain.gif; ("", []) if none."""
-    import glob
-    pngs = sorted(glob.glob(os.path.join(ART, "dancer-*.png")), key=lambda p: int(p.rsplit("-", 1)[1][:-4]))
-    if pngs:
-        return "png", pngs
-    for g in (os.path.join(ART, "dancer.gif"), GIF):
+    """(kind, paths): the chosen dancer, else the current art set's, else lain.gif; ("", []) when switched off or missing."""
+    try:
+        with open(CHOICE) as f:
+            choice = f.read().strip()
+    except OSError:
+        choice = ""
+    if choice == "off":
+        return "", []
+    # a named dancer, else the current art set's own; Lain when neither has one (or when she is the choice)
+    for d in ([os.path.join(ROOT, choice)] if choice and choice != "lain" else [] if choice == "lain" else [ART]):
+        kind, paths = _in(d)
+        if paths:
+            return kind, paths
+    lain = os.path.join(ROOT, "lain", "dancer.gif")
+    for g in (lain, GIF):
         if os.path.exists(g):
             return "gif", [g]
     return "", []
+
+
+def dancers():
+    """[(id, name)] of the dancers there are: every art set with one (its banner.conf may name it: dancer_name=...), and lain."""
+    out = []
+    for s in sorted(os.listdir(ROOT)) if os.path.isdir(ROOT) else []:
+        d = os.path.join(ROOT, s)
+        if s == "current" or os.path.islink(d) or not _in(d)[1]:
+            continue
+        name = s
+        try:
+            with open(os.path.join(d, "banner.conf")) as f:
+                for ln in f:
+                    if ln.startswith("dancer_name="):
+                        name = ln.split("=", 1)[1].strip().strip('"')
+        except OSError:
+            pass
+        out.append((s, name))
+    if "lain" not in [i for i, _ in out] and os.path.exists(GIF):
+        out.append(("lain", "lain"))
+    return out
 
 
 def hexrgb(h):
