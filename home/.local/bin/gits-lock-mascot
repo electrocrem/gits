@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# hyprlock label: the frame of the lock-screen mascot for this instant (hyprlock.conf asks 10 times a second).
-#   GITS_LOCK_MASCOT=tachikoma (default: the dancing Fuchikoma in colour, or the Tachikoma hologram without its gif) | lain (the dancing Lain) | off
-# Frames are ~/.local/share/gits-lock/<mascot>-N.txt (tachikoma.py, build.py). No forks besides the subshell: it runs 10 times a second.
+# hyprlock label: the braille frame of the lock-screen mascot for this instant, 8 frames a second.
+#   GITS_LOCK_MASCOT=tachikoma (default: the turning Tachikoma hologram) | lain (the dancing Lain) | off
+# Frames are ~/.local/share/gits-lock/<mascot>-N.txt (tachikoma.py, build.py). No forks besides the subshell: it runs 8 times a second.
 d=${XDG_DATA_HOME:-$HOME/.local/share}/gits-lock
 m=${GITS_LOCK_MASCOT:-tachikoma}
 f=("$d/$m"-*.txt)
 [[ $m != off && -e ${f[0]} ]] || exit 0
-slot=100000; [[ $m == lain ]] && slot=125000   # microseconds per frame: Lain dances at 8 frames a second
-n=$(( (${EPOCHREALTIME/./} / slot) % ${#f[@]} ))
+n=$(( (${EPOCHREALTIME/./} / 125000) % ${#f[@]} ))
 echo "$(<"$d/$m-$n.txt")"

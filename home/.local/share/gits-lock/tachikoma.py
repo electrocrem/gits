@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""Frames of the Tachikoma for the lock screen (gits-lock-mascot): tachikoma-0.txt ... next to this file.
-
-With tachikoma.gif next to this file (the installer puts assets/fuchikoma-dance.gif there) the frames are that animation in colour: one
-frame per pose, every character a half block (▀/▄) whose foreground and background are two pixels, as Pango markup (hyprlock labels
-render it). Without it (a fork without the fan art) they are the hologram below:
+"""Frames of the Tachikoma hologram for the lock screen (gits-lock-mascot): braille art, tachikoma-0.txt ... next to this file.
 
 A Tachikoma (the think-tank of Ghost in the Shell) modelled from a few signed-distance primitives (abdomen pod, cabin, three eye pods,
 four legs on wheels, manipulators, the rear launcher), ray-marched with numpy and turned slowly on a holo platform. Every braille
@@ -146,81 +142,10 @@ def braille(lum):
     return "\n".join(lines)
 
 
-# --------------------------------------------------------------------------------------------- the dancing gif, in colour
-GIF = os.path.join(HERE, "tachikoma.gif")
-GIF_COLS = 70      # characters across (one pixel each); rows are half as many characters as pixels
-CELL = 1.45        # a half block of the lock screen font (JetBrainsMono, 13 pt) is this much taller than wide: squash the rows to match
-GIF_COLOURS = 32   # per frame: fewer colours = longer runs = fewer <span>s for hyprlock to parse 8 times a second
-
-
-def gif_frames():
-    """Every distinct frame of the gif (repeats dropped), cropped to what any frame covers, on black. hyprlock shows them at 10 a second:
-    all of the dance, a bit slower than the gif's 30 ms frames."""
-    from PIL import Image, ImageSequence
-    src = [f.convert("RGB") for f in ImageSequence.Iterator(Image.open(GIF))]
-    lit = [np.asarray(f).astype(int).sum(2) > 60 for f in src]
-    poses, prev = [], None
-    for f, m in zip(src, lit):
-        a = np.asarray(f).astype(int)
-        if prev is None or np.abs(a - prev).mean() > 1:  # not a repeat of the previous frame
-            poses.append((f, m))
-        prev = a
-    union = np.any(lit, axis=0)
-    ys, xs = np.nonzero(union)
-    box = (xs.min(), ys.min(), xs.max() + 1, ys.max() + 1)
-    h = round((box[3] - box[1]) * GIF_COLS / (box[2] - box[0]) / CELL)
-    h += h % 2
-    out = []
-    for f, m in poses:
-        rgb = f.crop(box).resize((GIF_COLS, h), Image.BOX).quantize(GIF_COLOURS).convert("RGB")
-        mask = Image.fromarray((m * 255).astype("uint8")).crop(box).resize((GIF_COLS, h), Image.BOX)
-        out.append((np.asarray(rgb), np.asarray(mask) > 110))
-    return out
-
-
-def markup(rgb, on):
-    """Half blocks as Pango markup: one <span> per run of equal colours. Transparent cells are no-break spaces: hyprlock trims plain
-    leading spaces off the text, which shifted the first line to the left."""
-    hexc = lambda c: "#%02x%02x%02x" % tuple(int(v) for v in c)
-    lines = []
-    for r in range(0, rgb.shape[0], 2):
-        cells = []
-        for c in range(rgb.shape[1]):
-            top, bot = on[r, c], on[r + 1, c]
-            if top and bot:
-                cells.append(("▀", hexc(rgb[r, c]), hexc(rgb[r + 1, c])))
-            elif top or bot:
-                cells.append(("▀" if top else "▄", hexc(rgb[r if top else r + 1, c]), None))
-            else:
-                cells.append(("\u00a0", None, None))
-        while cells and cells[-1][0] == "\u00a0":
-            cells.pop()
-        line, prev = "", (None, None)
-        for ch, fg, bg in cells:
-            if (fg, bg) != prev:
-                if prev != (None, None):
-                    line += "</span>"
-                if fg:
-                    line += f'<span foreground="{fg}"' + (f' background="{bg}"' if bg else "") + ">"
-                prev = (fg, bg)
-            line += ch
-        if prev != (None, None):
-            line += "</span>"
-        lines.append(line or "\u00a0")
-    return "\n".join(lines)
-
-
 def main():
     for old in os.listdir(HERE):
         if old.startswith("tachikoma-") and old.endswith(".txt"):
             os.remove(os.path.join(HERE, old))
-    if os.path.exists(GIF):
-        frames = gif_frames()
-        for n, (rgb, on) in enumerate(frames):
-            with open(os.path.join(HERE, f"tachikoma-{n}.txt"), "w", encoding="utf-8") as fh:
-                fh.write(markup(rgb, on))
-        print(f"{len(frames)} colour frames of {GIF_COLS} characters from {GIF}")
-        return
     for n in range(FRAMES):
         f = n / FRAMES
         art = braille(render(math.radians(-30) + f * 2 * math.pi, f * 4 * math.pi, COLS * 2, ROWS * 4))
