@@ -1713,6 +1713,115 @@ class MenuPopup(Popup):
         self.dismiss()
 
 
+def load_themes():
+    """[(name, theme dict)] from gits-theme itself (one parser for the theme files), and the current theme's name."""
+    from importlib.machinery import SourceFileLoader
+    try:
+        gt = SourceFileLoader("gits_theme", shutil.which("gits-theme") or HOME + "/.local/bin/gits-theme").load_module()
+        return [(n, gt.load_theme(n)) for n in gt.theme_names()], gt.current()
+    except (OSError, ImportError, SyntaxError):
+        return [], "gits"
+
+
+class ThemePopup(Popup):
+    """The colour theme picker (gits-panel themes, Super+I -> Colour theme): one card per theme with its wallpaper, name, description
+    and a strip of its colours. Click (or Enter) switches with `gits-theme set`; the popup waits for it and closes."""
+    CARD_W = 540
+    SWATCH = ("bg", "surface", "fg", "muted", "accent", "accent_bright", "accent_2", "red", "green", "yellow", "blue", "violet")
+
+    def __init__(self, monitor):
+        super().__init__(monitor, center=True)
+        themes, self.cur = load_themes()
+        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        root.add_css_class("panel")
+        head = Gtk.Box(spacing=6)
+        head.append(label("\U000F03D8  COLOUR THEME", "m-head"))
+        sp = Gtk.Box()
+        sp.set_hexpand(True)
+        head.append(sp)
+        head.append(label("// 配色", "m-tag"))
+        root.append(head)
+        self.buttons = []
+        for name, t in themes:
+            root.append(self._card(name, t))
+        self.status = label("click a theme · Esc closes", "th-status")
+        root.append(self.status)
+        self.set_child(root)
+        for b in self.buttons:
+            if b.theme == self.cur:
+                GLib.idle_add(lambda b=b: (b.grab_focus(), False)[1])
+
+    def _card(self, name, t):
+        btn = Gtk.Button()
+        btn.add_css_class("theme-card")
+        btn.theme = name
+        if name == self.cur:
+            btn.add_css_class("current")
+        row = Gtk.Box(spacing=12)
+        pic = Gtk.Picture()
+        pic.add_css_class("th-thumb")
+        pic.set_size_request(160, 90)
+        pic.set_valign(Gtk.Align.CENTER)
+        wall = t.get("wallpaper", "")
+        path = wall if os.path.isabs(wall) else os.path.join(HOME, ".local/share/gits/wallpapers", wall)
+        if wall and os.path.exists(path):
+            try:   # decoded small and cut to exactly 160x90 (cover): the picture's natural size is then the frame's
+                pb = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, 480, 480, True)
+                k = max(160 / pb.get_width(), 90 / pb.get_height())
+                pb = pb.scale_simple(max(160, round(pb.get_width() * k)), max(90, round(pb.get_height() * k)), GdkPixbuf.InterpType.BILINEAR)
+                pb = pb.new_subpixbuf((pb.get_width() - 160) // 2, (pb.get_height() - 90) // 2, 160, 90)
+                pic.set_paintable(Gdk.Texture.new_for_pixbuf(pb))
+            except GLib.Error:
+                pass
+        row.append(pic)
+        col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        col.set_hexpand(True)
+        top = Gtk.Box(spacing=6)
+        nm = label(t["name"].upper(), "th-name")
+        nm.set_hexpand(True)
+        top.append(nm)
+        if name == self.cur:
+            top.append(label("ACTIVE", "th-active"))
+        col.append(top)
+        desc = label(t.get("description", ""), "th-desc")
+        desc.set_wrap(True)
+        desc.set_max_width_chars(40)
+        col.append(desc)
+        roles = t["roles"]
+        cols = [roles[k] for k in self.SWATCH if k in roles]
+        da = Gtk.DrawingArea()
+        da.set_content_height(14)
+        da.set_valign(Gtk.Align.END)
+        da.set_vexpand(True)
+
+        def draw(_a, cr, w, h, cols=cols):
+            n = max(len(cols), 1)
+            for i, c in enumerate(cols):
+                cr.set_source_rgb(*(v / 255 for v in c))
+                cr.rectangle(i * w / n, 0, w / n - 2, h)
+                cr.fill()
+        da.set_draw_func(draw)
+        col.append(da)
+        row.append(col)
+        btn.set_child(row)
+        btn.connect("clicked", lambda _b: self._apply(name, t["name"]))
+        self.buttons.append(btn)
+        return btn
+
+    def _apply(self, name, title):
+        if name == self.cur:
+            self.dismiss()
+            return
+        for b in self.buttons:
+            b.set_sensitive(False)
+        self.status.set_text(f"SWITCHING TO {title.upper()} …")
+
+        def work():
+            sh(["gits-theme", "set", name], timeout=120)
+            GLib.idle_add(lambda: (self.dismiss(), False)[1])
+        threading.Thread(target=work, daemon=True).start()
+
+
 class MixerPopup(Popup):
     """Sound mixer: master volume + mute of the default output, a button per output device, and one slider per application that
     is playing (streams of one app are grouped). Refreshes every 1.5 s while open (apps come and go)."""
@@ -2312,6 +2421,8 @@ def main():
         win = LauncherPopup(mon, mode)
     elif mode == "note":
         win = NotePopup(mon)
+    elif mode == "themes":
+        win = ThemePopup(mon)
     elif mode == "mixer":
         cx = int(sh(["hyprctl", "cursorpos"]).split(",")[0] or 640) if not DEMO else 700
         width = mon.get_geometry().width if mon else 1280

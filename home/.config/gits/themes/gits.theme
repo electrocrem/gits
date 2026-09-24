@@ -2,6 +2,10 @@
 # Every themed file (see `files`) is written in these colours. Another theme names the same roles with its own colours and
 # `gits-theme set NAME` maps each colour below to that role's colour; any other colour of these files follows its nearest role.
 name = Ghost in the Shell
+description = CRT cyan on navy-black, the red of the eye. Section 9.
+wallpaper = gits_smoke.png
+# a theme may also swap text in the themed files after recolouring, e.g. another lock-screen picture:
+#   swap = hyprlock/gits_lock_bg.png -> hyprlock/my_lock_bg.png
 
 bg            = #060A14
 bg_deep       = #03060D

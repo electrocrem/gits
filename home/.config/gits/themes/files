@@ -3,9 +3,11 @@
 # (icons, cursor, boot splash, login screen), so a theme needs a rebuild step for them.
 #- .local/share/gits-boot/build.py
 #- .local/share/gits-cursor/build.py
-#- .local/share/gits-icons/build.py
+#- .local/share/gits-icons/build.py      (its output, the icon folder below, is themed instead)
 #- .local/share/gits-sddm/ghost-in-the-shell/Main.qml
 #- .local/share/gits-telegram/build.py
+# a folder (ends in /): every file in it; the icon theme is built at install time
+.local/share/icons/GitS-Icons/
 
 .config/Kvantum/GitS/GitS.kvconfig
 .config/Kvantum/GitS/GitS.svg
