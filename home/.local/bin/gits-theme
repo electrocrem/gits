@@ -270,6 +270,13 @@ def switch(name, reload=True):
         print(f"  left alone (changed by hand): {k}", file=sys.stderr)
     if reload:
         wall = theme["wallpaper"]
+        try:  # the wallpaper you last picked under this theme (gits-wall remembers one per theme) wins over the theme's own
+            with open(os.path.join(os.path.dirname(STATE), "wallpaper." + name)) as f:
+                mine = f.read().strip()
+            if os.path.exists(mine):
+                wall = mine
+        except OSError:
+            pass
         if wall:
             wall = wall if os.path.isabs(wall) else os.path.join(HOME, ".local", "share", "gits", "wallpapers", wall)
             if os.path.exists(wall):
