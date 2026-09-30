@@ -67,12 +67,11 @@ end
 local function safe_apply() local ok, main = pcall(apply); return ok and main or nil end
 
 -- X11 games (Proton) size themselves for the XWayland primary output, which is otherwise the one at 0,0: with a 1080p screen on the
--- left the game renders 1920x1080 into the top-left corner of the fullscreen window on the main one. XWayland may come up a while
--- after Hyprland (or restart), so retry until xrandr knows the output instead of one fixed sleep.
+-- left the game renders 1920x1080 into the top-left corner of the fullscreen window on the main one. XWayland comes up a while after
+-- Hyprland and the monitors settle in steps, so gits-xprimary.sh keeps the main output primary for a minute (one instance, newest wish).
 local function x_primary(main)
     if not main then return end
-    hl.exec_cmd("sh -c 'command -v xrandr >/dev/null || exit 0; for i in $(seq 30); do " ..
-                "xrandr --output " .. main.name .. " --primary 2>/dev/null && exit 0; sleep 1; done'")
+    hl.exec_cmd(os.getenv("HOME") .. "/.config/hypr/scripts/gits-xprimary.sh " .. main.name)
 end
 
 x_primary(safe_apply())   -- on a config reload the monitors are already there
@@ -84,3 +83,9 @@ hl.on("hyprland.start", function()
 end)
 hl.on("monitor.added", function() x_primary(safe_apply()) end)
 hl.on("monitor.removed", function() x_primary(safe_apply()) end)
+-- and once more when the Steam client opens, before any game asks for the screen size
+hl.on("window.open", function(w)
+    pcall(function()
+        if w.class == "steam" then x_primary(ordered()[1]) end
+    end)
+end)
