@@ -3,12 +3,13 @@
 #   gits-update             open a terminal window and run the whole thing (Super+I -> Update system)
 #   gits-update --check     only count pending updates (repo + AUR), change nothing
 #   gits-update --post      only the after-update repairs (gits-doctor --fix, timers, dunst)
-# What it does: list what is pending -> ask -> `paru -Syu` (snap-pac takes a snapshot before and after the pacman transaction,
+# What it does: list what is pending -> ask -> `paru -Syu` or `yay -Syu` (plain pacman without either) (snap-pac takes a snapshot before and after the pacman transaction,
 # so a bad update can be rolled back from the GRUB snapshot menu) -> repair what KDE updates and crashes typically undo
 # (gits-doctor --fix) -> tell you whether a reboot is advisable (new kernel or NVIDIA driver).
 run_here() { [[ -t 0 && -t 1 ]]; }
+helper=$(command -v paru || command -v yay)
 count_updates() {
-    repo=$(checkupdates 2>/dev/null); aur=$(paru -Qua 2>/dev/null)
+    repo=$(checkupdates 2>/dev/null); aur=$([[ -n $helper ]] && "$helper" -Qua 2>/dev/null)
     nrepo=$([[ -n $repo ]] && wc -l <<<"$repo" || echo 0); naur=$([[ -n $aur ]] && wc -l <<<"$aur" || echo 0)
 }
 post() {
@@ -39,5 +40,5 @@ if (( nrepo + naur == 0 )); then echo "already up to date"; post; exit 0; fi
 echo; echo "snap-pac takes a snapshot before and after; roll back from the GRUB snapshot menu if something breaks."
 read -rp "update now? [y/N] " a
 [[ $a == [yYдД]* ]] || { echo "cancelled"; exit 0; }
-paru -Syu || { echo "the update failed or was cancelled; nothing was repaired"; exit 1; }
+if [[ -n $helper ]]; then "$helper" -Syu; else sudo pacman -Syu; fi || { echo "the update failed or was cancelled; nothing was repaired"; exit 1; }
 post
