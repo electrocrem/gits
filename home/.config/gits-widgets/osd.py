@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
-"""Ghost in the Shell on-screen display for volume / brightness / microphone (a tiny resident layer-shell daemon).
+"""Ghost in the Shell on-screen display for volume / brightness / microphone / keyboard layout (a tiny resident layer-shell daemon).
 
 Feed it with `gits-osd volume 46 [muted]` (writes a line into $XDG_RUNTIME_DIR/gits-osd.fifo). The window appears at the bottom
-centre, shows a segmented LED bar and hides itself 1.4 s after the last event. Hidden = unmapped: it costs nothing.
+centre of the focused monitor, shows a segmented LED bar (for `layout`: one chip per layout, the active one lit; `gits-osd layout 1 0 EN,RU`) and
+hides itself 1.4 s after the last event. Hidden = unmapped: it costs nothing.
 `GITS_OSD_DEMO=kind:pct[:muted]` shows one frame and stays (for screenshots)."""
+import json
 import math
 import os
+import socket
 import sys
 
 _LS_LIB = "/usr/lib/libgtk4-layer-shell.so"
@@ -28,6 +31,25 @@ from gi.repository import Gtk4LayerShell as LS  # noqa: E402
 # libraries for nothing, which made each spawned command several times slower
 os.environ.pop("LD_PRELOAD", None)
 
+def focused_connector():
+    """Name of the focused monitor (e.g. "DP-3"), asked straight from Hyprland's socket (no hyprctl process per key press)."""
+    sig = os.environ.get("HYPRLAND_INSTANCE_SIGNATURE")
+    if not sig:
+        return None
+    path = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "hypr", sig, ".socket.sock")
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+            s.settimeout(0.3)
+            s.connect(path)
+            s.sendall(b"j/monitors")
+            data = b""
+            while chunk := s.recv(65536):
+                data += chunk
+        return next((m["name"] for m in json.loads(data) if m.get("focused")), None)
+    except (OSError, ValueError):
+        return None
+
+
 FIFO = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "gits-osd.fifo")
 FONT = "JetBrainsMono Nerd Font"
 BG, CY, CYB, FG, DIM, RED = "#060A14", "#2ED3D7", "#5EF1F5", "#C8F4FF", "#596977", "#E5432B"
@@ -38,6 +60,7 @@ KINDS = {  # kind -> (title, kanji, icon by state)
     "mic": ("MICROPHONE", "録音", "󰍬", "󰍬", "󰍬", "󰍭"),
     "kbd": ("KEYBOARD", "鍵盤", "󰌌", "󰌌", "󰌌", "󰌌"),
     "touchpad": ("TOUCHPAD", "触摸", "󰍽", "󰍽", "󰍽", "󰍽"),
+    "layout": ("LAYOUT", "配列", "󰌌", "󰌌", "󰌌", "󰌌"),  # pct = index of the active layout, label = "EN,RU"
 }
 KBD_LEVELS = ["OFF", "LOW", "MED", "HIGH"]
 
@@ -88,6 +111,7 @@ class Osd(Gtk.Window):
         LS.set_exclusive_zone(self, -1)
         if monitor is not None:
             LS.set_monitor(self, monitor)
+        self.monitor = monitor
         self.kind, self.pct, self.muted, self.label = "volume", 0, False, None
         self.da = Gtk.DrawingArea()
         self.da.set_content_width(W)
@@ -99,6 +123,9 @@ class Osd(Gtk.Window):
 
     def show_state(self, kind, pct, muted, sticky=False, label=None):
         self.kind, self.pct, self.muted, self.label = kind, max(0, min(100, pct)), muted, label
+        if kind == "layout":
+            self.muted = False
+        self._follow_focus()
         self.da.queue_draw()
         self.present()
         if self.hide_id:
@@ -106,6 +133,21 @@ class Osd(Gtk.Window):
             self.hide_id = None
         if not sticky:
             self.hide_id = GLib.timeout_add(1400, self._hide)
+
+    def _follow_focus(self):
+        """Show on the monitor that has focus; a layer surface only changes output while unmapped."""
+        name = focused_connector()
+        if not name or (self.monitor is not None and self.monitor.get_connector() == name):
+            return
+        mons = Gdk.Display.get_default().get_monitors()
+        for i in range(mons.get_n_items()):
+            m = mons.get_item(i)
+            if m.get_connector() == name:
+                if self.get_visible():
+                    self.set_visible(False)
+                LS.set_monitor(self, m)
+                self.monitor = m
+                return
 
     def _hide(self):
         self.hide_id = None
@@ -133,6 +175,9 @@ class Osd(Gtk.Window):
         text(cr, title, 62, 21, 9, DIM, bold=True, spacing=2)
         text(cr, kanji, 62 + len(title) * 8.3 + 6, 21, 9, DIM, family="Noto Sans CJK JP")
         bx, by, bw, bh = 62, 30, w - 62 - 74, 14
+        if self.kind == "layout":
+            self._draw_layout(cr, w, bx, by, bw, bh)
+            return
         n, gap = SEGS, 2
         sw = (bw - gap * (n - 1)) / n
         lit = 0 if self.muted else round(self.pct / 100 * n)
@@ -148,6 +193,25 @@ class Osd(Gtk.Window):
             cr.fill()
         label = self.label or ("MUTED" if self.muted else f"{self.pct}%")
         text(cr, label, w - 14, 43, 17 if not (self.muted or self.label) else 13, RED if self.muted else FG, bold=True, align="right")
+
+    def _draw_layout(self, cr, w, bx, by, bw, bh):
+        codes = [c for c in (self.label or "").split(",") if c] or ["??"]
+        cur = min(self.pct, len(codes) - 1)
+        gap = 4
+        cw = (bw - gap * (len(codes) - 1)) / len(codes)
+        for i, code in enumerate(codes):
+            x = bx + i * (cw + gap)
+            if i == cur:
+                cr.set_source_rgba(*rgba(CY, 0.95))
+                cr.rectangle(x, by, cw, bh)
+                cr.fill()
+            else:
+                cr.set_source_rgba(*rgba(CY, 0.35))
+                cr.set_line_width(1)
+                cr.rectangle(x + 0.5, by + 0.5, cw - 1, bh - 1)
+                cr.stroke()
+            text(cr, code, x + cw / 2, by + 11, 9, BG if i == cur else DIM, bold=True, align="center")
+        text(cr, codes[cur], w - 14, 43, 17, FG, bold=True, align="right")
 
 
 class Daemon:
