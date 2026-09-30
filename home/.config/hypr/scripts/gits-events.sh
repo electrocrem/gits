@@ -2,6 +2,7 @@
 # gits-events: UI sounds for session events, one small background loop (started from gits.lua on login).
 #   login   played once when the daemon starts        plug / unplug   mains power connected / removed
 #   lock / unlock   hyprlock appears / disappears
+#   layout   the new keyboard layout on the GitS OSD on every switch (no sound)
 #   battery   a warning at 15 % and a critical one at 7 % while discharging (the charge limit of an ASUS keeps it near 98 %, that is not a warning)
 # Mute everything: `gits-sound off`. Single instance (flock). Polls every 2 s: two file reads and one pgrep.
 exec 9>"${XDG_RUNTIME_DIR:-/tmp}/gits-events.lock"
@@ -17,6 +18,27 @@ pgrep -x hyprlock >/dev/null && locked=1
 warned=0
 
 [[ -n ${GITS_EVENTS_NO_LOGIN:-} ]] || gits-sound login
+
+# layout OSD: the new keyboard layout on the GitS OSD (bottom centre, like volume) on every switch
+# (caps lock, Super+K, bar click). Event-driven over socket2; Hyprland sends "activelayout" once per keyboard,
+# so repeats are dropped. Turn off with GITS_EVENTS_NO_LAYOUT=1.
+sock="$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock"
+if [[ -z ${GITS_EVENTS_NO_LAYOUT:-} && -S $sock ]] && command -v socat >/dev/null && command -v gits-osd >/dev/null; then
+    (
+        kbd() { hyprctl devices -j 2>/dev/null | jq -r '[.keyboards[] | select(.main)][0] // empty
+            | "\(.active_layout_index) \(.layout | split(",") | map(if . == "us" or . == "gb" then "EN" else ascii_upcase end) | join(","))"'; }
+        last=$(hyprctl devices -j 2>/dev/null | jq -r '[.keyboards[] | select(.main)][0].active_keymap // empty')
+        socat -U - "UNIX-CONNECT:$sock" 2>/dev/null | while IFS= read -r line; do
+            [[ $line == activelayout'>>'* ]] || continue
+            name=${line##*,}
+            [[ $name == "$last" || $name == error ]] && continue
+            last=$name
+            read -r idx codes < <(kbd)
+            [[ $idx =~ ^[0-9]+$ ]] && gits-osd layout "$idx" 0 "$codes"
+        done
+    ) &
+fi
+
 while sleep "${GITS_EVENTS_POLL:-2}"; do
     if [[ -n $ac ]]; then
         now=$(cat "$ac" 2>/dev/null)
