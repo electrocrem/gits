@@ -3,7 +3,8 @@
 
 GTK4 + gtk4-layer-shell, one process, one layer-shell window per card on the BOTTOM layer (above the
 wallpaper, below every window; BACKGROUND would be covered by a later-started wallpaper daemon). Cards: clock, calendar, media player (playerctl), weather (wttr.in),
-battery, CPU/RAM/SSD rings, CPU/RAM history graph, network throughput, audio spectrum (parec + numpy), to-do list, a home server over ssh.
+battery, CPU/RAM/SSD rings, CPU/RAM history graph, network throughput, audio spectrum (parec + numpy), to-do list, a journal feed
+(SYS.LOG), a home server over ssh with its services, torrents (qBittorrent) and streams (Jellyfin).
 
 Env: GITS_WEATHER_LOCATION  city for wttr.in (default: auto-detect by IP; "off" disables the request)
      GITS_WIDGETS_MONITOR   connector name to place the cards on (default: the main monitor, as in hypr/gits/monitors.lua:
@@ -12,7 +13,9 @@ Env: GITS_WEATHER_LOCATION  city for wttr.in (default: auto-detect by IP; "off" 
      GITS_WIDGETS_SECOND    0 = nothing on the other monitors (default: clock, calendar, system rings / graph, network,
                             GPU, disks and the busiest processes there)
      GITS_SERVER            ssh destination of a home server (a Host from ~/.ssh/config or user@host; key login, python3 on it):
-                            adds the NODE.LINK card with its CPU / RAM / temperature, disks and Docker containers (default: none)
+                            adds the NODE.LINK card with its CPU / RAM / temperature, disks and Docker containers, SERVICES
+                            (container lights, Pi-hole) and, when set up in ~/.config/gits/server.env on the server (see
+                            SERVER_PROBE), TORRENT.LINK and NOW.WATCHING (default: none)
      GITS_SERVER_NAME       the name on that card (default: the server's hostname)
      GITS_WIDGETS_DEMO      1 = screenshot mode: made-up SSID/IP and to-do items, throw-away state and cache dirs
                             (your to-do file and weather cache are neither read nor written)
@@ -1352,9 +1355,14 @@ class TopCard(Card):
 
 # --------------------------------------------------------------------------------------------- remote server (GITS_SERVER)
 # Sent to the server over ssh and run there by `python3 -` (stdlib only, nothing is installed): one JSON line every 2 s.
-# Docker is polled every 30 s with `docker`, else `sudo -n docker`; without either the card just has no container line.
+# Docker is polled every 10 s with `docker`, else `sudo -n docker`; without either the card just has no container line.
+# Optional services, read from ~/.config/gits/server.env ON THE SERVER (KEY=value lines; the secrets never leave it):
+#   GITS_QBIT_URL=http://localhost:8080   [GITS_QBIT_USER, GITS_QBIT_PASS]   -> TORRENT.LINK
+#   GITS_JELLYFIN_URL=http://localhost:8096   GITS_JELLYFIN_KEY=<api key>   -> NOW.WATCHING
+#   GITS_PIHOLE_URL=http://localhost   GITS_PIHOLE_PASS or GITS_PIHOLE_PASS_FILE (Pi-hole v6; its cli_pw works) -> SERVICES
+# A service that is not configured sends null and its card stays hidden.
 SERVER_PROBE = r'''
-import json, os, subprocess, time
+import http.cookiejar, json, os, subprocess, time, urllib.error, urllib.parse, urllib.request
 FS = {"ext4", "btrfs", "xfs", "f2fs", "vfat", "exfat", "ntfs3", "zfs", "bcachefs"}
 SKIP = ("lo", "docker", "veth", "br-", "virbr")
 def cpu():
@@ -1377,20 +1385,126 @@ def run(cmd):
     except (OSError, subprocess.SubprocessError):
         return None
 def slow():
-    out = run(["docker", "ps", "-a", "--format", "{{.Names}}\t{{.State}}"])
+    fmt = "{{.Names}}\t{{.State}}\t{{.Status}}"
+    out = run(["docker", "ps", "-a", "--format", fmt])
     if out is None:
-        out = run(["sudo", "-n", "docker", "ps", "-a", "--format", "{{.Names}}\t{{.State}}"])
-    dk = None if out is None else [ln.split("\t") for ln in out.splitlines() if "\t" in ln]
+        out = run(["sudo", "-n", "docker", "ps", "-a", "--format", fmt])
+    dk = None
+    if out is not None:  # [name, state, health]: health is healthy / unhealthy / starting / "" (no healthcheck)
+        dk = []
+        for ln in out.splitlines():
+            c = ln.split("\t")
+            if len(c) == 3:
+                h = next((x for x in ("unhealthy", "healthy", "starting") if "(" + x in c[2]), "")
+                dk.append([c[0], c[1], h])
+        dk.sort()
     th = run(["vcgencmd", "get_throttled"])
     return dk, (th.strip().split("=")[-1] if th else None)
+ENV = {}
+try:
+    with open(os.path.expanduser("~/.config/gits/server.env")) as f:
+        for ln in f:
+            ln = ln.strip()
+            if ln and not ln.startswith("#") and "=" in ln:
+                k, v = ln.split("=", 1)
+                ENV[k.strip()] = v.strip().strip("\"'")
+except OSError:
+    pass
+def fetch(url, data=None, headers=None, opener=None, method=None):
+    req = urllib.request.Request(url, data=data, headers=headers or {}, method=method)
+    with (opener.open(req, timeout=4) if opener else urllib.request.urlopen(req, timeout=4)) as r:
+        body = r.read()
+    return json.loads(body) if body[:1] in (b"{", b"[") else body.decode("utf-8", "replace")
+QB = ENV.get("GITS_QBIT_URL", "").rstrip("/")
+qb_jar = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+DL = ("downloading", "forcedDL", "metaDL", "forcedMetaDL", "stalledDL", "queuedDL", "checkingDL", "allocating")
+def qbit():
+    for attempt in (0, 1):
+        try:
+            info = fetch(QB + "/api/v2/transfer/info", opener=qb_jar)
+            ts = fetch(QB + "/api/v2/torrents/info?sort=added_on&reverse=true", opener=qb_jar)
+            break
+        except urllib.error.HTTPError as e:
+            if e.code not in (401, 403) or attempt or not ENV.get("GITS_QBIT_USER"):
+                return {"error": "HTTP %d" % e.code}
+            try:
+                fetch(QB + "/api/v2/auth/login", opener=qb_jar, headers={"Referer": QB}, data=urllib.parse.urlencode(
+                    {"username": ENV["GITS_QBIT_USER"], "password": ENV.get("GITS_QBIT_PASS", "")}).encode())
+            except (OSError, ValueError):
+                return {"error": "LOGIN FAILED"}
+        except (OSError, ValueError):
+            return {"error": "NO ANSWER"}
+    ts.sort(key=lambda t: (t.get("state") not in DL, t.get("dlspeed", 0) <= 0, -t.get("added_on", 0)))  # moving ones first
+    return {"dl": info.get("dl_info_speed", 0), "up": info.get("up_info_speed", 0),
+            "n": len(ts), "active": sum(t.get("state") in DL for t in ts),
+            "seed": sum(t.get("state") in ("uploading", "stalledUP", "forcedUP") for t in ts),
+            "list": [[t.get("name", ""), t.get("progress", 0), t.get("dlspeed", 0), t.get("eta", 0), t.get("state", ""),
+                      t.get("size", 0)] for t in ts[:5]]}
+JF, JK = ENV.get("GITS_JELLYFIN_URL", "").rstrip("/"), ENV.get("GITS_JELLYFIN_KEY", "")
+jf = {"user": None, "latest": []}
+def jellyfin(with_latest):
+    h = {"Authorization": 'MediaBrowser Token="%s"' % JK}
+    try:
+        playing = []
+        for se in fetch(JF + "/Sessions?activeWithinSeconds=960", headers=h):
+            it = se.get("NowPlayingItem")
+            if not it:
+                continue
+            ps = se.get("PlayState") or {}
+            title = it.get("Name", "")
+            if it.get("SeriesName"):
+                title = "%s · S%02dE%02d" % (it["SeriesName"], it.get("ParentIndexNumber") or 0, it.get("IndexNumber") or 0)
+            playing.append([se.get("UserName") or "?", title, se.get("DeviceName") or se.get("Client") or "",
+                            (ps.get("PositionTicks") or 0) / 1e7, (it.get("RunTimeTicks") or 0) / 1e7, bool(ps.get("IsPaused"))])
+        if with_latest:
+            if jf["user"] is None:
+                users = fetch(JF + "/Users", headers=h)
+                jf["user"] = next((u["Id"] for u in users if (u.get("Policy") or {}).get("IsAdministrator")),
+                                  users[0]["Id"] if users else "")
+            items = fetch(JF + "/Items/Latest?" + urllib.parse.urlencode({"userId": jf["user"], "limit": 6}), headers=h)
+            jf["latest"] = [[i.get("SeriesName") or i.get("Name", ""), i.get("Type", ""), i.get("ProductionYear") or ""]
+                            for i in items]
+        return {"playing": playing, "latest": jf["latest"]}
+    except urllib.error.HTTPError as e:
+        return {"error": "HTTP %d" % e.code}
+    except (OSError, ValueError, KeyError, IndexError):
+        return {"error": "NO ANSWER"}
+PH = ENV.get("GITS_PIHOLE_URL", "").rstrip("/")
+ph = {"sid": None}
+def pihole():
+    for attempt in (0, 1):
+        try:
+            q = fetch(PH + "/api/stats/summary", headers={"X-FTL-SID": ph["sid"]} if ph["sid"] else {})["queries"]
+            return {"total": q["total"], "blocked": q["blocked"], "pct": q["percent_blocked"]}
+        except urllib.error.HTTPError as e:
+            if e.code != 401 or attempt:
+                return {"error": "HTTP %d" % e.code}
+            pw = ENV.get("GITS_PIHOLE_PASS", "")
+            try:
+                if not pw and ENV.get("GITS_PIHOLE_PASS_FILE"):
+                    with open(os.path.expanduser(ENV["GITS_PIHOLE_PASS_FILE"])) as f:
+                        pw = f.read().strip()
+                r = fetch(PH + "/api/auth", data=json.dumps({"password": pw}).encode(), headers={"Content-Type": "application/json"})
+                ph["sid"] = (r.get("session") or {}).get("sid")
+            except (OSError, ValueError, AttributeError):
+                return {"error": "LOGIN FAILED"}
+        except (OSError, ValueError, KeyError, TypeError):
+            return {"error": "NO ANSWER"}
 host = os.uname().nodename
 t0, i0 = cpu()
 n0, s0 = net(), time.monotonic()
 docker, throttled, k = None, None, 0
+torrents = media = dns = None
 while True:
     time.sleep(2)
-    if k % 15 == 0:
+    if k % 5 == 0:
         docker, throttled = slow()
+    if QB and k % 2 == 0:
+        torrents = qbit()
+    if JF and JK and k % 3 == 0:
+        media = jellyfin(k % 30 == 0)
+    if PH and k % 15 == 0:
+        dns = pihole()
     k += 1
     t, i = cpu()
     c = 100 * (1 - (i - i0) / max(t - t0, 1))
@@ -1424,7 +1538,8 @@ while True:
                 disks.append([mnt, total, free])
     print(json.dumps({"host": host, "cpu": c, "ram": 100 * (1 - mem["MemAvailable"] / mem["MemTotal"]),
                       "ram_total": mem["MemTotal"] * 1024, "temp": temp, "up": up, "load": os.getloadavg()[0],
-                      "rx": rx, "tx": tx, "disks": disks, "docker": docker, "throttled": throttled}), flush=True)
+                      "rx": rx, "tx": tx, "disks": disks, "docker": docker, "throttled": throttled,
+                      "qbit": torrents, "jellyfin": media, "pihole": dns}), flush=True)
 '''
 
 
@@ -1484,12 +1599,9 @@ class ServerCard(Card):
 
     Undervoltage / throttling (Raspberry Pi `vcgencmd get_throttled` != 0x0) turns the status red."""
 
-    def __init__(self, app, dest, **kw):
+    def __init__(self, app, dest, link, **kw):
         super().__init__(app, "NODE.LINK // 端末", **kw)
-        self.link = None
-        if not DEMO:
-            self.link = ServerLink(dest)
-            self.link.start()
+        self.link = link
         head = Gtk.Box(spacing=8)
         self.l_name = label(os.environ.get("GITS_SERVER_NAME", "") or dest.split("@")[-1].upper(), "n-down", ellipsize=True)
         self.l_name.set_hexpand(True)
@@ -1510,12 +1622,8 @@ class ServerCard(Card):
         """(data or None, online, error, cpu history)"""
         if DEMO:
             t = time.monotonic()
-            d = {"host": "tachikoma", "cpu": 18 + 9 * math.sin(t / 3), "ram": 47.0, "ram_total": 4 * 2**30, "temp": 51.0,
-                 "up": 3 * 86400 + 5 * 3600, "load": 0.42, "rx": 310e3, "tx": 42e3, "throttled": "0x0",
-                 "disks": [["/", 62e9, 41e9], ["/mnt/media", 1e12, 850e9], ["/mnt/backup", 235e9, 233e9]],
-                 "docker": [["jellyfin", "running"]] * 9 + [["pihole", "running"]]}
             hist = [18 + 9 * math.sin((t - 2 * (Stats.N - i)) / 3) for i in range(Stats.N)]
-            return d, True, "", hist
+            return demo_server(), True, "", hist
         ln = self.link
         return ln.data, ln.online(), ln.error, list(ln.cpu_hist)
 
@@ -1532,7 +1640,7 @@ class ServerCard(Card):
             self.l_meta.set_text(err.upper() if err else "NO SIGNAL")
         dk = d.get("docker") if d else None
         if online and dk is not None:
-            down = [n for n, s in dk if s != "running"]
+            down = [e[0] for e in dk if e[1] != "running"]
             up = len(dk) - len(down)
             self.l_docker.set_text(f"DOCKER {up}/{len(dk)} UP" + (" · DOWN: " + ", ".join(down).upper() if down else ""))
             (self.l_docker.add_css_class if down else self.l_docker.remove_css_class)("bad")
@@ -1589,9 +1697,357 @@ class ServerCard(Card):
             draw_meter(cr, 0, y + 13, w, 4, pct / 100, hot=pct >= 90)
             y += step
 
+
+
+def demo_server():
+    """Made-up server data for GITS_WIDGETS_DEMO (screenshots)."""
+    t = time.monotonic()
+    names = ["filebrowser", "homepage", "jellyfin", "navidrome", "pihole", "portainer", "qbittorrent", "syncthing",
+             "uptime-kuma", "vaultwarden"]
+    return {"host": "tachikoma", "cpu": 18 + 9 * math.sin(t / 3), "ram": 47.0, "ram_total": 4 * 2**30, "temp": 51.0,
+            "up": 3 * 86400 + 5 * 3600, "load": 0.42, "rx": 310e3, "tx": 42e3, "throttled": "0x0",
+            "disks": [["/", 62e9, 41e9], ["/mnt/media", 1e12, 850e9], ["/mnt/backup", 235e9, 233e9]],
+            "docker": [[n, "running", "healthy" if i % 3 else ""] for i, n in enumerate(names)],
+            "qbit": {"dl": 12.4e6, "up": 830e3, "n": 14, "active": 2, "seed": 11,
+                     "list": [["Ghost in the Shell - Stand Alone Complex S01 [BD 1080p]", 0.62, 9.1e6, 1260, "downloading", 38e9],
+                              ["Kenji Kawai - Ghost in the Shell OST [FLAC]", 0.88, 3.3e6, 95, "downloading", 410e6],
+                              ["Serial Experiments Lain [BD 1080p]", 1.0, 0, 8640000, "stalledUP", 21e9],
+                              ["Akira (1988) [BD 1080p]", 1.0, 0, 8640000, "stalledUP", 12e9]]},
+            "jellyfin": {"playing": [["motoko", "Ghost in the Shell · S01E03", "Living room TV", 812 + t % 600, 1450, False]],
+                         "latest": [["Serial Experiments Lain", "Series", 1998], ["Akira", "Movie", 1988],
+                                    ["Patlabor 2", "Movie", 1993], ["Ergo Proxy", "Series", 2006]]},
+            "pihole": {"total": 18422, "blocked": 2311, "pct": 12.5}}
+
+
+def clip(cr, text, maxw, size, bold=False):
+    """`text` shortened with … to fit `maxw` pixels at this font size."""
+    cr.select_font_face(FONT, cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD if bold else cairo.FONT_WEIGHT_NORMAL)
+    cr.set_font_size(size)
+    if cr.text_extents(text).x_advance <= maxw:
+        return text
+    while text and cr.text_extents(text + "…").x_advance > maxw:
+        text = text[:-1]
+    return text.rstrip() + "…"
+
+
+class ServerFeed(Card):
+    """A card fed by the shared ServerLink; hidden until the server reports its part (`key`) - unconfigured = never shown."""
+    key = ""
+
+    def __init__(self, app, tag, link, **kw):
+        super().__init__(app, tag, **kw)
+        self.link = link
+        self.wait_data = True
+
+    def feed(self):
+        """(this card's part of the data or None, link online)"""
+        if DEMO:
+            return demo_server().get(self.key), True
+        d = self.link.data if self.link else None
+        return (d or {}).get(self.key), bool(self.link and self.link.online())
+
+    def update(self):
+        part, _ = self.feed()
+        if (part is not None) != self.get_visible():
+            self.set_visible(part is not None)
+        if part is not None:
+            self.refresh(part)
+
+    def refresh(self, part):
+        self.da.queue_draw()
+
+
+def fmt_eta(sec):
+    if sec <= 0 or sec >= 8640000:
+        return "∞"
+    return f"{sec // 3600}H{sec % 3600 // 60:02d}" if sec >= 3600 else f"{sec // 60}M{sec % 60:02d}"
+
+
+class TorrentCard(ServerFeed):
+    """qBittorrent on the server: total speed, counts, the moving torrents first with progress and ETA."""
+    key = "qbit"
+
+    def __init__(self, app, link, **kw):
+        super().__init__(app, "TORRENT.LINK // 急流", link, **kw)
+        row = Gtk.Box(spacing=8)
+        self.l_dl = label("↓ 0 B/s", "n-down")
+        self.l_dl.set_hexpand(True)
+        self.l_up = label("↑ 0 B/s", "n-up", 1.0)
+        row.append(self.l_dl)
+        row.append(self.l_up)
+        self.body.append(row)
+        self.l_meta = label("", "n-meta", ellipsize=True)
+        self.body.append(self.l_meta)
+        self.da = self.area(self._draw)
+        self.da.set_vexpand(True)
+        self.body.append(self.da)
+        self.update()
+
+    def refresh(self, q):
+        if q.get("error"):
+            self.l_dl.set_text("QBITTORRENT")
+            self.l_up.set_text("")
+            self.l_meta.set_text(q["error"])
+        else:
+            self.l_dl.set_text("↓ " + human_rate(q["dl"]))
+            self.l_up.set_text("↑ " + human_rate(q["up"]))
+            self.l_meta.set_text(f"{q['active']} DL · {q['seed']} SEED · {q['n']} TOTAL")
+        self.da.queue_draw()
+
+    def _draw(self, area, cr, w, h):
+        q, online = self.feed()
+        rows = (q or {}).get("list") or []
+        if not rows:
+            draw_text(cr, "NO TORRENTS", 0, 12, 9, DIM, bold=True)
+            return
+        a = 1.0 if online else 0.35
+        step = 25
+        n = min(len(rows), max(int(h // step), 1))
+        for i, (name, prog, speed, eta, state, size) in enumerate(rows[:n]):
+            y = i * step
+            done = prog >= 1
+            tail = "DONE" if done else f"{prog * 100:.0f}% · {fmt_eta(eta)}"
+            draw_text(cr, tail, w, y + 10, 9, CYB if speed > 0 else DIM, bold=True, align="right", alpha=a)
+            cr.select_font_face(FONT, cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
+            cr.set_font_size(9)
+            room = w - cr.text_extents(tail).x_advance - 10
+            draw_text(cr, clip(cr, name, room, 9, bold=True), 0, y + 10, 9, FG if speed > 0 else MID, bold=True, alpha=a)
+            draw_meter(cr, 0, y + 15, w, 4, prog, hot=state in ("error", "missingFiles"))
+
+
+def fmt_hms(sec):
+    sec = int(sec)
+    return f"{sec // 3600}:{sec % 3600 // 60:02d}:{sec % 60:02d}" if sec >= 3600 else f"{sec // 60}:{sec % 60:02d}"
+
+
+class WatchCard(ServerFeed):
+    """Jellyfin on the server: who is watching what (with progress), then the newest additions."""
+    key = "jellyfin"
+
+    def __init__(self, app, link, **kw):
+        super().__init__(app, "NOW.WATCHING // 視聴", link, **kw)
+        self.da = self.area(self._draw)
+        self.da.set_vexpand(True)
+        self.body.append(self.da)
+        self.update()
+
+    def _draw(self, area, cr, w, h):
+        j, online = self.feed()
+        j = j or {}
+        a = 1.0 if online else 0.35
+        if j.get("error"):
+            draw_text(cr, "JELLYFIN · " + j["error"], 0, 12, 9, RED, bold=True)
+            return
+        y = 0
+        playing = j.get("playing") or []
+        if not playing:
+            draw_text(cr, "NO ACTIVE STREAMS", 0, y + 12, 9, DIM, bold=True)
+            y += 24
+        for user, title, dev, pos, total, paused in playing[:2]:
+            draw_text(cr, "󰏤" if paused else "󰐊", 0, y + 13, 12, RED if paused else CYB, alpha=a)
+            draw_text(cr, clip(cr, title.upper(), w - 18, 11, bold=True), 18, y + 13, 11, FG, bold=True, alpha=a)
+            draw_text(cr, clip(cr, f"{user} · {dev}".upper(), w * 0.6, 8, bold=True), 18, y + 27, 8, DIM, bold=True)
+            draw_text(cr, f"{fmt_hms(pos)} / {fmt_hms(total)}", w, y + 27, 8, MID, bold=True, align="right")
+            draw_meter(cr, 18, y + 32, w - 18, 4, pos / total if total else 0)
+            y += 46
+        latest = j.get("latest") or []
+        if not latest or y > h - 30:
+            return
+        draw_text(cr, "RECENTLY ADDED", 0, y + 10, 8, DIM, bold=True)
+        y += 16
+        for name, kind, year in latest:
+            if y + 14 > h:
+                break
+            right = f"{'TV' if kind == 'Series' else 'FILM' if kind == 'Movie' else kind.upper()[:5]} {year}".strip()
+            draw_text(cr, right, w, y + 10, 8, DIM, bold=True, align="right")
+            cr.select_font_face(FONT, cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+            cr.set_font_size(8)
+            room = w - cr.text_extents(right).x_advance - 12
+            setc(cr, CY)
+            cr.rectangle(0, y + 5, 3, 3)
+            cr.fill()
+            draw_text(cr, clip(cr, name.upper(), room - 8, 10), 8, y + 10, 10, MID, alpha=a)
+            y += 16
+
+
+class ServicesCard(ServerFeed):
+    """Every Docker container on the server as a status light, plus the Pi-hole blocking figures when configured."""
+    key = "docker"
+
+    def __init__(self, app, link, **kw):
+        super().__init__(app, "SERVICES // 稼働", link, **kw)
+        self.l_sum = label("", "n-meta", ellipsize=True)
+        self.body.append(self.l_sum)
+        self.da = self.area(self._draw)
+        self.da.set_vexpand(True)
+        self.body.append(self.da)
+        self.update()
+
+    def refresh(self, dk):
+        bad = [e for e in dk if e[1] != "running" or e[2] == "unhealthy"]
+        self.l_sum.set_text(f"{len(dk) - len(bad)}/{len(dk)} NOMINAL" + (f" · {len(bad)} FAULT" if bad else ""))
+        (self.l_sum.add_css_class if bad else self.l_sum.remove_css_class)("bad")
+        self.da.queue_draw()
+
+    def _draw(self, area, cr, w, h):
+        dk, online = self.feed()
+        dk = dk or []
+        pi = (demo_server() if DEMO else (self.link.data if self.link else None) or {}).get("pihole")
+        a = 1.0 if online else 0.35
+        foot = 34 if pi else 0
+        cols = 2
+        rows = max((len(dk) + cols - 1) // cols, 1)
+        step = min(17, (h - foot) / rows)
+        cw = w / cols
+        blink = int(time.monotonic()) % 2 == 0
+        for i, (name, state, health) in enumerate(dk):
+            x, y = (i // rows) * cw, (i % rows) * step
+            if state != "running" or health == "unhealthy":
+                col, fill = RED, True
+            elif health == "starting":
+                col, fill = CY, blink
+            else:
+                col, fill = CYB if health == "healthy" else CY, True
+            setc(cr, col, a if fill else 0.3)
+            cr.arc(x + 4, y + 7, 3.2, 0, 2 * math.pi)
+            cr.fill() if fill else cr.stroke()
+            draw_text(cr, clip(cr, name.upper(), cw - 18, 9), x + 13, y + 10, 9,
+                      RED if col == RED else FG if health == "healthy" else MID, alpha=a)
+        if pi:
+            y = h - foot + 6
+            if pi.get("error"):
+                draw_text(cr, "PI-HOLE · " + pi["error"], 0, y + 10, 9, RED, bold=True)
+                return
+            draw_text(cr, "PI-HOLE", 0, y + 10, 9, FG, bold=True, alpha=a)
+            draw_text(cr, f"{pi['blocked']:,} / {pi['total']:,} BLOCKED · {pi['pct']:.1f}%".replace(",", " "), w, y + 10, 9, DIM,
+                      bold=True, align="right")
+            draw_meter(cr, 0, y + 15, w, 4, min(pi["pct"] / 100 * 4, 1))  # 25 % blocked fills the bar
+
+
+# --------------------------------------------------------------------------------------------- local journal
+class SysLog(threading.Thread):
+    """`journalctl -f` as JSON: warnings and errors, USB plug / unplug, ssh logins. Repeats fold into one line with a count."""
+    USB_NEW = re.compile(r"^usb (\S+): Product: (.+)$")
+    USB_GONE = re.compile(r"^usb (\S+): USB disconnect")
+    SSH = re.compile(r"^Accepted \S+ for (\S+) from (\S+)")
+
+    def __init__(self):
+        super().__init__(daemon=True)
+        self.lines = collections.deque(maxlen=40)  # [time, source, text, level, count, key]
+        self.lock = threading.Lock()
+        self.proc, self.stamp = None, 0
+
+    def stop(self):
+        if self.proc:
+            self.proc.kill()
+
+    def pick(self, e):
+        msg = e.get("MESSAGE")
+        if not isinstance(msg, str):
+            return None
+        prio = int(e.get("PRIORITY", 6))
+        src = os.path.basename(e.get("SYSLOG_IDENTIFIER") or e.get("_COMM") or "?").lower()
+        m = self.USB_NEW.match(msg)
+        if m:
+            return "usb", "+ " + m.group(2), "event"
+        m = self.USB_GONE.match(msg)
+        if m:
+            return "usb", "- " + m.group(1) + " unplugged", "event"
+        m = self.SSH.match(msg)
+        if m and src.startswith("sshd"):
+            return "ssh", f"login {m.group(1)} from {m.group(2)}", "event"
+        if prio <= 4:
+            return src, msg, "err" if prio <= 3 else "warn"
+        return None
+
+    def run(self):
+        while True:
+            try:
+                self.proc = subprocess.Popen(["journalctl", "-f", "-n", "2000", "-o", "json", "--no-pager"],
+                                             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+                for line in self.proc.stdout:
+                    try:
+                        e = json.loads(line)
+                    except ValueError:
+                        continue
+                    got = self.pick(e)
+                    if not got:
+                        continue
+                    src, text, level = got
+                    text = " ".join(text.split())
+                    ts = time.strftime("%H:%M:%S", time.localtime(int(e.get("__REALTIME_TIMESTAMP", 0)) / 1e6))
+                    key = (src, re.sub(r"\d+", "#", text)[:60])
+                    with self.lock:  # a repeat of one of the last few lines moves it down with a higher count
+                        old = next((x for x in list(self.lines)[-4:] if x[5] == key), None)
+                        if old:
+                            self.lines.remove(old)
+                            old[0], old[4] = ts, old[4] + 1
+                            self.lines.append(old)
+                        else:
+                            self.lines.append([ts, src, text, level, 1, key])
+                        self.stamp += 1
+                self.proc.wait()
+            except OSError:
+                return
+            time.sleep(10)
+
+    def snapshot(self):
+        with self.lock:
+            return self.stamp, [list(x) for x in self.lines]
+
+
+class LogCard(Card):
+    """SYS.LOG: the local journal as a terminal feed (newest at the bottom)."""
+
+    def __init__(self, app, **kw):
+        super().__init__(app, "SYS.LOG // 記録", **kw)
+        self.feed, self.seen = None, -1
+        if DEMO:
+            self.demo = [["22:41:07", "kernel", "+ Elements 25A2", "event", 1],
+                         ["22:41:09", "ssh", "login crem from 192.168.50.20", "event", 1],
+                         ["22:43:30", "kernel", "x86/split lock detection: #DB: took a bus_lock trap", "warn", 38],
+                         ["22:47:12", "systemd", "pi-backup.service: Failed with result 'exit-code'.", "err", 1],
+                         ["22:52:03", "kernel", "- 8-3.2 unplugged", "event", 1]]
+        else:
+            self.feed = SysLog()
+            self.feed.start()
+        self.da = self.area(self._draw)
+        self.da.set_vexpand(True)
+        self.body.append(self.da)
+
+    def update(self):
+        if self.feed and self.feed.stamp != self.seen:
+            self.seen = self.feed.stamp
+            self.da.queue_draw()
+
+    def _draw(self, area, cr, w, h):
+        lines = self.demo if DEMO else self.feed.snapshot()[1]
+        lh = 16
+        n = max(int(h // lh), 1)
+        lines = lines[-n:]
+        if not lines:
+            draw_text(cr, "NO EVENTS", 0, 12, 9, DIM, bold=True)
+            return
+        y = h - len(lines) * lh
+        for i, (ts, src, text, level, count, *_) in enumerate(lines):
+            yy = y + i * lh + 11
+            age = 0.55 + 0.45 * (i + 1) / len(lines)  # older lines fade
+            col = RED if level == "err" else CYB if level == "event" else MID
+            draw_text(cr, ts, 0, yy, 9, DIM, alpha=age)
+            tag = src[:8].upper()
+            draw_text(cr, tag, 52, yy, 9, col, bold=True, alpha=age)
+            tail = f" ×{count}" if count > 1 else ""
+            x = 102
+            if tail:
+                draw_text(cr, tail, w, yy, 9, DIM, bold=True, align="right", alpha=age)
+                cr.select_font_face(FONT, cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
+                cr.set_font_size(9)
+            room = w - x - (cr.text_extents(tail).x_advance + 6 if tail else 0)
+            draw_text(cr, clip(cr, text, room, 9), x, yy, 9, FG if level != "warn" else MID, alpha=age)
+
     def shutdown(self):
-        if self.link:
-            self.link.stop()
+        if self.feed:
+            self.feed.stop()
 
 
 class TodoCard(Card):
@@ -1698,6 +2154,7 @@ class App:
     def __init__(self):
         self.cards = []
         self.stats = None
+        self.link = None
         self.loop = GLib.MainLoop()
 
     def pick_monitor(self):
@@ -1745,9 +2202,15 @@ class App:
         y += 108 + gap
         add(NetCard, x2, y, MW, 132)
         server = os.environ.get("GITS_SERVER", "")
+        self.link = None
         if DEMO or (server and server.lower() != "off"):
+            if not DEMO:
+                self.link = ServerLink(server)
+                self.link.start()
             y += 132 + gap
-            add(ServerCard, x2, y, MW, 262, dest=server or "tachikoma")
+            add(ServerCard, x2, y, MW, 262, dest=server or "tachikoma", link=self.link)
+            y += 262 + gap
+            add(ServicesCard, x2, y, MW, 236, link=self.link)
         y = top
         bats = sorted(glob.glob("/sys/class/power_supply/BAT*"))
         if bats:
@@ -1758,6 +2221,12 @@ class App:
         add(GraphCard, m, y, RW, 132, right=True, stats=self.stats)
         y += 132 + gap
         add(TodoCard, m, y, RW, 250, right=True)
+        if DEMO or self.link:  # server feeds under the to-do; each stays hidden until the server reports its service
+            y += 250 + gap
+            add(TorrentCard, m, y, RW, 196, right=True, link=self.link)
+            y += 196 + gap
+            add(WatchCard, m, y, RW, 214, right=True, link=self.link)
+        log_home = None  # SYS.LOG: under the calendar of the second monitor, else low in the main left column
 
         # every other monitor: a smaller set without the cards that run their own threads (player, audio spectrum, to-do)
         if os.environ.get("GITS_WIDGETS_SECOND", "1") != "0" and mon is not None:
@@ -1771,6 +2240,9 @@ class App:
                 y = top
                 add2(ClockCard, m, y, LW, 226)
                 add2(CalendarCard, m, y + 226 + gap, LW, 236)
+                if log_home is None:
+                    log_home = other
+                    add2(LogCard, m, y + 226 + gap + 236 + gap, LW + gap + MW, 300)
                 y = top
                 add2(RingsCard, m, y, RW, 132, right=True, stats=self.stats)
                 y += 132 + gap
@@ -1785,21 +2257,26 @@ class App:
                 y += 150 + gap
                 add2(TopCard, x2, y, MW, 150)
 
+        if log_home is None:
+            add(LogCard, m, top + 226 + gap + 236 + gap + (160 + gap if np is not None else 0), LW, 300)
+
         for c in self.cards:
-            c.present()
+            if not getattr(c, "wait_data", False):
+                c.present()
         GLib.timeout_add_seconds(1, self.tick1)
         GLib.timeout_add_seconds(2, self.tick2)
 
     def tick1(self):
         for c in self.cards:
-            if isinstance(c, (ClockCard, CalendarCard, MediaCard)):
+            if isinstance(c, (ClockCard, CalendarCard, MediaCard, LogCard)):
                 c.update()
         return True
 
     def tick2(self):
         self.stats.refresh()
         for c in self.cards:
-            if isinstance(c, (RingsCard, GraphCard, BatteryCard, WeatherCard, NetCard, GpuCard, DiskCard, TopCard, ServerCard)):
+            if isinstance(c, (RingsCard, GraphCard, BatteryCard, WeatherCard, NetCard, GpuCard, DiskCard, TopCard, ServerCard,
+                              ServerFeed)):
                 c.update()
         return True
 
@@ -1815,6 +2292,8 @@ def main():
     app.loop.run()
     for c in app.cards:
         getattr(c, "shutdown", lambda: None)()
+    if app.link:
+        app.link.stop()
     return 0
 
 
