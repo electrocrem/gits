@@ -165,3 +165,25 @@ button.ap-wall.sel { border: 2px solid #5EF1F5; padding: 0; }
 button.ap-apply { padding: 6px 18px; background: #2ED3D7; color: #060A14; font-size: 11px; font-weight: 800; letter-spacing: 2px; }
 button.ap-apply:hover { background: #5EF1F5; }
 button.ap-apply:disabled { background: alpha(#2ED3D7, 0.3); }
+
+/* settings hub (gits-panel settings, Super+I): system facts, then three columns of sections with each setting's current value */
+.hub { padding: 12px 16px 14px 16px; }
+.s-info { margin-top: 8px; }
+.s-chip { padding: 3px 8px; border: 1px solid alpha(#2ED3D7, 0.22); background: alpha(#0C1A33, 0.6); }
+.s-chip-icon { font-size: 11px; color: #2ED3D7; }
+.s-chip-text { font-size: 10px; color: #9FC5D6; }
+.s-sec { margin: 10px 0 3px 0; padding-bottom: 3px; border-bottom: 1px solid alpha(#2ED3D7, 0.25); }
+.s-sec-name { font-size: 10px; font-weight: 800; letter-spacing: 2px; color: #2ED3D7; }
+.s-sec-tag { font-size: 9px; color: #596977; }
+button.s-row { padding: 6px 8px; border: 1px solid transparent; background: transparent; }
+button.s-row:hover { background: alpha(#2ED3D7, 0.10); border-color: alpha(#2ED3D7, 0.35); }
+button.s-row.sel { background: #2ED3D7; border-color: #2ED3D7; }
+.s-glyph { font-size: 18px; color: #2ED3D7; min-width: 24px; }
+.s-title { font-size: 12px; font-weight: 700; color: #C8F4FF; }
+.s-sub { font-size: 9px; color: #596977; }
+.s-val { font-size: 10px; font-weight: 700; color: #5EF1F5; }
+.s-val.dim { color: #596977; }
+.s-val.warn { color: #E8C547; }
+.s-val.bad { color: #E5432B; }
+button.s-row.sel .s-glyph, button.s-row.sel .s-title, button.s-row.sel .s-val { color: #060A14; }
+button.s-row.sel .s-sub { color: #0C1A33; }

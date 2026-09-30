@@ -149,6 +149,13 @@ def get_touchpad():
     return sh(["gits-touchpad", "status"]) != "off"
 
 
+def has_touchpad():
+    try:
+        return any("touchpad" in m.get("name", "").lower() for m in json.loads(sh(["hyprctl", "devices", "-j"]) or "{}").get("mice", []))
+    except ValueError:
+        return False
+
+
 GLITCH_FLAG = STATE + "/gits-widgets/no-glitch"
 
 
@@ -444,7 +451,7 @@ class Panel(Popup):
         glitch = Tile("󰘨", "GLITCH", get_glitch, set_glitch)
         rec = Tile("󰑋", "REC", lambda: sh(["gits-rec", "status"]) == "on", lambda: self._later("gits-rec toggle area"))
         focus = Tile("󱎫", "FOCUS", lambda: sh(["gits-focus", "status"]) == "on", lambda: fire(["gits-focus", "toggle"]))
-        self.tiles += [pad, glitch, rec, focus]
+        self.tiles += ([pad] if DEMO or has_touchpad() else []) + [glitch, rec, focus]   # a desktop has no touchpad tile
         for row in (self.tiles[:3], self.tiles[3:6], self.tiles[6:9], self.tiles[9:]):
             r = Gtk.Box(spacing=6, homogeneous=True)
             for t in row:
@@ -2320,6 +2327,203 @@ def calc(expr):
     return f"{v:.10g}" if isinstance(v, float) else str(v)
 
 
+class SettingsPopup(Popup):
+    """The settings hub (Super+I, gits-settings): every entry of `gits-settings --table` in sections, each with its current value
+    (the table's status command, run in the background), and a strip of system facts on top. Type to filter, Up/Down + Enter or a
+    click opens one, Esc / click outside closes."""
+    CARD_W = 1020
+    COLUMNS = {"CONNECT": 0, "SYSTEM": 0, "DESKTOP": 1, "YOURS": 1, "POWER": 2, "TOOLS": 2}
+    TAGS = {"CONNECT": "接続", "DESKTOP": "画面", "POWER": "電源", "TOOLS": "道具", "SYSTEM": "系統", "YOURS": "個人"}
+
+    def __init__(self, monitor):
+        super().__init__(monitor, center=True)
+        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        root.add_css_class("panel")
+        root.add_css_class("hub")
+        head = Gtk.Box(spacing=6)
+        head.append(label("SETTINGS // 設定", "m-head"))
+        sp = Gtk.Box()
+        sp.set_hexpand(True)
+        head.append(sp)
+        head.append(label("type to filter · ↑↓ Enter: open · Esc: close", "m-tag"))
+        root.append(head)
+        self.info = Gtk.FlowBox()
+        self.info.set_selection_mode(Gtk.SelectionMode.NONE)
+        self.info.set_max_children_per_line(12)
+        self.info.set_column_spacing(6)
+        self.info.set_row_spacing(4)
+        self.info.set_can_target(False)
+        self.info.add_css_class("s-info")
+        root.append(self.info)
+        self.entry = Gtk.Entry()
+        self.entry.add_css_class("m-entry")
+        self.entry.set_placeholder_text("filter settings: sound, theme, power, update..._")
+        self.entry.connect("changed", lambda *_: self._filter())
+        self.entry.connect("activate", lambda *_: self._activate())
+        keys = Gtk.EventControllerKey()
+        keys.connect("key-pressed", self._key)
+        self.entry.add_controller(keys)
+        root.append(self.entry)
+        cols = Gtk.Box(spacing=14, homogeneous=True)
+        self.cols = [Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2) for _ in range(3)]
+        for c in self.cols:
+            cols.append(c)
+        sc = Gtk.ScrolledWindow()
+        sc.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        sc.set_propagate_natural_height(True)
+        sc.set_max_content_height(660)
+        sc.set_child(cols)
+        root.append(sc)
+        self.rows, self.sections, self.sel = [], {}, None
+        for ln in sh(["gits-settings", "--table"], timeout=5, real=True).splitlines():
+            f = ln.split("\t")
+            if len(f) >= 3:
+                self._add_row(f[0] or "YOURS", f[1], f[2], f[3] if len(f) > 3 else "")
+        self.set_child(root)
+        threading.Thread(target=self._load_info, daemon=True).start()
+        for r in self.rows:
+            if r.status:
+                threading.Thread(target=self._load_status, args=(r,), daemon=True).start()
+        GLib.idle_add(lambda: (self.entry.grab_focus(), False)[1])
+
+    def _add_row(self, section, lab, cmd, status):
+        if section not in self.sections:
+            box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            h = Gtk.Box(spacing=6)
+            h.add_css_class("s-sec")
+            h.append(label(section, "s-sec-name"))
+            h.append(label(self.TAGS.get(section, ""), "s-sec-tag"))
+            box.append(h)
+            box.head = h
+            self.cols[self.COLUMNS.get(section, 1)].append(box)
+            self.sections[section] = box
+        m = re.match(r"^(\S)\s+(.*)$", lab)
+        glyph, text = (m.group(1), m.group(2)) if m else ("󰒓", lab)
+        m = re.match(r"^(.*?)\s*\((.*)\)$", text)
+        title, sub = (m.group(1), m.group(2)) if m else (text, "")
+        b = Gtk.Button()
+        b.add_css_class("s-row")
+        h = Gtk.Box(spacing=10)
+        h.append(label(glyph, "s-glyph", 0.5))
+        v = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0, valign=Gtk.Align.CENTER)
+        v.set_hexpand(True)
+        lt = label(title, "s-title")
+        lt.set_ellipsize(Pango.EllipsizeMode.END)
+        v.append(lt)
+        if sub:
+            ls = label(sub, "s-sub")
+            ls.set_ellipsize(Pango.EllipsizeMode.END)
+            v.append(ls)
+        h.append(v)
+        b.val = label("…" if status else "", "s-val", 1.0)
+        b.val.set_ellipsize(Pango.EllipsizeMode.END)
+        b.val.set_max_width_chars(22)
+        b.val.set_valign(Gtk.Align.CENTER)
+        h.append(b.val)
+        b.set_child(h)
+        b.cmd, b.status, b.section = cmd, status, section
+        b.text = f"{section} {title} {sub}".lower()
+        b.connect("clicked", lambda *_: self._run(b))
+        self.sections[section].append(b)
+        self.rows.append(b)
+
+    # -- data
+    def _load_status(self, row):
+        out = sh(["bash", "-c", row.status], timeout=25 if "--check" in row.status else 6)
+        GLib.idle_add(self._show_status, row, out.splitlines()[0].strip() if out else "")
+
+    def _show_status(self, row, text):
+        row.val.set_text(text or "—")
+        row.val.set_tooltip_text(text or None)
+        low = text.lower()
+        if re.search(r"\b[1-9]\d* fail", low):
+            row.val.add_css_class("bad")
+        elif re.search(r"\b[1-9]\d* warn|updates?\b", low) and "up to date" not in low:
+            row.val.add_css_class("warn")
+        elif low in ("off", "stopped", "—", "") or low.startswith("off"):
+            row.val.add_css_class("dim")
+        row.text += " " + low
+
+    def _load_info(self):
+        u = os.uname()
+        facts = [("󰇅", u.nodename.upper())]
+        try:
+            osr = dict(ln.rstrip().split("=", 1) for ln in open("/etc/os-release") if "=" in ln)
+            facts.append(("󰣇", osr.get("PRETTY_NAME", "linux").strip('"')))
+        except OSError:
+            pass
+        facts.append(("󰌽", u.release))
+        try:
+            hv = json.loads(sh(["hyprctl", "version", "-j"], real=True) or "{}").get("tag", "")
+            if hv:
+                facts.append(("\uf359", "Hyprland " + hv.lstrip("v")))
+        except ValueError:
+            pass
+        try:
+            up = int(float(open("/proc/uptime").read().split()[0]))
+            facts.append(("󰔛", f"up {up // 86400}d {up % 86400 // 3600}h" if up >= 86400 else f"up {up // 3600}h {up % 3600 // 60}m"))
+            mem = {ln.split(":")[0]: int(ln.split()[1]) for ln in open("/proc/meminfo")}
+            used = (mem["MemTotal"] - mem["MemAvailable"]) / 2**20
+            facts.append(("󰍛", f"RAM {used:.1f} / {mem['MemTotal'] / 2**20:.0f} GB"))
+            facts.append(("󰻠", f"load {os.getloadavg()[0]:.2f} · {os.cpu_count()} threads"))
+        except (OSError, ValueError, KeyError):
+            pass
+        du = shutil.disk_usage("/")
+        facts.append(("󰋊", f"/ {du.used / 2**30:.0f} / {du.total / 2**30:.0f} GB"))
+        bat = battery_line()
+        if bat:
+            facts.append(("\U000f0079", bat.split(" ", 1)[-1]))
+        GLib.idle_add(self._show_info, facts)
+
+    def _show_info(self, facts):
+        for icon, text in facts:
+            chip = Gtk.Box(spacing=5)
+            chip.add_css_class("s-chip")
+            if icon:
+                chip.append(label(icon, "s-chip-icon"))
+            chip.append(label(text, "s-chip-text"))
+            self.info.append(chip)
+
+    # -- filter, keyboard, run
+    def _visible(self):
+        return [r for r in self.rows if r.get_visible()]
+
+    def _filter(self):
+        q = self.entry.get_text().lower().split()
+        for r in self.rows:
+            r.set_visible(all(w in r.text for w in q))
+        for box in self.sections.values():
+            box.set_visible(any(r.get_visible() for r in self.rows if r.get_parent() is box))
+        self._select(0 if q else None)
+
+    def _select(self, i):
+        vis = self._visible()
+        for r in self.rows:
+            r.remove_css_class("sel")
+        self.sel = None if i is None or not vis else vis[i % len(vis)]
+        if self.sel is not None:
+            self.sel.add_css_class("sel")
+
+    def _key(self, _c, kv, state, *_):
+        if kv in (Gdk.KEY_Down, Gdk.KEY_Up, Gdk.KEY_Tab, Gdk.KEY_ISO_Left_Tab):
+            vis = self._visible()
+            cur = vis.index(self.sel) if self.sel in vis else -1
+            self._select(cur + (-1 if kv in (Gdk.KEY_Up, Gdk.KEY_ISO_Left_Tab) else 1))
+            return True
+        return False
+
+    def _activate(self):
+        vis = self._visible()
+        row = self.sel if self.sel in vis else (vis[0] if len(vis) == 1 else None)
+        if row is not None:
+            self._run(row)
+
+    def _run(self, row):
+        """Close first, then run a moment later: a window opened while this popup holds the keyboard would not get focus."""
+        fire(["bash", "-c", f"sleep 0.45; {row.cmd}"])
+        self.dismiss()
+
+
 class Item:
     def __init__(self, kind, title, sub="", icon=None, glyph="󰀻", match="", act=None, weight=1.0, ident=None):
         self.kind, self.title, self.sub, self.icon, self.glyph = kind, title, sub, icon, glyph
@@ -2658,6 +2862,8 @@ def main():
         win = LauncherPopup(mon, mode)
     elif mode == "note":
         win = NotePopup(mon)
+    elif mode == "settings":
+        win = SettingsPopup(mon)
     elif mode in ("appearance", "themes"):
         win = AppearancePopup(mon)
     elif mode == "mixer":

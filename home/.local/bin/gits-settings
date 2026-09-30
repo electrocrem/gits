@@ -1,46 +1,57 @@
 #!/usr/bin/env bash
 # gits-settings: one menu for ALL the settings of this desktop (Super+I, the ALL SETTINGS button of the control panel).
-# System settings apps, the look and feel selectors (colour theme, tiling layout, workflow, animations), the ASUS bits.
-# Add your own: append a "label<TAB>command" line to ~/.config/gits/settings.tsv.
+# System settings apps, the look and feel selectors (colour theme, tiling layout, workflow, animations), power, tools.
+#   gits-settings           the settings hub: a big popup with sections, the current value of each setting, system info (gits-panel settings)
+#   gits-settings --menu    the same entries as a plain list (gits-menu)
+#   gits-settings --list    "label<TAB>command" per entry (the command palette reads this)
+#   gits-settings --table   "section<TAB>label<TAB>command<TAB>status command" per entry (the hub reads this)
+# Entries for hardware that is not there (touchpad, ASUS / ROG) are left out.
+# Add your own: append a "label<TAB>command" line to ~/.config/gits/settings.tsv (it shows up in the section YOURS).
 extra=${XDG_CONFIG_HOME:-$HOME/.config}/gits/settings.tsv
+has_touchpad() { hyprctl devices -j 2>/dev/null | jq -e '[.mice[] | select(.name | test("touchpad"; "i"))] | length > 0' >/dev/null; }
+has_rog() { command -v rog-control-center >/dev/null && [[ -d /sys/devices/platform/asus-nb-wmi ]]; }
+# section, label, command, status (a shell snippet whose output is shown next to the entry; empty = none)
 entries=$(cat <<'ROWS'
-󰖩  Network	nm-connection-editor
-󰂯  Bluetooth	blueman-manager
-󰕾  Sound mixer (per application)	gits-panel mixer
-󰕾  Sound devices (pavucontrol)	pavucontrol
-󰍹  Displays	nwg-displays
-󰒓  All system settings (KDE: input, keyboard, apps...)	systemsettings
-󰉋  Open a project (git / Godot)	gits-project
-󰎞  Quick note (Super+N)	gits-note add
-󰎞  Recent notes (copy one)	gits-note list
-󱎫  Focus timer (pomodoro)	gits-focus menu
-󰐹  Radio (DATAMOSH: on air, spectrum, tune in / out)	gits-panel radio
-󰖔  Night light schedule (evening / night warmth)	gits-daynight menu
-󰆍  Tiling layout (dwindle / master / monocle / scrolling)	gits-layout select
-󰓅  Workflow (default / gaming / editing / powersaver)	gits-workflow select
-󱂬  Window animations	gits-anim select
-󰏘  Appearance (colour theme, accent, lock-screen mascot, wallpaper)	gits-panel appearance
-󰸉  Wallpaper (pick with a preview; GIFs too)	gits-panel appearance
-󰌌  Key bindings	gits-panel keys
-󰢮  ROG Control Center	gits-rog
-󰤄  Sleep and power timers (dim / lock / screen off / sleep)	gits-idle menu
-󰁹  Power profile	$HOME/.config/waybar/scripts/gits-perf.sh menu
-󰍽  Touchpad on / off	gits-touchpad toggle
-󰈙  Hyprland config (options, rules, key bindings)	xdg-open $HOME/.config/hypr/gits
-󰑋  Screen recording: area (again = stop)	gits-rec toggle area
-󰑋  Screen recording: whole screen	gits-rec toggle screen
-󰚰  Update the system (snapshot, then repairs)	gits-update
-󰋼  Health check (gits-doctor)	kitty --hold sh -c gits-doctor
+CONNECT	󰖩  Network	nm-connection-editor	nmcli -t -f NAME,TYPE connection show --active | awk -F: '$2 != "loopback" && $2 != "bridge" { print $1; exit }'
+CONNECT	󰂯  Bluetooth	blueman-manager	bluetoothctl show | grep -q 'Powered: yes' && echo "on · $(bluetoothctl devices Connected | wc -l) connected" || echo off
+CONNECT	󰕾  Sound mixer (per application)	gits-panel mixer	wpctl get-volume @DEFAULT_AUDIO_SINK@ | awk '{ printf "%d%%%s\n", $2 * 100 + 0.5, ($3 ? " muted" : "") }'
+CONNECT	󰓃  Sound devices (pavucontrol)	pavucontrol	wpctl inspect @DEFAULT_AUDIO_SINK@ | sed -n 's/.*node.description = "\(.*\)"/\1/p' | head -1
+CONNECT	󰍹  Displays	nwg-displays	hyprctl monitors -j | jq -r 'length as $n | max_by(.width * .height) | "\(.width)x\(.height)@\(.refreshRate | floor)" + (if $n > 1 then " +\($n - 1)" else "" end)'
+CONNECT	󰍽  Touchpad on / off	gits-touchpad toggle	gits-touchpad status
+CONNECT	󰒓  All system settings (KDE: input, keyboard, apps...)	systemsettings
+DESKTOP	󰏘  Appearance (colour theme, accent, lock-screen mascot, wallpaper)	gits-panel appearance	gits-theme current
+DESKTOP	󰸉  Wallpaper (pick with a preview; GIFs too)	gits-panel appearance
+DESKTOP	󱂬  Window animations	gits-anim select	gits-anim current
+DESKTOP	󰆍  Tiling layout (dwindle / master / monocle / scrolling)	gits-layout select	gits-layout current
+DESKTOP	󰖔  Night light schedule (evening / night warmth)	gits-daynight menu	gits-daynight status
+DESKTOP	󰌌  Key bindings	gits-panel keys
+DESKTOP	󰈙  Hyprland config (options, rules, key bindings)	xdg-open $HOME/.config/hypr/gits
+POWER	󰓅  Workflow (default / gaming / editing / powersaver)	gits-workflow select	gits-workflow current | sed 's/^[0-9]*-//'
+POWER	󰁹  Power profile	$HOME/.config/waybar/scripts/gits-perf.sh menu	powerprofilesctl get
+POWER	󰤄  Sleep and power timers (dim / lock / screen off / sleep)	gits-idle menu	gits-idle show | awk -F'[.=]' '$1 == "ac" { v = v (v ? "/" : "") $3 } END { print v " min" }'
+POWER	󰢮  ROG Control Center	gits-rog
+TOOLS	󰉋  Open a project (git / Godot)	gits-project
+TOOLS	󰎞  Quick note (Super+N)	gits-note add
+TOOLS	󰎞  Recent notes (copy one)	gits-note list
+TOOLS	󱎫  Focus timer (pomodoro)	gits-focus menu	gits-focus status
+TOOLS	󰐹  Radio (DATAMOSH: on air, spectrum, tune in / out)	gits-panel radio	gits-radio status
+TOOLS	󰑋  Screen recording: area (again = stop)	gits-rec toggle area	gits-rec status
+TOOLS	󰑋  Screen recording: whole screen	gits-rec toggle screen
+SYSTEM	󰚰  Update the system (snapshot, then repairs)	gits-update	gits-update --check | awk '{ n = $2 + $4; print n ? n " updates (" $2 " + AUR " $4 ")" : "up to date" }'
+SYSTEM	󰋼  Health check (gits-doctor)	kitty --hold sh -c gits-doctor	gits-doctor -q | tail -1 | sed 's/\x1b\[[0-9;]*m//g' | awk -F', ' '{ split($1, o, " "); split($2, w, " "); split($3, f, " "); print f[1] ? f[1] " fail · " w[1] " warn" : w[1] ? w[1] " warn" : "all " o[1] " ok" }'
 ROWS
 )
-[[ -r $extra ]] && entries+=$'\n'$(cat "$extra")
-mapfile -t rows <<<"$entries"
-labels=(); cmds=()
-for r in "${rows[@]}"; do
-    [[ -z $r ]] && continue
-    labels+=("${r%%$'\t'*}"); cmds+=("${r#*$'\t'}")
-done
-if [[ ${1:-} == --list ]]; then for i in "${!labels[@]}"; do printf '%s\t%s\n' "${labels[i]}" "${cmds[i]}"; done; exit 0; fi
+has_touchpad || entries=$(grep -Pv '\tgits-touchpad toggle(\t|$)' <<<"$entries")
+has_rog || entries=$(grep -Pv '\tgits-rog(\t|$)' <<<"$entries")
+[[ -r $extra ]] && entries+=$'\n'$(awk -F'\t' 'NF >= 2 && $1 !~ /^#/ { print "YOURS\t" $1 "\t" $2 "\t" }' "$extra")
+case ${1:-} in
+    --table) printf '%s\n' "$entries"; exit 0 ;;
+    --list) awk -F'\t' 'NF >= 3 { print $2 "\t" $3 }' <<<"$entries"; exit 0 ;;
+    --menu) ;;
+    "") exec gits-panel settings ;;
+    *) echo "usage: gits-settings [--menu|--list|--table]" >&2; exit 2 ;;
+esac
+mapfile -t labels < <(awk -F'\t' 'NF >= 3 { print $2 }' <<<"$entries")
+mapfile -t cmds < <(awk -F'\t' 'NF >= 3 { print $3 }' <<<"$entries")
 idx=$(printf '%s\n' "${labels[@]}" | gits-menu "󰒓  SETTINGS" "// 設定" -format i) || exit 0
-cmd=${cmds[idx]}
-setsid -f bash -c "$cmd" </dev/null >/dev/null 2>&1
+setsid -f bash -c "${cmds[idx]}" </dev/null >/dev/null 2>&1
