@@ -285,7 +285,14 @@ if [[ $FIX == 1 ]]; then
     pgrep -f '[g]its-events.sh' >/dev/null || { [[ -x $H/.config/hypr/scripts/gits-events.sh ]] && GITS_EVENTS_NO_LOGIN=1 setsid -f "$H/.config/hypr/scripts/gits-events.sh" </dev/null >/dev/null 2>&1 && fixed "events daemon started (sounds)"; }
     nw=$(ls "$H/.local/share/gits-sounds"/*.wav 2>/dev/null | wc -l)
     [[ $nw -ge 7 ]] || { python3 "$H/.local/share/gits-sounds/build.py" >/dev/null 2>&1 && fixed "UI sounds rebuilt"; }
-    if [[ -n $(systemctl --user --failed --no-legend 2>/dev/null) ]]; then systemctl --user reset-failed && fixed "failed user units reset (then check again: they may fail again)"; fi
+    # a unit that crashed with the old compositor (Hyprland restart) often hit the start limit before the new one was up:
+    # reset it and start it again; one that is really broken just fails again and is reported
+    for u in $(systemctl --user --failed --no-legend --plain 2>/dev/null | awk '{print $1}'); do
+        systemctl --user reset-failed "$u"
+        if [[ $u != *.service ]]; then fixed "$u reset"
+        elif timeout 20 systemctl --user restart "$u" 2>/dev/null && systemctl --user is-active -q "$u"; then fixed "$u restarted"
+        else failed_fix "restart $u (journalctl --user -u $u)"; fi
+    done
     command -v dunstctl >/dev/null && dunstctl reload 2>/dev/null
     (( FIXED )) && printf '  %d repair(s) done: run gits-doctor again\n' "$FIXED" || printf '  nothing to repair\n'
 fi
