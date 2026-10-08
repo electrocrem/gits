@@ -48,6 +48,8 @@ hl.window_rule({
 -- thinks it owns the screen then maps the mouse wrong (clicks miss, the cursor stops at the tile edge)
 hl.window_rule({ name = "gits_games", match = { class = "^(steam_app_\\d+|gamescope)$" }, fullscreen = true })
 -- the drop-down terminal (gits-dropdown) lives on its own special workspace
+-- ROG Control Center asks for a fixed 1100x630 window whatever the screen: give it most of the monitor, centred
+hl.window_rule({ name = "gits_rog", match = { class = "^(org\\.opengamingcollective\\.rog-control-center)$" }, float = true, size = "(monitor_w*0.85) (monitor_h*0.85)", center = true })
 hl.window_rule({ name = "gits_dropdown", match = { class = "^(console-dropdown)$" }, workspace = "special:console silent", float = true, size = "(monitor_w*0.8) (monitor_h*0.5)", center = true })
 
 hl.layer_rule({ name = "gits_layer_blur", match = { namespace = rx({ "rofi", "notifications", "swaync-(notification-window|control-center)", "waybar", "logout_dialog" }) }, blur = true })
