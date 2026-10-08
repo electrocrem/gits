@@ -283,7 +283,7 @@ else
     # (the OSD starts again by itself at its next use; the event loop through Hyprland, with the session's environment, no login chime)
     if [[ -z ${GITS_SKIP_PREFLIGHT:-} && -n ${HYPRLAND_INSTANCE_SIGNATURE:-} ]]; then
         "$HOME/.local/bin/gits-osd" stop 2>/dev/null || true
-        p=$(cat "${XDG_RUNTIME_DIR:-/tmp}/gits-events.pid" 2>/dev/null)
+        p=$(cat "${XDG_RUNTIME_DIR:-/tmp}/gits-events.pid" 2>/dev/null || pgrep -o -f '/hypr/scripts/gits-events[.]sh' || true)   # older copies wrote no pid file
         if [[ $p =~ ^[0-9]+$ ]] && grep -qa 'gits-events.sh' "/proc/$p/cmdline" 2>/dev/null; then
             kill "$p" 2>/dev/null
             for _ in {1..40}; do kill -0 "$p" 2>/dev/null || break; sleep 0.1; done   # it holds a lock; TERM lands after its 2 s sleep
