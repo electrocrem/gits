@@ -284,7 +284,7 @@ else
     if [[ -z ${GITS_SKIP_PREFLIGHT:-} && -n ${HYPRLAND_INSTANCE_SIGNATURE:-} ]]; then
         "$HOME/.local/bin/gits-osd" stop 2>/dev/null || true
         # every copy and its subshells (they inherit the lock, so a new copy would quit while one is left) and their socket readers
-        ps=$(pgrep -f '/hypr/scripts/gits-events[.]sh' || true)
+        ps=$(pgrep -f '^(/usr/bin/)?bash [^ ]*/hypr/scripts/gits-events[.]sh$' || true)   # the script itself, not an editor that has it open
         if [[ -n $ps ]]; then
             all=$ps; new=$ps   # the whole tree first: a reader whose subshell dies first is orphaned and keeps the lock
             while [[ -n $new ]]; do new=$(for p in $new; do pgrep -P "$p" || true; done); all+=" $new"; done
