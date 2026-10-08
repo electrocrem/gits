@@ -286,7 +286,9 @@ else
         # every copy and its subshells (they inherit the lock, so a new copy would quit while one is left) and their socket readers
         ps=$(pgrep -f '/hypr/scripts/gits-events[.]sh' || true)
         if [[ -n $ps ]]; then
-            for p in $ps; do pkill -P "$p" 2>/dev/null || true; kill "$p" 2>/dev/null || true; done
+            all=$ps; new=$ps   # the whole tree first: a reader whose subshell dies first is orphaned and keeps the lock
+            while [[ -n $new ]]; do new=$(for p in $new; do pgrep -P "$p" || true; done); all+=" $new"; done
+            kill $all 2>/dev/null || true
             for p in $ps; do for _ in {1..40}; do kill -0 "$p" 2>/dev/null || break; sleep 0.1; done; done   # TERM lands after a 2 s sleep
             hyprctl dispatch "hl.dsp.exec_cmd('env GITS_EVENTS_NO_LOGIN=1 $HOME/.config/hypr/scripts/gits-events.sh')" >/dev/null 2>&1 || true
         fi
