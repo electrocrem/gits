@@ -283,10 +283,11 @@ else
     # (the OSD starts again by itself at its next use; the event loop through Hyprland, with the session's environment, no login chime)
     if [[ -z ${GITS_SKIP_PREFLIGHT:-} && -n ${HYPRLAND_INSTANCE_SIGNATURE:-} ]]; then
         "$HOME/.local/bin/gits-osd" stop 2>/dev/null || true
-        p=$(cat "${XDG_RUNTIME_DIR:-/tmp}/gits-events.pid" 2>/dev/null || pgrep -o -f '/hypr/scripts/gits-events[.]sh' || true)   # older copies wrote no pid file
-        if [[ $p =~ ^[0-9]+$ ]] && grep -qa 'gits-events.sh' "/proc/$p/cmdline" 2>/dev/null; then
-            kill "$p" 2>/dev/null
-            for _ in {1..40}; do kill -0 "$p" 2>/dev/null || break; sleep 0.1; done   # it holds a lock; TERM lands after its 2 s sleep
+        # every copy and its subshells (they inherit the lock, so a new copy would quit while one is left) and their socket readers
+        ps=$(pgrep -f '/hypr/scripts/gits-events[.]sh' || true)
+        if [[ -n $ps ]]; then
+            for p in $ps; do pkill -P "$p" 2>/dev/null || true; kill "$p" 2>/dev/null || true; done
+            for p in $ps; do for _ in {1..40}; do kill -0 "$p" 2>/dev/null || break; sleep 0.1; done; done   # TERM lands after a 2 s sleep
             hyprctl dispatch "hl.dsp.exec_cmd('env GITS_EVENTS_NO_LOGIN=1 $HOME/.config/hypr/scripts/gits-events.sh')" >/dev/null 2>&1 || true
         fi
     fi
