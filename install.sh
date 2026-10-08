@@ -275,10 +275,21 @@ run python3 "$HOME/.local/share/gits-lock/build.py" >/dev/null || warn "dancing 
 # ------------------------------------------------------------------ activation
 say "session units"
 if ((DRY)); then
-    echo "   (dry) systemctl --user daemon-reload; gits-idle apply"
+    echo "   (dry) systemctl --user daemon-reload; gits-idle apply; restart the OSD and the event loop"
 else
     [[ -n ${GITS_SKIP_PREFLIGHT:-} ]] || systemctl --user daemon-reload 2>/dev/null || true   # (tests run with a throw-away $HOME: leave the real session alone)
     GITS_IDLE_NO_RESTART=1 "$HOME/.local/bin/gits-idle" apply >/dev/null 2>&1 || true   # write the sleep timers into hypridle.conf
+    # the small daemons started at login keep running the code they started with: restart them so the new version takes effect now
+    # (the OSD starts again by itself at its next use; the event loop through Hyprland, with the session's environment, no login chime)
+    if [[ -z ${GITS_SKIP_PREFLIGHT:-} && -n ${HYPRLAND_INSTANCE_SIGNATURE:-} ]]; then
+        "$HOME/.local/bin/gits-osd" stop 2>/dev/null || true
+        p=$(cat "${XDG_RUNTIME_DIR:-/tmp}/gits-events.pid" 2>/dev/null)
+        if [[ $p =~ ^[0-9]+$ ]] && grep -qa 'gits-events.sh' "/proc/$p/cmdline" 2>/dev/null; then
+            kill "$p" 2>/dev/null
+            for _ in {1..40}; do kill -0 "$p" 2>/dev/null || break; sleep 0.1; done   # it holds a lock; TERM lands after its 2 s sleep
+            hyprctl dispatch "hl.dsp.exec_cmd('env GITS_EVENTS_NO_LOGIN=1 $HOME/.config/hypr/scripts/gits-events.sh')" >/dev/null 2>&1 || true
+        fi
+    fi
 fi
 
 # ------------------------------------------------------------------ system part (sudo)

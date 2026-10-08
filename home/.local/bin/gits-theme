@@ -449,6 +449,7 @@ def reload_all(icons=False):
     run("dbus-send", "--session", "--type=signal", "/KGlobalSettings", "org.kde.KGlobalSettings.notifyChange", "int32:0", "int32:0")
     run("pkill", "-USR1", "-x", "kitty")           # kitty: reload kitty.conf (and theme.conf)
     run("systemctl", "--user", "try-restart", "gits-notifications.service")
+    run(os.path.join(HOME, ".local", "bin", "gits-osd"), "stop")   # the OSD daemon keeps its colours: it starts again, recoloured, at its next use
     run("tmux", "source-file", os.path.join(CONF, "tmux", "tmux.conf"))
     widgets = os.path.join(CONF, "gits-widgets", "run.sh")
     if os.path.exists(os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "gits-widgets.pid")):

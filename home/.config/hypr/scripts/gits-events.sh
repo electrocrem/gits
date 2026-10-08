@@ -7,6 +7,7 @@
 # Mute everything: `gits-sound off`. Single instance (flock). Polls every 2 s: two file reads and one pgrep.
 exec 9>"${XDG_RUNTIME_DIR:-/tmp}/gits-events.lock"
 flock -n 9 || exit 0
+echo $$ >"${XDG_RUNTIME_DIR:-/tmp}/gits-events.pid"   # install.sh restarts a running copy so a new version takes effect without a re-login
 
 ac=""
 for d in /sys/class/power_supply/*; do
@@ -37,6 +38,8 @@ if [[ -z ${GITS_EVENTS_NO_LAYOUT:-} && -S $sock ]] && command -v socat >/dev/nul
             [[ $idx =~ ^[0-9]+$ ]] && gits-osd layout "$idx" 0 "$codes"
         done
     ) &
+    listener=$!
+    trap 'pkill -P "$listener" 2>/dev/null; kill "$listener" 2>/dev/null; exit 0' TERM INT   # take the socket reader along
 fi
 
 while sleep "${GITS_EVENTS_POLL:-2}"; do
