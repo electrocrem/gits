@@ -1,9 +1,9 @@
 [Unit]
-Description=waybar (the GitS bar; systemd restarts it after a crash)
+Description=waybar (the GitS bar, through gits-bar: your hidden modules left out; systemd restarts it after a crash)
 PartOf=gits-session.target
 
 [Service]
-ExecStart=/usr/bin/waybar -c %h/.config/waybar/layouts/ghost-in-the-shell.jsonc -s %h/.config/waybar/styles/ghost-in-the-shell.css
+ExecStart=%h/.local/bin/gits-bar run
 Restart=on-failure
 RestartSec=1
 

@@ -1,0 +1,119 @@
+#!/usr/bin/env python3
+"""gits-bar: the bar (waybar) with the modules you chose to hide left out (the desktop menu, Super+I -> Desktop).
+
+  gits-bar run                start waybar (gits-bar.service runs this): writes the config and execs waybar
+  gits-bar list               the bar's modules as JSON: [{"id", "name", "side", "on"}]
+  gits-bar hide|show ID...    hide / show modules (ids from `list`; "workspaces" is all ten workspace buttons), then restart the bar
+  gits-bar set [ID...]        hide exactly these (none = show all), then restart the bar once
+  gits-bar reset              show everything again
+
+Hidden modules live in ~/.config/gits/bar.conf (`hide = ID` lines). The written config ($XDG_RUNTIME_DIR/gits-bar.jsonc) includes the
+GitS layout and repeats only its three module lists without the hidden ones: waybar keeps the including file's values over the
+included one's, so the layout itself (and its recolouring by gits-theme) stays untouched."""
+import json
+import os
+import re
+import subprocess
+import sys
+
+HOME = os.path.expanduser("~")
+CONF = os.environ.get("XDG_CONFIG_HOME", os.path.join(HOME, ".config"))
+LAYOUT = os.path.join(CONF, "waybar", "layouts", "ghost-in-the-shell.jsonc")
+STYLE = os.path.join(CONF, "waybar", "styles", "ghost-in-the-shell.css")
+CHOICE = os.path.join(CONF, "gits", "bar.conf")
+OUT = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "gits-bar.jsonc")
+SIDES = ("modules-left", "modules-center", "modules-right")
+NAMES = {"workspaces": "workspaces", "hyprland/window": "window title", "clock": "clock", "custom/gits-player": "now playing",
+         "custom/gits-updates": "updates", "idle_inhibitor": "keep awake", "custom/gits-focus": "focus timer",
+         "custom/gits-rec": "screen recording", "custom/gits-sys": "cpu / temperature", "custom/gits-gpu": "gpu",
+         "memory": "memory", "disk": "disk", "network": "network", "bluetooth": "bluetooth", "pulseaudio": "volume",
+         "custom/gits-lang": "keyboard layout", "custom/gits-mode": "workflow", "custom/gits-notify": "notifications",
+         "battery": "battery", "tray": "tray", "custom/gits-power": "power menu"}
+KEEP = {"custom/gits-power"}   # the way out of the session stays on the bar
+
+
+def module_id(m):
+    """custom/gits-ws3 -> workspaces, memory#gits -> memory."""
+    return "workspaces" if re.fullmatch(r"custom/gits-ws\d+", m) else m.split("#")[0]
+
+
+def layout_lists():
+    with open(LAYOUT) as f:
+        text = f.read()
+    out = {}
+    for side in SIDES:
+        m = re.search(r'"%s"\s*:\s*\[(.*?)\]' % side, text, re.S)
+        out[side] = re.findall(r'"([^"]+)"', re.sub(r"//[^\n]*", "", m.group(1))) if m else []
+    return out
+
+
+def hidden():
+    try:
+        with open(CHOICE) as f:
+            return {l.split("=", 1)[1].strip() for l in f if l.strip().startswith("hide") and "=" in l} - KEEP
+    except OSError:
+        return set()
+
+
+def save(ids):
+    os.makedirs(os.path.dirname(CHOICE), exist_ok=True)
+    with open(CHOICE, "w") as f:
+        f.write("# modules hidden from the bar (gits-bar / the desktop menu); `gits-bar reset` shows them all again\n")
+        f.writelines(f"hide = {i}\n" for i in sorted(ids))
+
+
+def write_config():
+    off = hidden()
+    cfg = {"include": [LAYOUT]}
+    for side, mods in layout_lists().items():
+        cfg[side] = [m for m in mods if module_id(m) not in off]
+    with open(OUT, "w") as f:
+        json.dump(cfg, f, indent=1)
+
+
+def restart():
+    if subprocess.run(["systemctl", "--user", "is-active", "--quiet", "gits-bar.service"]).returncode == 0:
+        subprocess.run(["systemctl", "--user", "restart", "gits-bar.service"])   # last: a popup opened from the bar dies with it
+    else:
+        write_config()
+        subprocess.run(["pkill", "-USR2", "-x", "waybar"])
+
+
+def main(argv):
+    cmd = argv[0] if argv else "run"
+    if cmd == "run":
+        write_config()
+        os.execvp("waybar", ["waybar", "-c", OUT, "-s", STYLE])
+    if cmd == "list":
+        off, seen, rows = hidden(), set(), []
+        for side, mods in layout_lists().items():
+            for m in mods:
+                i = module_id(m)
+                if i in seen:
+                    continue
+                seen.add(i)
+                rows.append({"id": i, "name": NAMES.get(i, i.split("/")[-1].replace("gits-", "")), "side": side.split("-")[1],
+                             "on": i not in off, "fixed": i in KEEP})
+        print(json.dumps(rows))
+        return 0
+    if cmd in ("hide", "show") and len(argv) > 1:
+        off = hidden()
+        off = (off | set(argv[1:])) if cmd == "hide" else (off - set(argv[1:]))
+        save(off - KEEP)
+        restart()
+        return 0
+    if cmd == "set":
+        if set(argv[1:]) - KEEP != hidden():
+            save(set(argv[1:]) - KEEP)
+            restart()
+        return 0
+    if cmd == "reset":
+        save(set())
+        restart()
+        return 0
+    print(__doc__.split("\n\n")[0], file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

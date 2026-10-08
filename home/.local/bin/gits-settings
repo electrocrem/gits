@@ -21,6 +21,7 @@ CONNECT	󰍽  Touchpad on / off	gits-touchpad toggle	gits-touchpad status
 CONNECT	󰒓  All system settings (KDE: input, keyboard, apps...)	systemsettings
 DESKTOP	󰏘  Appearance (colour theme, accent, lock-screen mascot, wallpaper)	gits-panel appearance	gits-theme current
 DESKTOP	󰸉  Wallpaper (pick with a preview; GIFs too)	gits-panel appearance
+DESKTOP	󰍹  Widgets and bar (which cards and bar modules are shown)	gits-panel desktop
 DESKTOP	󱂬  Window animations	gits-anim select	gits-anim current
 DESKTOP	󰆍  Tiling layout (dwindle / master / monocle / scrolling)	gits-layout select	gits-layout current
 DESKTOP	󰖔  Night light schedule (evening / night warmth)	gits-daynight menu	gits-daynight status
