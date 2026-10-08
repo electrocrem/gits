@@ -2148,6 +2148,235 @@ class TodoCard(Card):
 
 
 # --------------------------------------------------------------------------------------------- application
+# --------------------------------------------------------------------------------------------- notes + focus, updates, bluetooth
+UPDATE_CMD, BT_CMD = ["gits-update"], ["gits-bt"]   # what the bar runs on a click on its updates / Bluetooth module
+
+
+class BackgroundPoll(threading.Thread):
+    """Runs `fn` every `every` s off the main thread; the card reads `value` (None until the first answer)."""
+
+    def __init__(self, fn, every):
+        super().__init__(daemon=True)
+        self.fn, self.every, self.value = fn, every, None
+        self.start()
+
+    def run(self):
+        while True:
+            try:
+                self.value = self.fn()
+            except Exception:   # a tool that is missing or hangs must never kill the widgets
+                pass
+            time.sleep(self.every)
+
+
+def clickable(card, fn):
+    g = Gtk.GestureClick()
+    g.connect("released", lambda *_: fn())
+    card.add_controller(g)
+
+
+class NotesCard(Card):
+    """The latest quick notes (gits-note, ~/notes/inbox.md) and the focus timer (gits-focus). Click: the note popup; the timer line
+    starts / stops the timer."""
+    N = 5
+
+    def __init__(self, app, **kw):
+        super().__init__(app, "MEMO // 記録", **kw)
+        self.file = os.environ.get("GITS_NOTES", os.path.expanduser("~/notes/inbox.md"))
+        self.focus_state = os.path.join(os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")), "gits-focus", "state")
+        self.notes, self.focus = [], None
+        self.da = self.area(self._draw)
+        self.da.set_vexpand(True)
+        self.body.append(self.da)
+        self.l_focus = label("", "n-down")
+        self.body.append(self.l_focus)
+        g = Gtk.GestureClick()
+        g.connect("released", lambda _g, _n, x, y: self._click(y))
+        self.add_controller(g)
+        self.update()
+
+    def _click(self, y):
+        if y > self.get_height() - 30:
+            subprocess.Popen(["gits-focus", "toggle"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        else:
+            subprocess.Popen(["gits-panel", "note"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+
+    def update(self):
+        notes = []
+        if DEMO:
+            notes = ["call the section chief", "dive log: 2501", "buy thermoptic batteries"]
+        else:
+            try:
+                with open(self.file, errors="replace") as f:
+                    for line in f:
+                        t = re.sub(r"^\s*[-*]\s*(\[[ x]\]\s*)?(\d{4}-\d\d-\d\d \d\d:\d\d\s*)?", "", line.rstrip())
+                        if t and not t.startswith("#"):
+                            notes.append(t)
+            except OSError:
+                pass
+        self.notes = notes[-self.N:][::-1]
+        st = {}
+        try:
+            with open(self.focus_state) as f:
+                st = dict(l.strip().split("=", 1) for l in f if "=" in l)
+        except OSError:
+            pass
+        if st.get("end", "").isdigit():
+            left = max(0, int(st["end"]) - int(time.time()))
+            phase = "FOCUS" if st.get("phase") == "work" else "BREAK"
+            self.l_focus.set_text(f"◉ {phase} {left // 60:02d}:{left % 60:02d} · ROUND {int(st.get('round', 0) or 0) + 1}")
+        else:
+            self.l_focus.set_text("○ FOCUS TIMER · CLICK TO START")
+        self.da.queue_draw()
+
+    def _draw(self, area, cr, w, h):
+        if not self.notes:
+            draw_text(cr, "NO NOTES · SUPER+N", 0, 14, 9, DIM, bold=True)
+            return
+        step = min(22, h / self.N)
+        for i, t in enumerate(self.notes):
+            y = i * step + 13
+            draw_text(cr, "›", 0, y, 10, CY, bold=True)
+            draw_text(cr, clip(cr, t, w - 14, 10), 12, y, 10, FG if i == 0 else MID, bold=i == 0)
+
+
+def updates_probe():
+    out = subprocess.run(["gits-update", "--check"], capture_output=True, text=True, timeout=180).stdout
+    m = re.search(r"repo:\s*(\d+).*?aur:\s*(\d+)", out.replace("\n", " "))
+    repo, aur = (int(m.group(1)), int(m.group(2))) if m else (0, 0)
+    flat = 0
+    try:
+        fo = subprocess.run(["flatpak", "remote-ls", "--updates", "--columns=application"], capture_output=True, text=True, timeout=60).stdout
+        flat = len([l for l in fo.splitlines() if l.strip()])
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return repo, aur, flat
+
+
+class UpdatesCard(Card):
+    """Pending updates (pacman repos, AUR, Flatpak; checked every 30 min), uptime and kernel. Click: gits-update."""
+
+    def __init__(self, app, **kw):
+        super().__init__(app, "SYS.PATCH // 更新", **kw)
+        self.poll = None if DEMO else BackgroundPoll(updates_probe, 1800)
+        top = Gtk.Box()
+        self.big = label("…", "b-big")
+        self.big.set_hexpand(True)
+        self.state = label("", "b-state", 1.0)
+        self.state.set_valign(Gtk.Align.START)
+        top.append(self.big)
+        top.append(self.state)
+        self.body.append(top)
+        self.l_src = label("", "n-up")
+        self.body.append(self.l_src)
+        self.l_up = label("", "n-down")
+        self.body.append(self.l_up)
+        clickable(self, lambda: subprocess.Popen(UPDATE_CMD, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True))
+        self.update()
+
+    def update(self):
+        v = (12, 3, 1) if DEMO else (self.poll.value if self.poll else None)
+        if v is None:
+            self.big.set_text("…")
+            self.state.set_text("CHECKING")
+            self.l_src.set_text("")
+        else:
+            n = sum(v)
+            self.big.set_text(str(n))
+            self.state.set_text("PENDING" if n else "UP TO DATE")
+            self.l_src.set_text(f"REPO {v[0]} · AUR {v[1]} · FLATPAK {v[2]}")
+        try:
+            with open("/proc/uptime") as f:
+                up = int(float(f.read().split()[0]))
+        except OSError:
+            up = 0
+        self.l_up.set_text(f"UP {fmt_uptime(up)} · LINUX {os.uname().release.split('-')[0]}")
+
+
+def bt_probe():
+    devs = []
+    out = subprocess.run(["bluetoothctl", "devices", "Connected"], capture_output=True, text=True, timeout=10).stdout
+    for line in out.splitlines():
+        parts = line.split(" ", 2)
+        if len(parts) < 3 or parts[0] != "Device":
+            continue
+        info = subprocess.run(["bluetoothctl", "info", parts[1]], capture_output=True, text=True, timeout=10).stdout
+        bat = re.search(r"Battery Percentage:.*\((\d+)\)", info)
+        icon = re.search(r"Icon:\s*(\S+)", info)
+        devs.append((parts[2], int(bat.group(1)) if bat else None, icon.group(1) if icon else ""))
+    try:   # phones over KDE Connect
+        ids = subprocess.run(["kdeconnect-cli", "-a", "--id-name-only"], capture_output=True, text=True, timeout=10).stdout
+        for line in ids.splitlines():
+            did, _, name = line.partition(" ")
+            if not did or " " in did:
+                continue
+            r = subprocess.run(["gdbus", "call", "--session", "--dest", "org.kde.kdeconnect", "--object-path",
+                                f"/modules/kdeconnect/devices/{did}/battery", "--method", "org.freedesktop.DBus.Properties.Get",
+                                "org.kde.kdeconnect.device.battery", "charge"], capture_output=True, text=True, timeout=10).stdout
+            m = re.search(r"(\d+)", r)
+            devs.append((name, int(m.group(1)) if m else None, "phone"))
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return devs
+
+
+class BluetoothCard(Card):
+    """Connected Bluetooth devices and phones (KDE Connect) with their battery. Click: the Bluetooth menu."""
+    ICONS = {"audio-headset": "\U000F02CB", "audio-headphones": "\U000F02CB", "input-mouse": "\U000F037D", "input-keyboard": "\U000F030C",
+             "input-gaming": "\U000F0297", "phone": "\U000F011C", "audio-card": "\U000F04C3"}
+
+    def __init__(self, app, **kw):
+        super().__init__(app, "BT.LINK // 無線", **kw)
+        self.poll = None if DEMO else BackgroundPoll(bt_probe, 30)
+        self.da = self.area(self._draw)
+        self.da.set_vexpand(True)
+        self.body.append(self.da)
+        clickable(self, lambda: subprocess.Popen(BT_CMD, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True))
+        self.update()
+
+    def update(self):
+        self.da.queue_draw()
+
+    def _draw(self, area, cr, w, h):
+        devs = [("WH-1000XM", 80, "audio-headset"), ("LOGI M650", 100, "input-mouse")] if DEMO else (self.poll.value if self.poll else None)
+        if devs is None:
+            draw_text(cr, "SCANNING…", 0, 14, 9, DIM, bold=True)
+            return
+        if not devs:
+            draw_text(cr, "NOTHING CONNECTED", 0, 14, 9, DIM, bold=True)
+            return
+        step = min(30, h / max(1, len(devs)))
+        for i, (name, bat, icon) in enumerate(devs[:4]):
+            y = i * step
+            draw_text(cr, self.ICONS.get(icon, "\U000F00AF"), 0, y + 12, 11, CY)
+            draw_text(cr, clip(cr, name.upper(), w - 70, 9, True), 18, y + 12, 9, FG, bold=True)
+            if bat is not None:
+                draw_text(cr, f"{bat}%", w, y + 12, 9, RED if bat <= 15 else MID, bold=True, align="right")
+                draw_meter(cr, 18, y + 17, w - 18, 4, bat / 100, hot=bat <= 15)
+
+
+BAR_H = 26   # the bar's exclusive zone (waybar height 24 + its border)
+WIDGETS_CONF = os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")), "gits", "widgets.conf")
+WIDGETS_OFF = {"gpu", "disks", "top"}   # off by default on the main monitor (the second monitor shows them); the menu turns them on
+
+
+def widget_choice():
+    """(on, off) card ids from ~/.config/gits/widgets.conf (`ID = on|off` lines, written by the desktop menu); unlisted ones keep their
+    default: on, except WIDGETS_OFF."""
+    on, off = set(), set(WIDGETS_OFF)
+    try:
+        with open(WIDGETS_CONF) as f:
+            for line in f:
+                k, _, v = line.partition("=")
+                k, v = k.strip(), v.split("#")[0].strip().lower()
+                if k and not k.startswith("#") and v in ("on", "off"):
+                    (on if v == "on" else off).add(k)
+                    (off if v == "on" else on).discard(k)
+    except OSError:
+        pass
+    return on, off
+
+
 class App:
     """Plain windows + GLib main loop (a Gtk.Application blocks on its D-Bus registration in this session)."""
 
@@ -2181,52 +2410,78 @@ class App:
             self.cards.append(GlitchLayer(mon))  # first: layers of one level stack by creation order, cards go on top
         m, gap, top = 20, 12, 14  # screen margin, gap between cards, distance below the bar
         LW, MW, RW = 220, 236, 264  # left / middle / right column widths
+        hidden = widget_choice()[1]
 
         def add(cls, x, y, w, h, right=False, **kw):
             c = cls(self, x=x, y=y, w=w, h=h, right=right, monitor=mon, **kw)
             self.cards.append(c)
             return c
 
-        y = top
-        add(ClockCard, m, y, LW, 226)
-        y += 226 + gap
-        add(CalendarCard, m, y, LW, 236)
-        if np is not None:
-            y += 236 + gap
-            add(AudioCard, m, y, LW, 160)
-        x2 = m + LW + gap
-        y = top
-        add(MediaCard, x2, y, MW, 372)
-        y += 372 + gap
-        add(WeatherCard, x2, y, MW, 108)
-        y += 108 + gap
-        add(NetCard, x2, y, MW, 132)
         server = os.environ.get("GITS_SERVER", "")
         self.link = None
         if DEMO or (server and server.lower() != "off"):
             if not DEMO:
                 self.link = ServerLink(server)
                 self.link.start()
-            y += 132 + gap
-            add(ServerCard, x2, y, MW, 262, dest=server or "tachikoma", link=self.link)
-            y += 262 + gap
-            add(ServicesCard, x2, y, MW, 236, link=self.link)
-        y = top
+        # every card the main monitor may show: (id, class, side, preferred column, width, height, kwargs); `widget_choice` (the
+        # desktop menu, ~/.config/gits/widgets.conf) says which are on. They stack down their column and a card that does not fit
+        # the screen's height goes to the next column inward, so nothing ends up below the screen edge.
         bats = sorted(glob.glob("/sys/class/power_supply/BAT*"))
+        has_gpu = gpu_sample() is not None
+        many = mon is not None and Gdk.Display.get_default().get_monitors().get_n_items() > 1
+        plan = [("clock", ClockCard, "L", 0, LW, 226, {}),
+                ("calendar", CalendarCard, "L", 0, LW, 236, {})]
+        if np is not None:
+            plan.append(("spectrum", AudioCard, "L", 0, LW, 160, {}))
+        if not (many and os.environ.get("GITS_WIDGETS_SECOND", "1") != "0"):   # with a second monitor SYS.LOG lives there
+            plan.append(("log", LogCard, "L", 0, LW, 300, {}))
+        plan += [("media", MediaCard, "L", 1, MW, 372, {}),
+                 ("weather", WeatherCard, "L", 1, MW, 108, {}),
+                 ("net", NetCard, "L", 1, MW, 132, {})]
+        if DEMO or self.link:
+            plan += [("server", ServerCard, "L", 1, MW, 262, {"dest": server or "tachikoma", "link": self.link}),
+                     ("services", ServicesCard, "L", 1, MW, 236, {"link": self.link})]
+        plan += [("notes", NotesCard, "L", 0, LW, 170, {})]
         if bats:
-            add(BatteryCard, m, y, RW, 92, right=True, bat=bats[0])
-            y += 92 + gap
-        add(RingsCard, m, y, RW, 132, right=True, stats=self.stats)
-        y += 132 + gap
-        add(GraphCard, m, y, RW, 132, right=True, stats=self.stats)
-        y += 132 + gap
-        add(TodoCard, m, y, RW, 250, right=True)
-        if DEMO or self.link:  # server feeds under the to-do; each stays hidden until the server reports its service
-            y += 250 + gap
-            add(TorrentCard, m, y, RW, 196, right=True, link=self.link)
-            y += 196 + gap
-            add(WatchCard, m, y, RW, 214, right=True, link=self.link)
-        log_home = None  # SYS.LOG: under the calendar of the second monitor, else low in the main left column
+            plan.append(("battery", BatteryCard, "R", 0, RW, 92, {"bat": bats[0]}))
+        plan += [("rings", RingsCard, "R", 0, RW, 132, {"stats": self.stats}),
+                 ("graph", GraphCard, "R", 0, RW, 132, {"stats": self.stats}),
+                 ("todo", TodoCard, "R", 0, RW, 250, {})]
+        if DEMO or self.link:
+            plan += [("torrents", TorrentCard, "R", 0, RW, 196, {"link": self.link}),
+                     ("watching", WatchCard, "R", 0, RW, 214, {"link": self.link})]
+        plan += [("updates", UpdatesCard, "R", 0, RW, 110, {}),
+                 ("bluetooth", BluetoothCard, "R", 0, RW, 120, {})]
+        if has_gpu:
+            plan.append(("gpu", GpuCard, "R", 0, RW, 132, {}))
+        plan += [("disks", DiskCard, "R", 0, RW, 150, {}), ("top", TopCard, "R", 0, RW, 150, {})]
+        room = (mon.get_geometry().height if mon is not None else 1080) - BAR_H - top - m
+        for side in "LR":
+            cols = []   # [width, used height, [(card...)]]
+            for wid, cls, sd, pref, w, h, kw in plan:
+                if sd != side or wid in hidden:
+                    continue
+                ci = pref
+                while True:
+                    while len(cols) <= ci:
+                        cols.append([0, 0, []])
+                    col = cols[ci]
+                    need = h if not col[2] else col[1] + gap + h
+                    if need <= room or not col[2]:
+                        col[0], col[1] = max(col[0], w), need
+                        col[2].append((cls, w, h, kw))
+                        break
+                    ci += 1
+            x = m
+            for cw, _, items in cols:
+                if not items:
+                    continue
+                y = top
+                for cls, w, h, kw in items:
+                    add(cls, x, y, w, h, right=side == "R", **kw)
+                    y += h + gap
+                x += cw + gap
+        log_home = None  # SYS.LOG: under the calendar of the second monitor, else in the main monitor's plan above
 
         # every other monitor: a smaller set without the cards that run their own threads (player, audio spectrum, to-do)
         if os.environ.get("GITS_WIDGETS_SECOND", "1") != "0" and mon is not None:
@@ -2257,8 +2512,6 @@ class App:
                 y += 150 + gap
                 add2(TopCard, x2, y, MW, 150)
 
-        if log_home is None:
-            add(LogCard, m, top + 226 + gap + 236 + gap + (160 + gap if np is not None else 0), LW, 300)
 
         for c in self.cards:
             if not getattr(c, "wait_data", False):
@@ -2268,7 +2521,7 @@ class App:
 
     def tick1(self):
         for c in self.cards:
-            if isinstance(c, (ClockCard, CalendarCard, MediaCard, LogCard)):
+            if isinstance(c, (ClockCard, CalendarCard, MediaCard, LogCard, NotesCard)):
                 c.update()
         return True
 
@@ -2276,7 +2529,7 @@ class App:
         self.stats.refresh()
         for c in self.cards:
             if isinstance(c, (RingsCard, GraphCard, BatteryCard, WeatherCard, NetCard, GpuCard, DiskCard, TopCard, ServerCard,
-                              ServerFeed)):
+                              ServerFeed, UpdatesCard, BluetoothCard)):
                 c.update()
         return True
 
