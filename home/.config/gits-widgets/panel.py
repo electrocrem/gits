@@ -282,6 +282,7 @@ class Popup(Gtk.Window):
         LS.set_keyboard_mode(self, LS.KeyboardMode.EXCLUSIVE)
         if monitor is not None:
             LS.set_monitor(self, monitor)
+        self._monitor = monitor
         self.card = None
         key = Gtk.EventControllerKey()
         key.connect("key-pressed", lambda _c, kv, *_: (self.dismiss(), True)[1] if kv == Gdk.KEY_Escape else False)
@@ -298,7 +299,18 @@ class Popup(Gtk.Window):
         """Called by the subclasses with their card: place it in the corner of the fullscreen surface, inside a stack that plays the
         GitS "power-on" effect: the card opens from a thin line with two glitch flickers while a bright scan line sweeps down it."""
         self.card = card
-        card.set_size_request(self.CARD_W, -1)
+        # fit the screen: the card is never wider than the monitor, and when it is taller than the room below the bar it scrolls
+        # (a 1920x1200 panel at scale 1.5 is only 800 px tall: the appearance menu and the settings hub did not fit)
+        geo = self._screen()
+        top = self.TOP if not self.center or geo.height < 1000 else 110
+        card.set_size_request(min(self.CARD_W, geo.width - 16), -1)
+        clip = Gtk.ScrolledWindow()
+        clip.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        clip.set_propagate_natural_height(True)
+        clip.set_propagate_natural_width(True)
+        clip.set_max_content_height(max(200, geo.height - top - 12))
+        clip.set_child(card)
+        self.clip = clip
         scan = Gtk.DrawingArea()
         scan.set_can_target(False)
         scan.set_draw_func(self._draw_scan)
@@ -307,7 +319,7 @@ class Popup(Gtk.Window):
         self.rev = Gtk.Revealer()   # opens the card from the top, like a scan line uncovering it
         self.rev.set_transition_type(Gtk.RevealerTransitionType.SLIDE_UP)
         self.rev.set_transition_duration(self.OPEN_MS * slow)
-        self.rev.set_child(card)
+        self.rev.set_child(clip)
         stack = Gtk.Overlay()
         stack.add_css_class("reveal")
         if slow > 1:
@@ -319,7 +331,7 @@ class Popup(Gtk.Window):
         stack.set_margin_top(self.TOP)
         if self.center:
             stack.set_halign(Gtk.Align.CENTER)
-            stack.set_margin_top(110)
+            stack.set_margin_top(top)
         elif self.hcenter:
             stack.set_halign(Gtk.Align.CENTER)
         elif self.left is None:
@@ -333,6 +345,18 @@ class Popup(Gtk.Window):
         super().set_child(wrap)
         self.scan_t0 = None
         self.connect("map", self._on_map)
+
+    def _screen(self):
+        """The logical size (after scaling) of the monitor this popup opens on."""
+        mon = getattr(self, "_monitor", None)
+        if mon is None:
+            mons = Gdk.Display.get_default().get_monitors()
+            mon = mons.get_item(0) if mons.get_n_items() else None
+        if mon is None:
+            r = Gdk.Rectangle()
+            r.width, r.height = 1920, 1080
+            return r
+        return mon.get_geometry()
 
     # -- the reveal and the scan line at its leading edge
     OPEN_MS, FADE_S = 300, 0.18
@@ -407,7 +431,7 @@ class Popup(Gtk.Window):
     def _pressed(self, gesture, n, x, y):
         if self.card is None:
             return
-        ok, rect = self.card.compute_bounds(self)
+        ok, rect = self.clip.compute_bounds(self)   # the visible part: a scrolled card reaches below the screen
         if os.environ.get("GITS_PANEL_DEBUG"):
             open(os.environ["GITS_PANEL_DEBUG"], "a").write(f"pressed {x:.0f},{y:.0f} card={rect.get_x():.0f},{rect.get_y():.0f} {rect.get_width():.0f}x{rect.get_height():.0f}\n")
         inside = ok and rect.get_x() <= x <= rect.get_x() + rect.get_width() and rect.get_y() <= y <= rect.get_y() + rect.get_height()
@@ -1777,7 +1801,11 @@ class AppearancePopup(Popup):
         self.cards = {}
         for tid, t in self.themes.items():
             row.append(self._theme_card(tid, t))
-        root.append(row)
+        trow = Gtk.ScrolledWindow()   # more themes than fit side by side: the row scrolls sideways (the wheel scrolls it too)
+        trow.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.NEVER)
+        trow.set_propagate_natural_height(True)
+        trow.set_child(row)
+        root.append(trow)
         # accent
         root.append(label("ACCENT  ·  rings, borders, icons, the selection", "ap-sec"))
         arow = Gtk.Box(spacing=6)
