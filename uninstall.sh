@@ -135,6 +135,7 @@ cat <<TXT
 Not touched (edited outside your \$HOME, needs sudo):
   SDDM:     sudo rm -rf /usr/share/sddm/themes/ghost-in-the-shell /etc/sddm.conf.d/zz-gits.conf
   Boot:     sudo ~/.local/share/gits-boot/install.sh --revert     (run BEFORE removing that folder)
+  Battery:  sudo ~/.local/share/gits-power/setup.sh --revert      (run BEFORE removing that folder)
   GRUB:     sudo cp /etc/default/grub.bak-pre-savedefault /etc/default/grub && sudo grub-mkconfig -o /boot/grub/grub.cfg
 Logseq, Zen, VS Code and kdeglobals were restored from their .bak-pre-gits / plugins-backup copies (log out and in for Qt colours).
 Log out and in. (The session units gits-*.service are removed; whatever was in place before is back.)

@@ -72,6 +72,7 @@ MANIFEST = [
     (".local/share/gits-sounds/build.py", None),
     (".local/share/gits-lock", ["build.py", "tachikoma.py"]),
     (".local/share/gits-snap/setup.sh", None),
+    (".local/share/gits-power", ["setup.sh", "70-gits-battery.conf"]),
     (".local/bin", ["gits-*"]),
     (".vscode-oss/extensions/gits.ghost-in-the-shell-1.0.0", None),
 ]

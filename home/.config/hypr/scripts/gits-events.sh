@@ -3,7 +3,8 @@
 #   login   played once when the daemon starts        plug / unplug   mains power connected / removed
 #   lock / unlock   hyprlock appears / disappears
 #   layout   the new keyboard layout on the GitS OSD on every switch (no sound)
-#   battery   a warning at 15 % and a critical one at 7 % while discharging (the charge limit of an ASUS keeps it near 98 %, that is not a warning)
+#   battery   a warning at 25 % and a critical one at 12 % while discharging (the charge limit of an ASUS keeps it near 98 %, that is not a warning);
+#             early because the worn battery holds ~9.5 Wh, and upowerd powers off at 8 % (~/.local/share/gits-power/setup.sh)
 # Mute everything: `gits-sound off`. Single instance (flock). Polls every 2 s: two file reads and one pgrep.
 exec 9>"${XDG_RUNTIME_DIR:-/tmp}/gits-events.lock"
 flock -n 9 || exit 0
@@ -54,10 +55,10 @@ while sleep "${GITS_EVENTS_POLL:-2}"; do
     pct=$(gits-battery percent 2>/dev/null)
     if [[ -n $pct ]]; then
         if [[ $(gits-battery status) == Discharging ]]; then
-            if (( pct <= 7 && warned < 2 )); then
-                notify-send -a GitS -u critical -i battery-empty -r 31 "Battery critical" "${pct}%: plug in the charger"; warned=2
-            elif (( pct <= 15 && warned < 1 )); then
-                notify-send -a GitS -u normal -i battery-caution -r 31 "Battery low" "${pct}% left"; warned=1
+            if (( pct <= 12 && warned < 2 )); then
+                notify-send -a GitS -u critical -i battery-empty -r 31 "Battery critical" "${pct}%: plug in the charger, the laptop powers off at 8%"; warned=2
+            elif (( pct <= 25 && warned < 1 )); then
+                notify-send -a GitS -u normal -i battery-caution -r 31 "Battery low" "${pct}% left (a few minutes on this battery)"; warned=1
             fi
         else
             warned=0

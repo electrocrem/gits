@@ -2,7 +2,7 @@
 # Ghost in the Shell for Hyprland: installer. The whole desktop: Hyprland config, bar, popups, lock screen, notifications, terminal, themes.
 #
 #   ./install.sh                 user-level install (no sudo)
-#   ./install.sh --system        ... plus SDDM, Plymouth and GRUB themes (asks for sudo)
+#   ./install.sh --system        ... plus SDDM, Plymouth and GRUB themes, battery poweroff policy (asks for sudo)
 #   ./install.sh --deps          ... pacman -S --needed for the packages in packages.txt first (asks for sudo)
 #   ./install.sh --login-guards  ... plus the blind-login guard (hybrid AMD/NVIDIA laptops)
 #   ./install.sh --telegram      ... also build the Telegram theme into ~/Downloads
@@ -314,6 +314,9 @@ if ((SYSTEM)); then
         run sudo "$HOME/.local/share/gits-boot/install.sh"
     else
         warn "plymouth not installed (pacman -S plymouth): boot themes skipped"
+    fi
+    if [[ -d /sys/class/power_supply/BAT0 || -d /sys/class/power_supply/BAT1 ]]; then
+        run sudo "$HOME/.local/share/gits-power/setup.sh"   # upowerd always on, clean poweroff at 8 % battery
     fi
 fi
 if ((FIXGRUB)); then

@@ -242,6 +242,18 @@ command -v gits-theme >/dev/null && ok "colour theme: $(gits-theme current)" || 
 if command -v rog-control-center >/dev/null; then
     pgrep -f "^(/usr/bin/)?rog-control-center" >/dev/null && ok "ROG Control Center running" || warn "ROG Control Center installed but not running"
 fi
+for b in /sys/class/power_supply/BAT*; do
+    [[ -r $b/energy_full && -r $b/energy_full_design ]] || continue
+    full=$(<"$b/energy_full"); design=$(<"$b/energy_full_design"); ((design)) || continue
+    health=$((full * 100 / design)); wh="$((full / 1000000)).$((full / 100000 % 10)) of $(((design + 500000) / 1000000)) Wh"
+    ((health >= 60)) && ok "${b##*/} health ${health}% ($wh)" || warn "${b##*/} health ${health}% ($wh): minutes on battery; charge to 100% once to recalibrate, if it stays low replace it"
+    if [[ $(systemctl is-enabled upower.service 2>/dev/null) == enabled ]] && systemctl is-active -q upower.service && [[ -r /etc/UPower/UPower.conf.d/70-gits-battery.conf ]]; then
+        ok "upower on: clean poweroff at $(sed -n 's/^PercentageAction=//p' /etc/UPower/UPower.conf.d/70-gits-battery.conf)% battery"
+    else
+        warn "upower not set up: an empty battery cuts power with no shutdown (sudo ~/.local/share/gits-power/setup.sh)"
+    fi
+    break
+done
 if command -v snapper >/dev/null; then
     tl=$(systemctl is-enabled snapper-timeline.timer 2>/dev/null)
     [[ $tl == enabled ]] && ok "snapper timeline snapshots enabled" || warn "snapper timeline is $tl (sudo ~/.local/share/gits-snap/setup.sh)"
