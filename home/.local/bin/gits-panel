@@ -26,7 +26,15 @@ case $mode in
     control|media|radio|notify|mixer|note|launch|clip|windows|emoji|keys|appearance|themes|desktop|settings) ((alive)) && [[ $cur == "$mode" ]] && exit 0 ;;   # pressed again = close
     *) echo "usage: gits-panel [control|media|radio|notify|mixer|note|launch|clip|windows|emoji|keys|appearance|themes|desktop|settings|close]" >&2; exit 2 ;;
 esac
+log=${XDG_RUNTIME_DIR:-/tmp}/gits-panel.log
+# the warm spare of gits-panel.service (popupd.py) shows it at once; without it panel.py starts cold (~0.2 s more). socat, not the
+# Python client: that would cost another ~50 ms. socat gives up 1 s after sending; the spare then shows nothing, so no double popup.
+sock=${XDG_RUNTIME_DIR:-/tmp}/gits-panel.sock reply=""
+if [[ -S $sock ]] && command -v socat >/dev/null; then
+    IFS= read -r -t 2 reply < <(printf '{"argv": ["%s"], "log": "%s"}\n' "$mode" "$log" | socat -t 1 - "UNIX-CONNECT:$sock" 2>/dev/null)
+    [[ $reply =~ ^pid\ ([0-9]+)$ ]] && { echo "${BASH_REMATCH[1]} $mode" >"$pidfile"; exit 0; }
+fi
 # preloading gtk4-layer-shell here saves panel.py from re-executing itself to get it (a second Python start, ~0.15 s)
 ls_lib=/usr/lib/libgtk4-layer-shell.so; [[ -e $ls_lib ]] && export LD_PRELOAD="$ls_lib${LD_PRELOAD:+ $LD_PRELOAD}"
-python3 "$HOME/.config/gits-widgets/panel.py" "$mode" >"${XDG_RUNTIME_DIR:-/tmp}/gits-panel.log" 2>&1 &
+python3 "$HOME/.config/gits-widgets/panel.py" "$mode" >"$log" 2>&1 &
 echo "$! $mode" >"$pidfile"

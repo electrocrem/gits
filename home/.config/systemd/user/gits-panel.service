@@ -1,0 +1,13 @@
+[Unit]
+Description=warm popups: one gits-panel popup kept loaded, so menus open at once (popupd.py; gits-panel starts them cold without it)
+PartOf=gits-session.target
+
+[Service]
+ExecStart=/usr/bin/python3 %h/.config/gits-widgets/popupd.py serve
+Restart=always
+RestartSec=1
+# the popups and what they launch outlive a restart of this unit (a theme change, an update)
+KillMode=process
+
+[Install]
+WantedBy=gits-session.target

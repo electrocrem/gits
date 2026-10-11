@@ -27,9 +27,17 @@ _LS_LIB = "/usr/lib/libgtk4-layer-shell.so"
 if os.path.exists(_LS_LIB) and _LS_LIB not in os.environ.get("LD_PRELOAD", ""):
     os.environ["LD_PRELOAD"] = (_LS_LIB + " " + os.environ.get("LD_PRELOAD", "")).strip()
     os.execv(sys.executable, [sys.executable, os.path.abspath(__file__), *sys.argv[1:]])
-os.environ.setdefault("GSK_RENDERER", "cairo")
-os.environ.setdefault("GDK_BACKEND", "wayland")
-os.environ["GTK_THEME"] = "Adwaita:dark"
+
+
+def gtk_env():
+    """GTK settings of every popup. A spare sets them again after it took over the caller's environment: GTK picks the renderer
+    when the window is shown, and without GSK_RENDERER=cairo it opened the NVIDIA card (and kept it awake) for each popup."""
+    os.environ.setdefault("GSK_RENDERER", "cairo")
+    os.environ.setdefault("GDK_BACKEND", "wayland")
+    os.environ["GTK_THEME"] = "Adwaita:dark"
+
+
+gtk_env()
 
 import cairo
 import gi
@@ -3005,14 +3013,134 @@ class LauncherPopup(Popup):
         self.dismiss()
 
 
+_display_ready = False
+
+
+def setup_display():
+    """GTK + panel.css, once (a spare does this before it gets its popup)."""
+    global _display_ready
+    if not _display_ready:
+        Gtk.init()
+        css = Gtk.CssProvider()
+        css.load_from_path(os.path.join(HERE, "panel.css"))
+        Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), css, Gtk.STYLE_PROVIDER_PRIORITY_USER)
+        _display_ready = True
+
+
+def spare(fd):
+    """`panel.py spare FD` (started by popupd.py, gits-panel.service): load everything, connect to the display, lay one popup out
+    offscreen, then wait on the listening socket FD for ONE request and become that popup. A request is one JSON line,
+    {"argv": [...], "log": FILE or null}; without a log file it carries the caller's stdin / stdout / stderr (SCM_RIGHTS). The
+    environment and working directory are the caller's, read from /proc by the peer pid. Answers "pid N" at once, and "rc N" when
+    the popup closes (not for a log-file request: the connection is closed after the pid). "stale" = this process runs older code
+    than the files on disk or talks to another compositor: the caller then starts a popup the old way."""
+    import socket
+    import struct
+    if not LS.is_supported():
+        return 1
+    setup_display()
+    try:   # fonts, glyph caches, icons and CSS get loaded now instead of in front of you: about half of the first frame
+        w = LauncherPopup(None, "keys")
+        for o in (Gtk.Orientation.VERTICAL, Gtk.Orientation.HORIZONTAL):
+            w.get_child().measure(o, -1)
+        w.destroy()
+    except Exception:
+        pass
+    born = {f: os.stat(os.path.join(HERE, f)).st_mtime_ns for f in os.listdir(HERE) if f.endswith(".py")}
+    lst = socket.socket(fileno=int(fd))
+    loop, got = GLib.MainLoop(), []
+
+    def accept(*_):   # Wayland events keep being read while we wait (a full socket buffer would get us disconnected)
+        try:
+            got.append(lst.accept()[0])
+        except BlockingIOError:
+            return True
+        loop.quit()
+        return False
+    lst.setblocking(False)
+    GLib.io_add_watch(lst.fileno(), GLib.PRIORITY_DEFAULT, GLib.IOCondition.IN, accept)
+    # stdin is a pipe from popupd that nobody writes to: it ends when popupd does (a restart of the unit), and a waiting spare
+    # must not outlive it (KillMode=process leaves it alone so that open popups survive)
+    orphan = GLib.io_add_watch(0, GLib.PRIORITY_DEFAULT, GLib.IOCondition.IN | GLib.IOCondition.HUP, lambda *_: os._exit(0))
+    os.write(1, b"ready\n")
+    loop.run()
+    conn = got[0]
+    lst.close()
+    os.write(1, b"taken\n")   # popupd starts the next spare now
+    GLib.source_remove(orphan)
+    conn.settimeout(2)
+    try:
+        peer = struct.unpack("3i", conn.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))[0]
+        data, fds, _flags, _addr = socket.recv_fds(conn, 65536, 3)
+        while data and not data.endswith(b"\n"):
+            chunk = conn.recv(65536)
+            if not chunk:
+                break
+            data += chunk
+        req = json.loads(data)
+        with open(f"/proc/{peer}/environ", "rb") as f:
+            env = dict(kv.decode(errors="replace").split("=", 1) for kv in f.read().split(b"\0") if b"=" in kv)
+        cwd = os.readlink(f"/proc/{peer}/cwd")
+        now = {f: os.stat(os.path.join(HERE, f)).st_mtime_ns for f in os.listdir(HERE) if f.endswith(".py")}
+    except (OSError, ValueError):   # the caller gave up (or sent nothing usable): show nothing
+        return 0
+    log = req.get("log")
+    if now != born or any(env.get(k) != os.environ.get(k) for k in ("WAYLAND_DISPLAY", "HYPRLAND_INSTANCE_SIGNATURE")) \
+            or (not log and len(fds) != 3):
+        try:
+            conn.sendall(b"stale\n")
+        except OSError:
+            pass
+        return 0
+    if log:
+        try:
+            fds = [os.open(os.devnull, os.O_RDONLY), os.open(log, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)]
+            fds.append(os.dup(fds[1]))
+        except OSError:
+            return 0
+    for i, f in enumerate(fds):
+        os.dup2(f, i)
+        os.close(f)
+    os.environ.clear()
+    os.environ.update(env)
+    os.environ.pop("LD_PRELOAD", None)
+    gtk_env()
+    global DEMO
+    DEMO = os.environ.get("GITS_PANEL_DEMO") == "1"
+    try:
+        os.chdir(cwd)
+    except OSError:
+        os.chdir(HOME)
+    sys.argv = [os.path.abspath(__file__), *req.get("argv", [])]
+    try:
+        conn.sendall(b"pid %d\n" % os.getpid())
+    except OSError:   # the caller gave up waiting and started a cold popup already: do not show a second one
+        return 0
+    if log:
+        conn.close()
+    while GLib.MainContext.default().iteration(False):   # whatever the compositor sent meanwhile (monitors) before we build
+        pass
+    try:
+        rc = main()
+    except Exception:
+        import traceback
+        traceback.print_exc()
+        rc = 1
+    sys.stdout.flush()
+    sys.stderr.flush()
+    if not log:
+        try:
+            conn.sendall(b"rc %d\n" % rc)
+        except OSError:
+            pass
+    os._exit(rc)
+
+
 def main():
     if not LS.is_supported():
         print("gits-panel: no layer-shell support", file=sys.stderr)
         return 1
-    Gtk.init()
-    css = Gtk.CssProvider()
-    css.load_from_path(os.path.join(HERE, "panel.css"))
-    Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), css, Gtk.STYLE_PROVIDER_PRIORITY_USER)
+    setup_display()
     # no monitor given = the compositor opens the popup on the focused one (where the bar was clicked / the key was pressed);
     # GITS_PANEL_MONITOR=<connector> pins every popup to one screen instead
     mons = Gdk.Display.get_default().get_monitors()
@@ -3070,4 +3198,4 @@ def main():
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(spare(sys.argv[2]) if sys.argv[1:2] == ["spare"] else main())

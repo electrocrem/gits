@@ -108,7 +108,7 @@ elif [[ -f $H/.local/state/gits-bar-hidden ]]; then ok "waybar hidden on purpose
 else bad "waybar is not running (systemctl --user status gits-bar)"; fi
 
 if systemctl --user is-active --quiet gits-session.target; then ok "gits-session.target active"; else bad "gits-session.target is not active (gits-session start)"; fi
-for u in bar notifications idle sunset wallpaper polkit clip-text clip-image clip-persist; do
+for u in bar panel notifications idle sunset wallpaper polkit clip-text clip-image clip-persist; do
     systemctl --user is-active --quiet "gits-$u.service" || warn "gits-$u.service is not running ($(systemctl --user show "gits-$u.service" -p Result --value 2>/dev/null))"
 done
 

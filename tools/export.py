@@ -33,7 +33,7 @@ MANIFEST = [
     (".config/waybar/layouts/ghost-in-the-shell.jsonc", None),
     (".config/waybar/styles/ghost-in-the-shell.css", None),
     (".config/waybar/scripts", ["gits-*.sh"]),
-    (".config/gits-widgets", ["widgets.py", "style.css", "run.sh", "panel.py", "panel.css", "osd.py", "spectrum.py", "dancer.py"]),
+    (".config/gits-widgets", ["widgets.py", "style.css", "run.sh", "panel.py", "panel.css", "osd.py", "spectrum.py", "dancer.py", "popupd.py"]),
     (".config/wlogout/layout_1", None),
     (".config/wlogout/style_1.css", None),
     (".config/dunst/dunstrc", None),

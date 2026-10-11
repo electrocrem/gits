@@ -172,6 +172,14 @@ aliases (including links to links) to the `scalable` directories too. `kiconfind
 * **`python3` re-execs itself with LD_PRELOAD (gtk4-layer-shell):** the process command line becomes `/usr/bin/python3 ...`,
   so `pgrep -f '^python3 ...'` never matches. A launcher that trusted it started a new OSD daemon on every volume key press
   (50 of them). Match the script path instead, and prefer `$!` of the first launch.
+* **Warm popups (`gits-panel.service`, popupd.py):** a cold popup spends ~0.2 s on Python, GTK and the display connection, so one
+  `panel.py spare` waits fully loaded and becomes the next popup (its own process, as before). Do NOT fork a loaded panel.py instead:
+  importing GTK starts threads (gdbus, gmain, fontconfig). The spare takes the caller's environment from /proc after GTK started, so
+  `gtk_env()` must run again: GTK picks the renderer when a window is shown, and without `GSK_RENDERER=cairo` every warm popup
+  opened `/dev/nvidia0` (dGPU awake). A spare whose files changed on disk (gits-theme recolours panel.py) answers "stale" and the
+  caller starts cold once. `KillMode=process` keeps open popups alive across a restart; the waiting spare notices popupd's death
+  on its stdin pipe. `gits-menu` runs the client in the background + `wait`: bash defers a trap while a foreground child runs,
+  so `kill gits-menu` left the popup on screen.
 * **`pkill -f pattern` from a tool shell matches the shell's own command line** whenever the pattern text appears in it
   (also in an unrelated sed expression). Use `[x]pattern` and keep the plain text out of the same command.
 * **Super+J = dwindle `togglesplit`, but the master layout answers "Unknown master layoutmsg:

@@ -13,5 +13,12 @@ while (($#)); do
         *) shift ;;
     esac
 done
+# the warm spare of gits-panel.service; in the background so that killing gits-menu reaches the client (it closes the popup):
+# bash would wait for a foreground child before running the trap
+python3 "$HOME/.config/gits-widgets/popupd.py" open menu "$title" "$tag" "$kind" <&0 & client=$!
+trap 'kill "$client" 2>/dev/null' TERM INT HUP
+wait "$client"; rc=$?
+trap - TERM INT HUP
+((rc == 75)) || exit $rc   # 75 = no spare: start cold
 ls_lib=/usr/lib/libgtk4-layer-shell.so; [[ -e $ls_lib ]] && export LD_PRELOAD="$ls_lib${LD_PRELOAD:+ $LD_PRELOAD}"   # spares panel.py its re-exec
 exec python3 "$HOME/.config/gits-widgets/panel.py" menu "$title" "$tag" "$kind"
