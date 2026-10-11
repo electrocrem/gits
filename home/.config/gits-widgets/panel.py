@@ -7,6 +7,7 @@ limit (asusctl, ASUS only). Closes on Escape or when it loses focus. Everything 
 tools the bar modules use, so the bar and the panel never disagree for long.
 """
 import ast
+import hashlib
 import json
 import math
 import operator
@@ -44,14 +45,24 @@ from gi.repository import Gtk4LayerShell as LS  # noqa: E402
 # libraries for nothing, which made each spawned command several times slower
 os.environ.pop("LD_PRELOAD", None)
 
-try:
-    from spectrum import StreamSpectrum   # only the radio popup needs these two (numpy, pactl, parec / Pillow, numpy, cairo)
-except ImportError:
-    StreamSpectrum = None
-try:
-    import dancer
-except ImportError:
-    dancer = None
+StreamSpectrum = dancer = None   # only the radio popup needs these two (numpy, pactl, parec / Pillow, numpy, cairo): radio_libs()
+_radio_libs_tried = False
+
+
+def radio_libs():
+    """Import spectrum.py and dancer.py on first use: numpy alone added ~60 ms to the start of EVERY popup."""
+    global StreamSpectrum, dancer, _radio_libs_tried
+    if _radio_libs_tried:
+        return
+    _radio_libs_tried = True
+    try:
+        from spectrum import StreamSpectrum
+    except ImportError:
+        pass
+    try:
+        import dancer
+    except ImportError:
+        pass
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 HOME = os.path.expanduser("~")
@@ -977,6 +988,7 @@ class RadioPage(ArtMixin, Gtk.Box):
         self.api, self.api_at, self.api_mono = None, -100.0, 0.0
         self.polling = False
         self.fast = None
+        radio_libs()
         n = StreamSpectrum.BANDS if StreamSpectrum else 24
         self.level, self.peak, self.hold = [0.0] * n, [0.0] * n, [0] * n
         self.demo_t = 0.0
@@ -1758,15 +1770,35 @@ def lighter(hexc, k=0.45):
     return "#%02X%02X%02X" % tuple(round(v + (255 - v) * k) for v in c)
 
 
+THUMBS = os.path.join(os.environ.get("XDG_CACHE_HOME", HOME + "/.cache"), "gits-widgets", "thumbs")
+
+
 def thumb(path, w, h):
-    """A picture decoded small and cut to exactly w x h (cover), as a texture; None if it cannot be read."""
+    """A picture decoded small and cut to exactly w x h (cover), as a texture; None if it cannot be read. Cached as a small PNG
+    per file + mtime + size: decoding the full-size wallpapers took ~0.4 s every time the appearance popup opened."""
+    try:
+        st = os.stat(path)
+        key = "%s-%d-%d-%dx%d" % (path, st.st_mtime_ns, st.st_size, w, h)
+        cached = os.path.join(THUMBS, hashlib.sha1(key.encode()).hexdigest() + ".png")
+        if os.path.exists(cached):
+            return Gdk.Texture.new_from_filename(cached)
+    except (OSError, GLib.Error):
+        cached = None
     try:
         pb = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, w * 3, h * 3, True)
         k = max(w / pb.get_width(), h / pb.get_height())
         pb = pb.scale_simple(max(w, round(pb.get_width() * k)), max(h, round(pb.get_height() * k)), GdkPixbuf.InterpType.BILINEAR)
-        return Gdk.Texture.new_for_pixbuf(pb.new_subpixbuf((pb.get_width() - w) // 2, (pb.get_height() - h) // 2, w, h))
+        pb = pb.new_subpixbuf((pb.get_width() - w) // 2, (pb.get_height() - h) // 2, w, h)
     except GLib.Error:
         return None
+    if cached:
+        try:
+            os.makedirs(THUMBS, exist_ok=True)
+            pb.savev(cached + ".tmp", "png", [], [])
+            os.replace(cached + ".tmp", cached)
+        except (OSError, GLib.Error):
+            pass
+    return Gdk.Texture.new_for_pixbuf(pb)
 
 
 class AppearancePopup(Popup):

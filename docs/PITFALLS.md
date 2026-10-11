@@ -53,7 +53,9 @@ sync with `GitS-Cursors`. `kquitapp6 kded6` makes it segfault (harmless, it rest
   `01-default` unless you are gaming (`gits-workflow set 01-default`).
 * **Hyprlock**: never
   stop a live hyprlock (`pkill`/`systemctl stop`): ext-session-lock treats that as a crash and locks you out;
-  recover with `hyprctl --instance 0 eval 'hl.clear_crashed_lockscreen()'`.
+  recover with `hyprctl --instance 0 eval 'hl.clear_crashed_lockscreen()'`. The same happens to a hyprlock started as a plain
+  child of hypridle: it sits in `gits-idle.service`, and restarting that unit (`gits-idle apply` on every plug / unplug) kills it.
+  `lock_cmd` in hypridle.conf therefore starts it with `systemd-run --user --scope`; keep that when you edit the file.
 * dunst: put extra rules in `dunstrc.d/` (drop-ins) instead of editing `dunstrc`.
   rofi ignores `display-columns` in a theme file, hence the wrapper script for the action menu.
 
