@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# gits-lock: start hyprlock (hypridle's lock_cmd, so `loginctl lock-session`, Super+L and the lock timer all come here).
+# On battery the lock screen is the same, only calmer: its animated labels (glitch clock, scanner, mascot, cursor) are refreshed
+# less often, from a copy of hyprlock.conf in $XDG_RUNTIME_DIR. At full speed they start ~30 shells a second and hyprlock redraws
+# each time: about 40% of a CPU core for as long as the machine stays locked.
+#   GITS_LOCK_LITE=auto (default: calm on battery) | always | never
+conf=${GITS_LOCK_CONF:-$HOME/.config/hypr/hyprlock.conf}
+on_battery() {
+    local d
+    for d in /sys/class/power_supply/*; do
+        [[ $(cat "$d/type" 2>/dev/null) == Mains ]] && { [[ $(cat "$d/online" 2>/dev/null) == 0 ]]; return; }
+    done
+    return 1
+}
+case ${GITS_LOCK_LITE:-auto} in
+    always) lite=1 ;;
+    never) lite=0 ;;
+    *) on_battery && lite=1 || lite=0 ;;
+esac
+if ((lite)) && [[ -r $conf ]]; then
+    out=${XDG_RUNTIME_DIR:-/tmp}/gits-lock/hyprlock-battery.conf
+    mkdir -p "${out%/*}"
+    # every cmd[update:N] faster than 0.5 s: 4x slower, the mascot only 2x (it is the one you look at)
+    if awk '{
+        if (match($0, /cmd\[update:[0-9]+\]/)) {
+            n = substr($0, RSTART + 11, RLENGTH - 12) + 0
+            if (n < 500) { n = n * (index($0, "gits-lock-mascot") ? 2 : 4); $0 = substr($0, 1, RSTART - 1) "cmd[update:" n "]" substr($0, RSTART + RLENGTH) }
+        }
+        print
+    }' "$conf" >"$out.tmp" && mv "$out.tmp" "$out"; then
+        conf=$out
+    fi
+fi
+exec hyprlock --config "$conf" "$@"

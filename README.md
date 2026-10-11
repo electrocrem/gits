@@ -139,6 +139,7 @@ need sudo, so the commands to undo them are printed at the end.
 * **Another radio station:** set `GITS_RADIO_STREAM` and `GITS_RADIO_API` (any AzuraCast station). Prefer a calmer Lain? `GITS_RADIO_LAIN_SPEED=0.5`;
   no flash on the beat: `GITS_RADIO_FLASH=0`; her own colours: `GITS_RADIO_LAIN=color`.
 * **A plainer lock screen:** copy `~/.config/hypr/hyprlock/static.conf` over `~/.config/hypr/hyprlock.conf`.
+  On battery the animations already run slower (`gits-lock`, about a third of the CPU); `GITS_LOCK_LITE=always` or `never` overrides that.
 * **Weather card:** `GITS_WEATHER_LOCATION="Berlin"` (it guesses by IP otherwise).
 * **Home server card:** `hl.env("GITS_SERVER", "pi")` in `local.lua` (a Host from `~/.ssh/config`, or `user@host`) shows a Raspberry Pi or any
   Linux box on the desktop: CPU, RAM, temperature, disks, Docker containers and undervoltage. It needs key login and `python3` on the server,

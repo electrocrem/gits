@@ -139,6 +139,7 @@ zsh и Neovim он добавляет несколько чётко помече
 * **Другая радиостанция:** задайте `GITS_RADIO_STREAM` и `GITS_RADIO_API` (любая станция на AzuraCast). Хочется спокойнее Лейн? `GITS_RADIO_LAIN_SPEED=0.5`;
   без вспышек на ударе: `GITS_RADIO_FLASH=0`; свои цвета у неё: `GITS_RADIO_LAIN=color`.
 * **Экран блокировки попроще:** скопируйте `~/.config/hypr/hyprlock/static.conf` поверх `~/.config/hypr/hyprlock.conf`.
+  На батарее анимации и так идут реже (`gits-lock`, примерно треть нагрузки на процессор); `GITS_LOCK_LITE=always` или `never` меняет это.
 * **Погода:** `GITS_WEATHER_LOCATION="Berlin"` (иначе город определяется по IP).
 * **Домашний сервер на рабочем столе:** `hl.env("GITS_SERVER", "pi")` в `local.lua` (Host из `~/.ssh/config` или `user@host`) — карточка
   с процессором, памятью, температурой, дисками, контейнерами Docker и недонапряжением Raspberry Pi. Нужен вход по ключу и `python3` на сервере,
