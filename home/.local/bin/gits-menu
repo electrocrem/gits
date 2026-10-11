@@ -13,4 +13,5 @@ while (($#)); do
         *) shift ;;
     esac
 done
+ls_lib=/usr/lib/libgtk4-layer-shell.so; [[ -e $ls_lib ]] && export LD_PRELOAD="$ls_lib${LD_PRELOAD:+ $LD_PRELOAD}"   # spares panel.py its re-exec
 exec python3 "$HOME/.config/gits-widgets/panel.py" menu "$title" "$tag" "$kind"

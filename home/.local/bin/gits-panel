@@ -26,5 +26,7 @@ case $mode in
     control|media|radio|notify|mixer|note|launch|clip|windows|emoji|keys|appearance|themes|desktop|settings) ((alive)) && [[ $cur == "$mode" ]] && exit 0 ;;   # pressed again = close
     *) echo "usage: gits-panel [control|media|radio|notify|mixer|note|launch|clip|windows|emoji|keys|appearance|themes|desktop|settings|close]" >&2; exit 2 ;;
 esac
+# preloading gtk4-layer-shell here saves panel.py from re-executing itself to get it (a second Python start, ~0.15 s)
+ls_lib=/usr/lib/libgtk4-layer-shell.so; [[ -e $ls_lib ]] && export LD_PRELOAD="$ls_lib${LD_PRELOAD:+ $LD_PRELOAD}"
 python3 "$HOME/.config/gits-widgets/panel.py" "$mode" >"${XDG_RUNTIME_DIR:-/tmp}/gits-panel.log" 2>&1 &
 echo "$! $mode" >"$pidfile"
