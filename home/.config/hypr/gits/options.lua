@@ -9,7 +9,7 @@ hl.config({
     dwindle = { preserve_split = true },
     master = { new_status = "master" },
     misc = {
-        vrr = 0,
+        vrr = 2, -- adaptive sync only for fullscreen windows (games, video): smoother below 120 fps, no flicker on the desktop
         disable_hyprland_logo = true,
         disable_splash_rendering = true,
         force_default_wallpaper = 0,
