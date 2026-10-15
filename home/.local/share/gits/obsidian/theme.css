@@ -1,0 +1,244 @@
+/* Ghost in the Shell for Obsidian: navy + cyan phosphor, square corners, monospace.
+ * Installed by tools/post.py obsidian: every vault gets .obsidian/themes/Ghost in the Shell -> ~/.local/share/gits/obsidian
+ * (a link, so gits-theme recolours this one file for all vaults). Palette = docs/PALETTE.md. Colours are written as hex only:
+ * gits-theme does not understand Obsidian's bare "R, G, B" triples, so callouts are coloured below with color-mix instead.
+ * Light and dark mode look the same: the desktop is dark.
+ */
+body {
+  --font-interface-theme: "JetBrainsMono Nerd Font", "JetBrains Mono", "Noto Sans CJK JP", monospace;
+  --font-text-theme: "JetBrainsMono Nerd Font", "JetBrains Mono", "Noto Sans CJK JP", monospace;
+  --font-monospace-theme: "JetBrainsMono Nerd Font", "JetBrains Mono", monospace;
+  --radius-s: 0px;
+  --radius-m: 0px;
+  --radius-l: 0px;
+  --radius-xl: 0px;
+  --checkbox-radius: 0px;
+  --tag-radius: 0px;
+  --callout-radius: 0px;
+  --modal-radius: 0px;
+  --button-radius: 0px;
+  --input-radius: 0px;
+  --scrollbar-radius: 0px;
+  --line-height-normal: 1.6;
+  --h1-weight: 700;
+  --h2-weight: 700;
+  --h3-weight: 600;
+}
+
+.theme-dark,
+.theme-light {
+  color-scheme: dark;
+
+  /* surfaces */
+  --color-base-00: #060a14;
+  --color-base-05: #080e1c;
+  --color-base-10: #0a1226;
+  --color-base-20: #0c1a33;
+  --color-base-25: #10233f;
+  --color-base-30: #183449;
+  --color-base-35: #254f5d;
+  --color-base-40: #2f5f6e;
+  --color-base-50: #596977;
+  --color-base-60: #7d98a8;
+  --color-base-70: #9fc5d6;
+  --color-base-100: #c8f4ff;
+
+  --background-primary: #060a14;
+  --background-primary-alt: #0a1226;
+  --background-secondary: #0a1226;
+  --background-secondary-alt: #0c1a33;
+  --background-modifier-border: #183449;
+  --background-modifier-border-hover: #254f5d;
+  --background-modifier-border-focus: #2ed3d7;
+  --background-modifier-hover: #0c1a33;
+  --background-modifier-active-hover: #10233f;
+  --background-modifier-form-field: #0a1226;
+  --background-modifier-error: #e5432b;
+  --background-modifier-error-hover: #ff7a5c;
+  --background-modifier-success: #34d399;
+  --background-modifier-message: #0c1a33;
+  --titlebar-background: #060a14;
+  --titlebar-background-focused: #0a1226;
+  --tab-container-background: #060a14;
+  --ribbon-background: #060a14;
+  --ribbon-background-collapsed: #060a14;
+
+  /* text */
+  --text-normal: #c8f4ff;
+  --text-muted: #9fc5d6;
+  --text-faint: #596977;
+  --text-error: #ff7a5c;
+  --text-success: #34d399;
+  --text-warning: #e8c547;
+  --text-accent: #2ed3d7;
+  --text-accent-hover: #5ef1f5;
+  --text-on-accent: #060a14;
+  --text-on-accent-inverted: #060a14;
+  --text-selection: #0b3a45;
+  --text-highlight-bg: #3b74d0;
+  --caret-color: #e5432b;
+
+  /* accent */
+  --color-accent: #2ed3d7;
+  --color-accent-1: #5ef1f5;
+  --color-accent-2: #398ff0;
+  --interactive-normal: #0c1a33;
+  --interactive-hover: #10233f;
+  --interactive-accent: #2ed3d7;
+  --interactive-accent-hover: #5ef1f5;
+
+  --color-red: #e5432b;
+  --color-orange: #ff7a5c;
+  --color-yellow: #e8c547;
+  --color-green: #34d399;
+  --color-cyan: #2ed3d7;
+  --color-blue: #398ff0;
+  --color-purple: #7c6ce0;
+  --color-pink: #ff7a5c;
+
+  /* writing */
+  --h1-color: #5ef1f5;
+  --h2-color: #2ed3d7;
+  --h3-color: #398ff0;
+  --h4-color: #9fc5d6;
+  --h5-color: #9fc5d6;
+  --h6-color: #596977;
+  --link-color: #2ed3d7;
+  --link-color-hover: #5ef1f5;
+  --link-unresolved-color: #e5432b;
+  --link-unresolved-opacity: 0.8;
+  --link-external-color: #398ff0;
+  --link-external-color-hover: #5ef1f5;
+  --tag-color: #2ed3d7;
+  --tag-color-hover: #5ef1f5;
+  --tag-background: #0b2a35;
+  --tag-background-hover: #0b3a45;
+  --tag-border-color: #254f5d;
+  --tag-border-width: 1px;
+  --code-background: #0a1226;
+  --code-normal: #c8f4ff;
+  --code-comment: #596977;
+  --code-function: #5ef1f5;
+  --code-important: #ff7a5c;
+  --code-keyword: #e5432b;
+  --code-operator: #9fc5d6;
+  --code-property: #398ff0;
+  --code-punctuation: #9fc5d6;
+  --code-string: #34d399;
+  --code-tag: #2ed3d7;
+  --code-value: #e8c547;
+  --blockquote-border-color: #2ed3d7;
+  --blockquote-color: #9fc5d6;
+  --hr-color: #254f5d;
+  --checkbox-color: #2ed3d7;
+  --checkbox-color-hover: #5ef1f5;
+  --checkbox-border-color: #254f5d;
+  --checkbox-marker-color: #060a14;
+  --checklist-done-color: #596977;
+  --list-marker-color: #2ed3d7;
+  --table-border-color: #183449;
+  --table-header-background: #0c1a33;
+  --table-header-color: #2ed3d7;
+  --table-row-alt-background: #080e1c;
+  --embed-border-left: 2px solid #2ed3d7;
+
+  /* chrome */
+  --nav-item-color-active: #5ef1f5;
+  --nav-item-background-active: #0c1a33;
+  --nav-item-color-selected: #c8f4ff;
+  --nav-item-background-selected: #0b2a35;
+  --icon-color: #9fc5d6;
+  --icon-color-hover: #5ef1f5;
+  --icon-color-active: #2ed3d7;
+  --icon-color-focused: #5ef1f5;
+  --scrollbar-bg: transparent;
+  --scrollbar-thumb-bg: #183449;
+  --scrollbar-active-thumb-bg: #2ed3d7;
+  --divider-color: #183449;
+  --divider-color-hover: #2ed3d7;
+  --status-bar-background: #060a14;
+  --status-bar-text-color: #596977;
+  --prompt-border-color: #2ed3d7;
+  --modal-border-color: #2ed3d7;
+
+  /* graph view */
+  --graph-node: #2ed3d7;
+  --graph-node-focused: #5ef1f5;
+  --graph-node-unresolved: #e5432b;
+  --graph-node-tag: #7c6ce0;
+  --graph-node-attachment: #e8c547;
+  --graph-line: #254f5d;
+  --graph-text: #9fc5d6;
+}
+
+/* ---- headings: phosphor glow, the H1 underlined by a cyan -> blue rule */
+.markdown-rendered h1,
+.HyperMD-header-1 {
+  text-shadow: 0 0 8px #2ed3d766;
+  letter-spacing: 0.04em;
+}
+.markdown-rendered h1 {
+  border-bottom: 1px solid transparent;
+  border-image: linear-gradient(90deg, #2ed3d7, #398ff0 60%, transparent) 1;
+  padding-bottom: 0.2em;
+}
+.markdown-rendered h2::before { content: "// "; color: #254f5d; }
+
+/* ---- the active tab and the focused pane get the accent edge */
+.workspace-tab-header.is-active {
+  box-shadow: inset 0 2px 0 #2ed3d7;
+}
+.workspace-tab-header.is-active .workspace-tab-header-inner-title { color: #5ef1f5; }
+.workspace-leaf.mod-active .view-header { border-bottom: 1px solid #254f5d; }
+
+/* ---- links: underline only on hover, like the rest of the desktop */
+.markdown-rendered a,
+.cm-s-obsidian span.cm-hmd-internal-link,
+.cm-s-obsidian span.cm-link { text-decoration: none; }
+.markdown-rendered a:hover { text-shadow: 0 0 6px #2ed3d766; text-decoration: underline; }
+
+/* ---- inline code and code blocks: framed, not filled bubbles */
+.markdown-rendered code,
+.cm-s-obsidian span.cm-inline-code { border: 1px solid #183449; }
+.markdown-rendered pre { border: 1px solid #183449; border-left: 2px solid #2ed3d7; }
+
+/* ---- selection */
+::selection { background: #0b3a45; color: #c8f4ff; }
+
+/* ---- callouts: per-type colour, mixed from hex so gits-theme can recolour it */
+.callout { --gits-callout: #2ed3d7; }
+.callout[data-callout="note"], .callout[data-callout="info"], .callout[data-callout="todo"] { --gits-callout: #398ff0; }
+.callout[data-callout="abstract"], .callout[data-callout="summary"], .callout[data-callout="tldr"],
+.callout[data-callout="tip"], .callout[data-callout="hint"], .callout[data-callout="important"] { --gits-callout: #2ed3d7; }
+.callout[data-callout="success"], .callout[data-callout="check"], .callout[data-callout="done"] { --gits-callout: #34d399; }
+.callout[data-callout="question"], .callout[data-callout="help"], .callout[data-callout="faq"],
+.callout[data-callout="warning"], .callout[data-callout="caution"], .callout[data-callout="attention"] { --gits-callout: #e8c547; }
+.callout[data-callout="failure"], .callout[data-callout="fail"], .callout[data-callout="missing"],
+.callout[data-callout="danger"], .callout[data-callout="error"], .callout[data-callout="bug"] { --gits-callout: #e5432b; }
+.callout[data-callout="example"] { --gits-callout: #7c6ce0; }
+.callout[data-callout="quote"], .callout[data-callout="cite"] { --gits-callout: #9fc5d6; }
+.callout {
+  background-color: color-mix(in srgb, var(--gits-callout) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--gits-callout) 35%, transparent);
+  border-left: 2px solid var(--gits-callout);
+}
+.callout-title,
+.callout-icon { color: var(--gits-callout); }
+
+/* ---- highlights (==text==): a marker stroke instead of a yellow block */
+.markdown-rendered mark,
+.cm-s-obsidian span.cm-highlight {
+  background: color-mix(in srgb, #3b74d0 35%, transparent);
+  color: #c8f4ff;
+}
+
+/* ---- buttons */
+button.mod-cta {
+  background: #2ed3d7;
+  color: #060a14;
+}
+button.mod-cta:hover { background: #5ef1f5; }
+.modal, .prompt, .menu, .suggestion-container {
+  border: 1px solid #2ed3d7;
+  box-shadow: 0 0 24px #2ed3d733;
+}

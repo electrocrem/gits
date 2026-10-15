@@ -4,6 +4,7 @@
     post.py kded                  stop kded6 from recreating the GTK settings that hang GTK4 apps
     post.py kdeglobals            recolour KDE/Qt accents (Breeze blue -> cyan) and greys -> navy, pin the GitS icon theme
     post.py logseq  <gits.css>    make Logseq load the GitS stylesheet (theme plugin route)
+    post.py obsidian <theme-dir>  link the GitS theme into every Obsidian vault and pick it (obsidian-revert undoes it)
     post.py vscode  <ext-dir>     register the theme extension for Code - OSS
     post.py zen     <zen-dir>     install userChrome/userContent/user.js into the default Zen profile
     post.py spotify               point Spicetify at Spotify and apply the GitS theme (~/.config/spicetify/Themes/GitS)
@@ -209,6 +210,68 @@ def logseq(css):
     print("logseq: GitS stylesheet installed over the Nord plugin (originals in ~/.logseq/plugins-backup)")
 
 
+OBSIDIAN_THEME = "Ghost in the Shell"
+
+
+def obsidian_vaults():
+    """Vault folders from the native and the Flatpak Obsidian's vault list."""
+    seen = []
+    for conf in (".config/obsidian/obsidian.json", ".var/app/md.obsidian.Obsidian/config/obsidian/obsidian.json"):
+        try:
+            vaults = json.load(open(os.path.join(HOME, conf))).get("vaults", {})
+        except (OSError, ValueError):
+            continue
+        for v in vaults.values():
+            p = v.get("path")
+            if p and os.path.isdir(p) and p not in seen:
+                seen.append(p)
+    return seen
+
+
+def obsidian(src):
+    # each vault: .obsidian/themes/<name>/ with a copy of manifest.json and theme.css as a link to src, so gits-theme recolours one file
+    # (listed in themes/files) for every vault; then appearance.json picks it (dark base)
+    vaults = obsidian_vaults()
+    if not vaults:
+        print("obsidian: no vaults yet (open Obsidian once and create one), skipped")
+        return
+    for vault in vaults:
+        tdir = os.path.join(vault, ".obsidian", "themes", OBSIDIAN_THEME)
+        os.makedirs(tdir, exist_ok=True)
+        shutil.copyfile(os.path.join(src, "manifest.json"), os.path.join(tdir, "manifest.json"))
+        css = os.path.join(tdir, "theme.css")
+        if os.path.lexists(css):
+            os.remove(css)
+        os.symlink(os.path.join(src, "theme.css"), css)
+        ap = os.path.join(vault, ".obsidian", "appearance.json")
+        if os.path.exists(ap):
+            backup(ap)
+        else:
+            create(ap)
+        try:
+            data = json.load(open(ap)) if os.path.getsize(ap) else {}
+        except ValueError:
+            data = {}
+        data.update(cssTheme=OBSIDIAN_THEME, theme="obsidian")
+        json.dump(data, open(ap, "w"), indent=2)
+        print(f"obsidian: {OBSIDIAN_THEME} on in {vault} (reopen the vault if Obsidian is running)")
+
+
+def obsidian_revert():
+    for vault in obsidian_vaults():
+        tdir = os.path.join(vault, ".obsidian", "themes", OBSIDIAN_THEME)
+        ap = os.path.join(vault, ".obsidian", "appearance.json")
+        if os.path.isdir(tdir):
+            shutil.rmtree(tdir)
+            print(f"delete   {tdir}")
+        if os.path.exists(ap + ".gits-created"):
+            os.remove(ap)
+            os.remove(ap + ".gits-created")
+        elif os.path.exists(ap + ".bak-pre-gits"):
+            os.replace(ap + ".bak-pre-gits", ap)
+            print(f"restore  {ap}")
+
+
 def vscode(extdir):
     root = os.path.join(HOME, ".vscode-oss/extensions")
     reg = os.path.join(root, "extensions.json")
@@ -342,4 +405,5 @@ def flatpak():
 
 cmd = sys.argv[1] if len(sys.argv) > 1 else ""
 {"kded": kded, "kdeglobals": kdeglobals, "logseq": lambda: logseq(sys.argv[2]), "vscode": lambda: vscode(sys.argv[2]),
- "zen": lambda: zen(sys.argv[2]), "spotify": spotify, "vesktop": vesktop, "flatpak": flatpak, "kde-apps": kde_apps, "steam": steam}.get(cmd, lambda: sys.exit(__doc__))()
+ "zen": lambda: zen(sys.argv[2]), "spotify": spotify, "vesktop": vesktop, "flatpak": flatpak, "kde-apps": kde_apps, "steam": steam,
+ "obsidian": lambda: obsidian(sys.argv[2]), "obsidian-revert": obsidian_revert}.get(cmd, lambda: sys.exit(__doc__))()

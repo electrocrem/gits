@@ -44,6 +44,7 @@
 .local/bin/gits-sessions
 .local/bin/gits-shot
 .local/share/color-schemes/GitS.colors
+.local/share/gits/obsidian/theme.css
 .vscode-oss/extensions/gits.ghost-in-the-shell-1.0.0/themes/ghost-in-the-shell-color-theme.json
 .config/gits-widgets/dancer.py
 

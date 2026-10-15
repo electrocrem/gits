@@ -54,7 +54,7 @@ sort -u "$LIST" | sed 's/^new://' | sort -u | while IFS= read -r entry; do
     fi
 done
 
-# edits made by tools/post.py (kdeglobals, Logseq, VS Code, Zen, Vesktop, Flatpak): each left a .bak-pre-gits / plugins-backup copy
+# edits made by tools/post.py (kdeglobals, Logseq, Obsidian, VS Code, Zen, Vesktop, Flatpak): each left a .bak-pre-gits / plugins-backup copy
 restore_bak() { [[ -f $1.bak-pre-gits ]] && { echo "restore  $1"; run mv "$1.bak-pre-gits" "$1"; } || true; }
 restore_bak "$HOME/.config/kdeglobals"
 restore_bak "$HOME/.vscode-oss/extensions/extensions.json"
@@ -84,6 +84,8 @@ fi
 for d in "$HOME"/.var/app/app.zen_browser.zen/.zen/*/; do
     for f in chrome/userChrome.css chrome/userContent.css user.js; do restore_bak "$d$f"; done
 done
+# Obsidian: the theme folder in every vault and its appearance.json (post.py obsidian)
+((DRY)) && echo "   (dry) post.py obsidian-revert" || python3 "$(dirname "$(readlink -f "$0")")/tools/post.py" obsidian-revert
 if [[ -d $HOME/.logseq/plugins-backup/nord-theme ]]; then
     echo "restore  Logseq Nord plugin"
     for f in custom.css package.json; do
@@ -137,6 +139,6 @@ Not touched (edited outside your \$HOME, needs sudo):
   Boot:     sudo ~/.local/share/gits-boot/install.sh --revert     (run BEFORE removing that folder)
   Battery:  sudo ~/.local/share/gits-power/setup.sh --revert      (run BEFORE removing that folder)
   GRUB:     sudo cp /etc/default/grub.bak-pre-savedefault /etc/default/grub && sudo grub-mkconfig -o /boot/grub/grub.cfg
-Logseq, Zen, VS Code and kdeglobals were restored from their .bak-pre-gits / plugins-backup copies (log out and in for Qt colours).
+Logseq, Obsidian, Zen, VS Code and kdeglobals were restored from their .bak-pre-gits / plugins-backup copies (log out and in for Qt colours).
 Log out and in. (The session units gits-*.service are removed; whatever was in place before is back.)
 TXT

@@ -1,7 +1,7 @@
 # Palette
 
 One palette for the whole desktop: CRT cyan on navy-black, a red accent for "the eye" and for alerts.
-Every config that draws colours (kitty, waybar, popups, hyprland, hyprlock, dunst, GTK, Qt, nvim, tmux, yazi, btop, satty, Zen, Logseq)
+Every config that draws colours (kitty, waybar, popups, hyprland, hyprlock, dunst, GTK, Qt, nvim, tmux, yazi, btop, satty, Zen, Logseq, Obsidian)
 uses these values; the master copy is `home/.config/kitty/theme.conf`.
 
 | role | hex |

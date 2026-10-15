@@ -237,12 +237,13 @@ fi
 # ------------------------------------------------------------------ apps
 say "apps"
 if ((DRY)); then
-    echo "   (dry) post.py kded / kdeglobals / logseq / vscode / zen / spotify / vesktop / flatpak / kde-apps / steam"
+    echo "   (dry) post.py kded / kdeglobals / logseq / obsidian / vscode / zen / spotify / vesktop / flatpak / kde-apps / steam"
 else
     python3 "$REPO/tools/post.py" kded
     python3 "$REPO/tools/post.py" kdeglobals
     python3 "$REPO/tools/post.py" kde-apps
     python3 "$REPO/tools/post.py" logseq "$REPO/logseq/gits.css"
+    python3 "$REPO/tools/post.py" obsidian "$HOME/.local/share/gits/obsidian"
     python3 "$REPO/tools/post.py" vscode "$HOME/.vscode-oss/extensions/gits.ghost-in-the-shell-1.0.0"
     python3 "$REPO/tools/post.py" zen "$REPO/zen"
     python3 "$REPO/tools/post.py" spotify
