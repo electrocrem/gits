@@ -233,7 +233,7 @@ Rectangle {
             width: 330
             wrapMode: Text.WordWrap
             visible: root.info !== ""
-            color: root.info.indexOf("Вставьте") >= 0 ? root.red : root.cyan
+            color: root.info.indexOf("Insert") >= 0 ? root.red : root.cyan
             font.family: root.mono
             font.pixelSize: 15
             text: "󰌆  " + root.info

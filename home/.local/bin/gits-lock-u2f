@@ -10,6 +10,6 @@ age=$(( $(date +%s) - ${since:-0} ))
 # blink: bright for half a second, dim for the other half
 if [ $(( $(date +%s%N) / 500000000 % 2 )) -eq 0 ]; then c="#5ef1f5"; else c="#2ed3d7"; fi
 case $kind in
-    touch) printf '<span foreground="%s">󰌆  TOUCH THE KEY</span>  <span foreground="#596977">// коснитесь YubiKey, затем пароль</span>\n' "$c" ;;
-    insert) printf '<span foreground="#e5432b">󰌆  INSERT THE KEY</span>  <span foreground="#596977">// вставьте YubiKey и нажмите Enter</span>\n' ;;
+    touch) printf '<span foreground="%s">󰌆  TOUCH THE KEY</span>  <span foreground="#596977">// the key is blinking</span>\n' "$c" ;;
+    insert) printf '<span foreground="#e5432b">󰌆  INSERT THE KEY</span>  <span foreground="#596977">// plug in the YubiKey, then Enter</span>\n' ;;
 esac

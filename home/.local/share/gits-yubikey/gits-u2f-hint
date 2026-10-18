@@ -25,16 +25,16 @@ fi
 [ "$me" = 0 ] || exit 0
 case ${PAM_SERVICE:-} in
     sddm*)
-        [ "$action" = begin ] && ! key_present && echo "◈ Вставьте YubiKey и войдите снова (или yubikey-mode off)"
+        [ "$action" = begin ] && ! key_present && echo "◈ Insert your YubiKey and log in again (or: yubikey-mode off)"
         exit 0 ;;
 esac
 idf=/run/gits-u2f-$uid.id
 case $action in
     begin)
         key_present || exit 0   # no key: sudo / polkit simply ask for the password
-        what=$PAM_SERVICE; [ "$what" = polkit-1 ] && what="запрос прав"
+        what=$PAM_SERVICE; [ "$what" = polkit-1 ] && what="authorization"
         id=$(as_user notify-send -p -a "GitS Notify" -u critical -t 30000 -i security-high \
-            "󰌆  YubiKey" "Коснитесь ключа ($what)" 2>/dev/null) && echo "$id" >"$idf"
+            "󰌆  YubiKey" "Touch the key ($what)" 2>/dev/null) && echo "$id" >"$idf"
         ;;
     end)
         [ -s "$idf" ] || exit 0

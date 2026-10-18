@@ -16,7 +16,7 @@ SRC=$(dirname "$(readlink -f "$0")")
 USR=${SUDO_USER:-}
 LOCK=(/etc/pam.d/sddm /etc/pam.d/hyprlock)
 ELEVATE=(/etc/pam.d/sudo /etc/pam.d/polkit-1)
-CUE='[cue_prompt=◈ Коснитесь YubiKey]'
+CUE='[cue_prompt=◈ Touch your YubiKey]'
 
 strip() {   # drop our lines and any other pam_u2f line (an older hand-made setup)
     sed -i -E '/# gits-yubikey$/d; /yubikey-mode-check|gits-u2f-hint/d; /^[[:space:]]*auth[[:space:]].*pam_u2f\.so/d' "$1"
