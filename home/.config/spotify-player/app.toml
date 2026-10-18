@@ -1,0 +1,38 @@
+# spotify_player (https://github.com/aome510/spotify_player): the terminal Spotify client, in the GitS look.
+# First run: `spotify_player authenticate` (browser login), then `spotify_player`. Playback on this machine needs Spotify Premium;
+# without it the TUI still drives the Spotify app or a phone (press D for devices).
+theme = "gits"
+
+border_type = "Rounded"
+progress_bar_type = "Line"
+play_icon = "▶"
+pause_icon = "⏸"
+liked_icon = "♥"
+
+# the cover beside the playback bar, drawn with kitty graphics
+cover_img_length = 9
+cover_img_width = 5
+cover_img_scale = 1.0
+enable_cover_image_cache = true
+
+seek_duration_secs = 10
+enable_mouse_scroll_volume = true
+enable_media_control = true      # MPRIS: the bar, the media keys and gits-media see it
+enable_notify = true             # a dunst card on a track change
+notify_streaming_only = true     # ...but only while it plays here, not while it remote-controls the Spotify app
+notify_format = { summary = "{track} • {artists}", body = "{album}" }
+notify_timeout_in_secs = 4
+
+[layout]
+playback_window_position = "Top"
+playback_window_height = 6
+library = { playlist_percent = 40, album_percent = 40 }
+
+[device]
+name = "gits"
+device_type = "computer"
+volume = 70
+bitrate = 320
+audio_cache = false
+normalization = true
+autoplay = true

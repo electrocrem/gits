@@ -1,0 +1,44 @@
+# GitS theme for spotify_player (gits-theme recolours it for the other themes; the colours are GitS palette roles, docs/PALETTE.md)
+[[themes]]
+name = "gits"
+
+[themes.palette]
+background = "#060A14"
+foreground = "#C8F4FF"
+black = "#0A1226"
+red = "#E5432B"
+green = "#34D399"
+yellow = "#E8C547"
+blue = "#3B74D0"
+magenta = "#7C6CE0"
+cyan = "#2ED3D7"
+white = "#C8F4FF"
+bright_black = "#596977"
+bright_red = "#FF7A5C"
+bright_green = "#6EE7B7"
+bright_yellow = "#F5DC7E"
+bright_blue = "#459BF1"
+bright_magenta = "#A99CF5"
+bright_cyan = "#5EF1F5"
+bright_white = "#DDF9FF"
+
+[themes.component_style]
+block_title = { fg = "#2ED3D7", modifiers = ["Bold"] }
+border = { fg = "#254F5D" }
+playback_status = { fg = "#2ED3D7", modifiers = ["Bold"] }
+playback_track = { fg = "#DDF9FF", modifiers = ["Bold"] }
+playback_artists = { fg = "#5EF1F5" }
+playback_album = { fg = "#398FF0", modifiers = ["Italic"] }
+playback_genres = { fg = "#9FC5D6", modifiers = ["Italic"] }
+playback_metadata = { fg = "#596977" }
+playback_progress_bar = { fg = "#2ED3D7", bg = "#0C1A33" }
+playback_progress_bar_unfilled = { fg = "#254F5D" }
+current_playing = { fg = "#5EF1F5", modifiers = ["Bold"] }
+page_desc = { fg = "#2ED3D7", modifiers = ["Bold"] }
+playlist_desc = { fg = "#596977" }
+table_header = { fg = "#398FF0", modifiers = ["Bold"] }
+selection = { fg = "#DDF9FF", bg = "#0C1A33", modifiers = ["Bold"] }
+secondary_row = { bg = "#0A1226" }
+like = { fg = "#E5432B" }
+lyrics_played = { fg = "#596977" }
+lyrics_playing = { fg = "#5EF1F5", modifiers = ["Bold"] }
