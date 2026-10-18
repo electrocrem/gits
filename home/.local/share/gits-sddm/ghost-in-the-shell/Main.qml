@@ -15,6 +15,15 @@ Rectangle {
     readonly property string cjk: "Noto Sans CJK JP"
 
     property bool denied: false
+    // lastUser can come back empty (it did after the Qt 6.12 update), so fall back to the
+    // first real user and never send an empty name to PAM.
+    property string firstUser: ""
+    readonly property string defaultUser: userModel.lastUser || firstUser
+
+    Repeater {
+        model: userModel
+        Item { Component.onCompleted: if (index === 0) root.firstUser = model.name }
+    }
 
     Image {
         anchors.fill: parent
@@ -119,7 +128,7 @@ Rectangle {
             id: userField
             x: 92; y: prompt.y + 44
             width: 330; height: 46
-            text: userModel.lastUser
+            text: root.defaultUser
             placeholderText: "▮ USERNAME"
             color: root.cyan
             placeholderTextColor: root.cyanDim
@@ -157,7 +166,7 @@ Rectangle {
                 border.color: root.denied ? root.red : (passField.activeFocus ? root.cyan : root.cyanDim)
             }
             KeyNavigation.backtab: userField
-            onAccepted: sddm.login(userField.text, passField.text, sessionBox.currentIndex)
+            onAccepted: sddm.login(userField.text.trim() || root.defaultUser, passField.text, sessionBox.currentIndex)
             Keys.onPressed: function(event) { root.denied = false }
         }
 
