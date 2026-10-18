@@ -3,7 +3,10 @@
 # On battery the lock screen is the same, only calmer: its animated labels (glitch clock, scanner, mascot, cursor) are refreshed
 # less often, from a copy of hyprlock.conf in $XDG_RUNTIME_DIR. At full speed they start ~30 shells a second and hyprlock redraws
 # each time: about 40% of a CPU core for as long as the machine stays locked.
+# Without a YubiKey set up (~/.local/share/gits-yubikey/setup.sh not run) the copy also leaves out the "touch the key" label,
+# so nothing polls for it.
 #   GITS_LOCK_LITE=auto (default: calm on battery) | always | never
+#   gits-lock --print-config   print the config file it would use and stop (for tests; does not lock)
 conf=${GITS_LOCK_CONF:-$HOME/.config/hypr/hyprlock.conf}
 on_battery() {
     local d
@@ -17,18 +20,29 @@ case ${GITS_LOCK_LITE:-auto} in
     never) lite=0 ;;
     *) on_battery && lite=1 || lite=0 ;;
 esac
-if ((lite)) && [[ -r $conf ]]; then
-    out=${XDG_RUNTIME_DIR:-/tmp}/gits-lock/hyprlock-battery.conf
+u2f=0; [[ -x /usr/local/bin/gits-u2f-hint ]] && u2f=1
+if ((lite || !u2f)) && [[ -r $conf ]]; then
+    out=${XDG_RUNTIME_DIR:-/tmp}/gits-lock/hyprlock-$( ((lite)) && echo battery || echo ac)$( ((u2f)) || echo -nokey).conf
     mkdir -p "${out%/*}"
-    # every cmd[update:N] faster than 0.5 s: 4x slower, the mascot only 2x (it is the one you look at)
-    if awk '{
-        if (match($0, /cmd\[update:[0-9]+\]/)) {
-            n = substr($0, RSTART + 11, RLENGTH - 12) + 0
-            if (n < 500) { n = n * (index($0, "gits-lock-mascot") ? 2 : 4); $0 = substr($0, 1, RSTART - 1) "cmd[update:" n "]" substr($0, RSTART + RLENGTH) }
+    # lite: every cmd[update:N] faster than 0.5 s 4x slower, the mascot only 2x (it is the one you look at)
+    # no key: drop the label block that runs gits-lock-u2f
+    if awk -v lite="$lite" -v u2f="$u2f" '
+        function slow(s,   n) {
+            if (lite && match(s, /cmd\[update:[0-9]+\]/)) {
+                n = substr(s, RSTART + 11, RLENGTH - 12) + 0
+                if (n < 500) { n = n * (index(s, "gits-lock-mascot") ? 2 : 4); s = substr(s, 1, RSTART - 1) "cmd[update:" n "]" substr(s, RSTART + RLENGTH) }
+            }
+            return s
         }
-        print
-    }' "$conf" >"$out.tmp" && mv "$out.tmp" "$out"; then
+        inblock { buf = buf "\n" slow($0); if ($0 ~ /gits-lock-u2f/) drop = 1
+                  if ($0 ~ /^[[:space:]]*}[[:space:]]*$/) { if (!(drop && !u2f)) print buf; inblock = 0 }
+                  next }
+        /^[[:space:]]*label[[:space:]]*\{/ { inblock = 1; drop = 0; buf = $0; next }
+        { print slow($0) }
+        END { if (inblock) print buf }
+    ' "$conf" >"$out.tmp" && mv "$out.tmp" "$out"; then
         conf=$out
     fi
 fi
+[[ ${1:-} == --print-config ]] && { echo "$conf"; exit 0; }
 exec hyprlock --config "$conf" "$@"
