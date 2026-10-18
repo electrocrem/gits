@@ -47,7 +47,7 @@ gi.require_version("Gdk", "4.0")
 gi.require_version("Gtk4LayerShell", "1.0")
 gi.require_version("GdkPixbuf", "2.0")
 gi.require_version("Gio", "2.0")
-from gi.repository import Gdk, GdkPixbuf, Gio, GLib, GLibUnix, Gtk, Pango  # noqa: E402
+from gi.repository import Gdk, GdkPixbuf, Gio, GLib, GLibUnix, GObject, Gtk, Pango  # noqa: E402
 from gi.repository import Gtk4LayerShell as LS  # noqa: E402
 # gtk4-layer-shell only has to be preloaded into THIS process: every child (bash, git, nmcli, hyprctl...) inherited it and loaded GTK's
 # libraries for nothing, which made each spawned command several times slower
@@ -2136,27 +2136,39 @@ class AppearancePopup(Popup):
 
 class DesktopPopup(Popup):
     """Desktop (gits-panel desktop, Super+I -> Desktop): which cards the desktop widgets show on the main monitor and which modules
-    the bar shows. APPLY writes ~/.config/gits/widgets.conf (read by gits-widgets/widgets.py) and the bar's choice (gits-bar), then
-    restarts the widgets and the bar. Cards that do not fit the screen's height move to the next column by themselves."""
+    the bar shows, and in which order. A click turns a tile on / off; drag a tile onto another one to move it there (Alt+arrows on a
+    focused tile do the same). Cards stay on their side of the screen and bar modules in their part of the bar. APPLY writes
+    ~/.config/gits/widgets.conf (read by gits-widgets/widgets.py: line order, `order = custom` when it is not the default) and the
+    bar's choice (gits-bar set ... --order), then restarts the widgets and the bar. Cards fill a side's columns top-down in the
+    order shown; one that does not fit the screen's height goes to the next column."""
     CARD_W = 760
-    # the ids of gits-widgets/widgets.py (App.start's plan) and their defaults there; keep the two lists in step
-    WIDGETS = (("clock", "clock"), ("calendar", "calendar"), ("spectrum", "audio spectrum"), ("log", "system log"),
-               ("media", "player"), ("weather", "weather"), ("net", "network"), ("notes", "memo + focus timer"),
-               ("battery", "battery"), ("rings", "cpu / ram / ssd rings"), ("graph", "cpu / ram graph"), ("todo", "to-do"),
-               ("updates", "updates + uptime"), ("bluetooth", "bluetooth devices"), ("gpu", "gpu"), ("disks", "disks"),
-               ("top", "busiest processes"), ("server", "home server *"), ("services", "server services *"),
-               ("torrents", "torrents *"), ("watching", "now watching *"))
+    # the ids of gits-widgets/widgets.py (App.start's plan), its side (L / R) and the default order: keep the two lists in step
+    WIDGETS = (("clock", "clock", "L"), ("calendar", "calendar", "L"), ("spectrum", "audio spectrum", "L"), ("log", "system log", "L"),
+               ("media", "player", "L"), ("weather", "weather", "L"), ("net", "network", "L"), ("server", "home server *", "L"),
+               ("services", "server services *", "L"), ("notes", "memo + focus timer", "L"),
+               ("battery", "battery", "R"), ("rings", "cpu / ram / ssd rings", "R"), ("graph", "cpu / ram graph", "R"),
+               ("todo", "to-do", "R"), ("torrents", "torrents *", "R"), ("watching", "now watching *", "R"),
+               ("updates", "updates + uptime", "R"), ("bluetooth", "bluetooth devices", "R"), ("gpu", "gpu", "R"),
+               ("disks", "disks", "R"), ("top", "busiest processes", "R"))
     WIDGETS_OFF = {"gpu", "disks", "top"}
     CONF = os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.join(HOME, ".config")), "gits", "widgets.conf")
+    GROUPS = (("w:L", "LEFT SIDE"), ("w:R", "RIGHT SIDE"), ("b:left", "BAR · LEFT"), ("b:center", "BAR · CENTRE"), ("b:right", "BAR · RIGHT"))
 
     def __init__(self, monitor):
         super().__init__(monitor, center=True)
-        self.w_on = self._read_widgets()
+        self.names = {i: n for i, n, _ in self.WIDGETS}
+        self.w_on, w_order = self._read_widgets()
         try:
             self.bar = json.loads(sh(["gits-bar", "list"], real=True) or "[]")
         except ValueError:
             self.bar = []
         self.b_on = {m["id"]: m["on"] for m in self.bar}
+        self.fixed = {m["id"] for m in self.bar if m.get("fixed")}
+        self.names.update({m["id"]: m["name"] for m in self.bar})
+        self.order = {"w:L": [i for i in w_order if self._side(i) == "L"], "w:R": [i for i in w_order if self._side(i) == "R"]}
+        for side in ("left", "center", "right"):
+            self.order["b:" + side] = [m["id"] for m in self.bar if m["side"] == side and not m.get("fixed")]
+        self.boxes, self.tiles = {}, {}
         root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         root.add_css_class("panel")
         head = Gtk.Box(spacing=6)
@@ -2164,14 +2176,12 @@ class DesktopPopup(Popup):
         sp = Gtk.Box()
         sp.set_hexpand(True)
         head.append(sp)
-        head.append(label("// 画面", "m-tag"))
+        head.append(label("click: on / off · drag: move · Alt+arrows · // 画面", "m-tag"))
         root.append(head)
-        root.append(label("WIDGETS  ·  on the main monitor; * only with a home server (GITS_SERVER)", "ap-sec"))
-        self.w_btns = {}
-        root.append(self._grid([(i, n) for i, n in self.WIDGETS], self.w_btns, self.w_on, self._flip_w))
-        root.append(label("BAR  ·  the power button always stays", "ap-sec"))
-        self.b_btns = {}
-        root.append(self._grid([(m["id"], m["name"]) for m in self.bar if not m.get("fixed")], self.b_btns, self.b_on, self._flip_b))
+        root.append(label("WIDGETS  ·  each side fills its columns top-down in this order; * only with a home server (GITS_SERVER)", "ap-sec"))
+        root.append(self._row(("w:L", "w:R"), per_line=2))
+        root.append(label("BAR  ·  modules move within their part of the bar; the power button always stays", "ap-sec"))
+        root.append(self._row(("b:left", "b:center", "b:right"), per_line=2))
         foot = Gtk.Box(spacing=8)
         self.status = label("", "th-status")
         self.status.set_hexpand(True)
@@ -2187,71 +2197,164 @@ class DesktopPopup(Popup):
         root.append(foot)
         self.set_child(root)
 
-    def _grid(self, items, btns, state, flip):
-        fb = Gtk.FlowBox()
-        fb.set_selection_mode(Gtk.SelectionMode.NONE)
-        fb.set_max_children_per_line(4)
-        fb.set_min_children_per_line(2)
-        fb.set_row_spacing(6)
-        fb.set_column_spacing(6)
-        fb.set_homogeneous(True)
-        for i, name in items:
-            b = Gtk.Button(label=name.upper())
+    def _side(self, wid):
+        return next((s for i, _, s in self.WIDGETS if i == wid), "L")
+
+    def _on(self, group):
+        return self.w_on if group.startswith("w:") else self.b_on
+
+    # -- layout: a column per group, its tiles in a FlowBox that also takes drops on its empty space (= move to the end)
+    def _row(self, groups, per_line):
+        row = Gtk.Box(spacing=12, homogeneous=True)
+        for g in groups:
+            col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+            col.append(label(dict(self.GROUPS)[g], "m-tag"))
+            fb = Gtk.FlowBox()
+            fb.set_selection_mode(Gtk.SelectionMode.NONE)
+            fb.set_max_children_per_line(per_line)
+            fb.set_min_children_per_line(1)
+            fb.set_row_spacing(4)
+            fb.set_column_spacing(4)
+            fb.set_homogeneous(True)
+            fb.set_valign(Gtk.Align.START)
+            drop = Gtk.DropTarget.new(GObject.TYPE_STRING, Gdk.DragAction.MOVE)
+            drop.connect("drop", lambda _t, val, _x, _y, g=g: self._drop(val, g, None))
+            fb.add_controller(drop)
+            col.append(fb)
+            row.append(col)
+            self.boxes[g] = fb
+            self._fill(g)
+        return row
+
+    def _fill(self, group, focus=None):
+        fb = self.boxes[group]
+        while (child := fb.get_first_child()) is not None:
+            fb.remove(child)
+        for n, wid in enumerate(self.order[group], 1):
+            b = Gtk.Button()
             b.add_css_class("ap-toggle")
-            b.get_child().set_xalign(0)
-            b.connect("clicked", lambda _b, i=i: flip(i))
-            btns[i] = b
+            b.add_css_class("dd-tile")
+            lab = Gtk.Label(xalign=0)
+            lab.set_ellipsize(Pango.EllipsizeMode.END)
+            b.set_child(lab)
+            b.lab, b.num = lab, n
+            b.connect("clicked", lambda _b, g=group, i=wid: self._flip(g, i))
+            src = Gtk.DragSource(actions=Gdk.DragAction.MOVE)
+            src.connect("prepare", lambda _s, _x, _y, g=group, i=wid: Gdk.ContentProvider.new_for_value(f"{g}|{i}"))
+            src.connect("drag-begin", lambda s, _d, b=b: (s.set_icon(Gtk.WidgetPaintable.new(b), 12, 12), b.add_css_class("dragging")))
+            src.connect("drag-end", lambda _s, _d, _del, b=b: b.remove_css_class("dragging"))
+            b.add_controller(src)
+            dt = Gtk.DropTarget.new(GObject.TYPE_STRING, Gdk.DragAction.MOVE)
+            dt.connect("enter", lambda _t, _x, _y, b=b: (b.add_css_class("drop-here"), Gdk.DragAction.MOVE)[1])
+            dt.connect("leave", lambda _t, b=b: b.remove_css_class("drop-here"))
+            dt.connect("drop", lambda _t, val, _x, _y, g=group, i=wid, b=b: (b.remove_css_class("drop-here"), self._drop(val, g, i))[1])
+            b.add_controller(dt)
+            keys = Gtk.EventControllerKey()
+            keys.connect("key-pressed", lambda _c, kv, _code, st, g=group, i=wid: self._key(g, i, kv, st))
+            b.add_controller(keys)
+            self.tiles[(group, wid)] = b
             fb.append(b)
-        self._paint(btns, state)
-        return fb
+        self._paint(group)
+        if focus is not None and (group, focus) in self.tiles:
+            GLib.idle_add(lambda: (self.tiles[(group, focus)].grab_focus(), False)[1])
 
-    @staticmethod
-    def _paint(btns, state):
-        for i, b in btns.items():
-            on = state.get(i, True)
-            (b.add_css_class if on else b.remove_css_class)("sel")
-            b.set_label(("■ " if on else "□ ") + b.get_label().lstrip("■□ "))
+    def _paint(self, group):
+        on = self._on(group)
+        for n, wid in enumerate(self.order[group], 1):
+            b = self.tiles.get((group, wid))
+            if b is None:
+                continue
+            state = on.get(wid, True)
+            (b.add_css_class if state else b.remove_css_class)("sel")
+            b.lab.set_text(f"{'■' if state else '□'} {n:02d}  {self.names.get(wid, wid).upper()}")
 
-    def _flip_w(self, i):
-        self.w_on[i] = not self.w_on.get(i, True)
-        self._paint(self.w_btns, self.w_on)
+    # -- edits
+    def _flip(self, group, wid):
+        on = self._on(group)
+        on[wid] = not on.get(wid, True)
+        self._paint(group)
 
-    def _flip_b(self, i):
-        self.b_on[i] = not self.b_on.get(i, True)
-        self._paint(self.b_btns, self.b_on)
+    def _move(self, group, wid, to):
+        lst = self.order[group]
+        lst.remove(wid)
+        lst.insert(max(0, min(to, len(lst))), wid)
+        self._fill(group, focus=wid)
 
+    def _drop(self, value, group, target):
+        """A tile was dropped on `target` (None: on the empty part of the group): put it in the target's place."""
+        src_group, _, wid = str(value).partition("|")
+        if src_group != group:
+            self.status.set_text("a card stays on its side, a bar module in its part of the bar")
+            return False
+        if wid == target:
+            return True
+        lst = self.order[group]
+        to = len(lst) - 1 if target is None else lst.index(target)
+        self._move(group, wid, to)
+        self.status.set_text("")
+        return True
+
+    def _key(self, group, wid, kv, state):
+        if not state & Gdk.ModifierType.ALT_MASK:
+            return False
+        step = {Gdk.KEY_Left: -1, Gdk.KEY_Up: -1, Gdk.KEY_Right: 1, Gdk.KEY_Down: 1}.get(kv)
+        if step is None:
+            return False
+        self._move(group, wid, self.order[group].index(wid) + step)
+        return True
+
+    # -- files
     def _read_widgets(self):
-        on = {i: i not in self.WIDGETS_OFF for i, _ in self.WIDGETS}
+        """({id: on}, [ids in order]) from widgets.conf; the order counts only with `order = custom` in it."""
+        on = {i: i not in self.WIDGETS_OFF for i, _, _ in self.WIDGETS}
+        default = [i for i, _, _ in self.WIDGETS]
+        seen, custom = [], False
         try:
             with open(self.CONF) as f:
                 for line in f:
-                    k, _, v = line.partition("=")
+                    k, eq, v = line.partition("=")
                     k, v = k.strip(), v.split("#")[0].strip().lower()
-                    if k in on and v in ("on", "off"):
+                    if not eq or k.startswith("#"):
+                        continue
+                    if k == "order":
+                        custom = v == "custom"
+                    elif k in on and v in ("on", "off"):
                         on[k] = v == "on"
+                        seen.append(k)
         except OSError:
             pass
-        return on
+        order = [i for i in seen if i in on] + [i for i in default if i not in seen] if custom else default
+        return on, order
 
     def _defaults(self):
-        self.w_on = {i: i not in self.WIDGETS_OFF for i, _ in self.WIDGETS}
+        self.w_on = {i: i not in self.WIDGETS_OFF for i, _, _ in self.WIDGETS}
         self.b_on = {i: True for i in self.b_on}
-        self._paint(self.w_btns, self.w_on)
-        self._paint(self.b_btns, self.b_on)
+        for side in "LR":
+            self.order["w:" + side] = [i for i, _, s in self.WIDGETS if s == side]
+        for side in ("left", "center", "right"):
+            self.order["b:" + side] = [m["id"] for m in sorted(self.bar, key=lambda m: m.get("rank", 0))
+                                       if m["side"] == side and not m.get("fixed")]
+        for g in self.boxes:
+            self._fill(g)
 
     def _apply(self):
         if DEMO:
             return
         os.makedirs(os.path.dirname(self.CONF), exist_ok=True)
+        ids = self.order["w:L"] + self.order["w:R"]
+        custom = ids != [i for i, _, _ in self.WIDGETS]
         with open(self.CONF, "w") as f:
-            f.write("# desktop widgets on the main monitor (gits-panel desktop): ID = on|off\n")
-            f.writelines(f"{i} = {'on' if self.w_on[i] else 'off'}\n" for i, _ in self.WIDGETS)
+            f.write("# desktop widgets on the main monitor (gits-panel desktop): ID = on|off, in the order the cards are placed\n")
+            if custom:
+                f.write("order = custom\n")
+            f.writelines(f"{i} = {'on' if self.w_on[i] else 'off'}\n" for i in ids)
         self.status.set_text("restarting the widgets and the bar…")
         widgets = os.path.join(HOME, ".config", "gits-widgets", "run.sh")
         hide = " ".join(i for i, v in self.b_on.items() if not v)
+        order = " ".join(f"--order {side}={','.join(self.order['b:' + side])}" for side in ("left", "center", "right"))
         # through Hyprland: the widgets need the session's environment (GITS_SERVER...), and the bar restart must not take this
         # popup down with it if it was opened from the bar
-        cmd = f"{widgets} restart; gits-bar set {hide}"
+        cmd = f"{widgets} restart; gits-bar set {hide} {order}"
         fire(["hyprctl", "dispatch", f"hl.dsp.exec_cmd('bash -c \"{cmd}\"')"])
         GLib.timeout_add(400, lambda: (self.dismiss(), False)[1])
 

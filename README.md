@@ -144,6 +144,8 @@ need sudo, so the commands to undo them are printed at the end.
 * **Home server card:** `hl.env("GITS_SERVER", "pi")` in `local.lua` (a Host from `~/.ssh/config`, or `user@host`) shows a Raspberry Pi or any
   Linux box on the desktop: CPU, RAM, temperature, disks, Docker containers and undervoltage. It needs key login and `python3` on the server,
   nothing is installed there. `GITS_SERVER_NAME` changes the name on the card.
+* **Desktop cards and the bar:** `Super+I` → *Widgets and bar*: click a tile to show / hide it, drag it (or Alt+arrows) to change
+  the order; cards stay on their side of the screen, bar modules in their part of the bar. *DEFAULTS* puts both back.
 * **YubiKey (or any FIDO2 key):** register it once (`pamu2fcfg > ~/.config/Yubico/u2f_keys`), then `sudo ~/.local/share/gits-yubikey/setup.sh`.
   Login and lock screen then want the password and a touch (in that order: password, Enter, touch the blinking key); `sudo` and the
   polkit dialogs take a touch instead of the password. A hint shows wherever the key is waited for. Without the key for a while:

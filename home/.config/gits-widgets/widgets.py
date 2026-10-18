@@ -2377,6 +2377,26 @@ def widget_choice():
     return on, off
 
 
+def widget_order():
+    """The card order chosen in the desktop menu: the ids in the order of their lines in widgets.conf, but only when the file says
+    `order = custom` (written when the order differs from the default). None = the default layout below."""
+    ids, custom = [], False
+    try:
+        with open(WIDGETS_CONF) as f:
+            for line in f:
+                k, eq, v = line.partition("=")
+                k, v = k.strip(), v.split("#")[0].strip().lower()
+                if not eq or k.startswith("#"):
+                    continue
+                if k == "order":
+                    custom = v == "custom"
+                elif v in ("on", "off"):
+                    ids.append(k)
+    except OSError:
+        pass
+    return ids if custom else None
+
+
 class App:
     """Plain windows + GLib main loop (a Gtk.Application blocks on its D-Bus registration in this session)."""
 
@@ -2455,6 +2475,10 @@ class App:
         if has_gpu:
             plan.append(("gpu", GpuCard, "R", 0, RW, 132, {}))
         plan += [("disks", DiskCard, "R", 0, RW, 150, {}), ("top", TopCard, "R", 0, RW, 150, {})]
+        order = widget_order()
+        if order:   # your order: each side's cards fill its columns top-down in that order (no preferred column any more)
+            rank = {wid: n for n, wid in enumerate(order)}
+            plan = [(wid, cls, sd, 0, w, h, kw) for wid, cls, sd, _pref, w, h, kw in sorted(plan, key=lambda c: rank.get(c[0], len(rank)))]
         room = (mon.get_geometry().height if mon is not None else 1080) - BAR_H - top - m
         for side in "LR":
             cols = []   # [width, used height, [(card...)]]
