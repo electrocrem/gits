@@ -15,6 +15,8 @@ Rectangle {
     readonly property string cjk: "Noto Sans CJK JP"
 
     property bool denied: false
+    // PAM text for the user, e.g. pam_u2f's "touch the YubiKey" cue or "insert the key" (gits-yubikey): shown under the form
+    property string info: ""
     // lastUser can come back empty (it did after the Qt 6.12 update), so fall back to the
     // first real user and never send an empty name to PAM.
     property string firstUser: ""
@@ -167,7 +169,7 @@ Rectangle {
             }
             KeyNavigation.backtab: userField
             onAccepted: sddm.login(userField.text.trim() || root.defaultUser, passField.text, sessionBox.currentIndex)
-            Keys.onPressed: function(event) { root.denied = false }
+            Keys.onPressed: function(event) { root.denied = false; root.info = "" }
         }
 
         ComboBox {
@@ -225,8 +227,28 @@ Rectangle {
             }
         }
 
+        Text {
+            id: infoLine
+            x: 92; y: sessionBox.y + 54
+            width: 330
+            wrapMode: Text.WordWrap
+            visible: root.info !== ""
+            color: root.info.indexOf("Вставьте") >= 0 ? root.red : root.cyan
+            font.family: root.mono
+            font.pixelSize: 15
+            text: "󰌆  " + root.info
+            SequentialAnimation on opacity {
+                running: infoLine.visible
+                loops: Animation.Infinite
+                NumberAnimation { from: 1.0; to: 0.35; duration: 550 }
+                NumberAnimation { from: 0.35; to: 1.0; duration: 550 }
+            }
+        }
+
         Connections {
             target: sddm
+            function onInformationMessage(message) { root.info = message.trim() }
+            function onLoginSucceeded() { root.info = "" }
             function onLoginFailed() {
                 root.denied = true
                 passField.text = ""

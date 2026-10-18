@@ -227,3 +227,12 @@ aliases (including links to links) to the `scalable` directories too. `kiconfind
 * **Spring curves in Hyprland 0.56**: `hl.curve(name, {type = "spring", mass, stiffness, dampening})` and `hl.animation({leaf = ..., spring = name})`. A damping ratio
   (`dampening / (2 * sqrt(stiffness * mass))`) of 0.22 gives a +23% overshoot on a window opening, 0.34 about +16%; the `cyber` preset uses plain exponential
   beziers and has none. Measure an animation by recording the screen (`wf-recorder -r 60`) and tracking the window width per frame, never by eye.
+
+## pam_u2f in hyprlock: password first, then the key
+hyprlock starts the PAM conversation the moment it locks. With `pam_u2f` as the first auth line the key starts waiting at once and
+gives up after a few seconds without a touch; the password typed later then fails because the `required` line already failed. So
+`gits-yubikey/setup.sh` puts the key lines AFTER the password lines in `/etc/pam.d/{hyprlock,sddm}`. hyprlock ignores PAM text
+messages (pam_u2f's cue only reaches its log), which is why the hint is a state file written by `gits-u2f-hint` (pam_exec) and drawn
+by the `gits-lock-u2f` label. SDDM does forward them (`sddm.informationMessage`), sudo prints them, polkit gets a notification.
+Test the PAM logic with a throw-away service file and `pamtester` (pam_permit / pam_deny standing in for password and key), never on
+the live lock screen.

@@ -1,0 +1,37 @@
+#!/bin/bash
+# yubikey-mode: is the YubiKey required at the login screen (SDDM) and the lock screen (hyprlock)?
+#   yubikey-mode               show the mode
+#   yubikey-mode off [TIME]    password only (TIME like 8h, 30min, 2d: back on by itself after that)
+#   yubikey-mode on            key required again (password + touch)
+# sudo / polkit are not affected: there a touch replaces the password and without the key the password works anyway.
+# The switch is a root-owned flag file, so changing it needs sudo. Lost the key while locked? Ctrl+Alt+F3, log in with
+# the password on the text console (it never asks for the key), run `sudo yubikey-mode off`, Ctrl+Alt+F1/F2 back.
+FLAG=/etc/yubikey-mode/off
+UNIT=yubikey-mode-reenable
+show() {
+    if [[ -e $FLAG ]]; then
+        local until; until=$(systemctl list-timers "$UNIT.timer" --no-legend 2>/dev/null | awk 'NF {print $2, $3; exit}')
+        echo "YubiKey: OFF (password only at login and lock)${until:+, back on at $until}"
+    else
+        echo "YubiKey: ON (password + key touch at login and lock)"
+    fi
+}
+case ${1:-status} in
+    status) show ;;
+    off|on)
+        if [[ $EUID -ne 0 ]]; then exec sudo "$0" "$@"; fi
+        systemctl stop "$UNIT.timer" "$UNIT.service" 2>/dev/null || true
+        if [[ $1 == off ]]; then
+            mkdir -p /etc/yubikey-mode && chmod 755 /etc/yubikey-mode
+            date -Is > "$FLAG"; chmod 644 "$FLAG"
+            if [[ -n ${2:-} ]]; then
+                systemd-run --quiet --unit="$UNIT" --on-active="$2" --timer-property=AccuracySec=1min \
+                    /usr/bin/rm -f "$FLAG" || { echo "bad time: $2 (examples: 8h, 30min, 2d)" >&2; rm -f "$FLAG"; exit 2; }
+            fi
+        else
+            rm -f "$FLAG"
+        fi
+        logger -t yubikey-mode "$1 ${2:-} by ${SUDO_USER:-root}"
+        show ;;
+    *) sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac

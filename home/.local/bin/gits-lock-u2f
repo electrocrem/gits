@@ -1,0 +1,15 @@
+#!/bin/sh
+# gits-lock-u2f: the lock-screen line that says the YubiKey is waited for (hyprlock label, cmd[update:250]).
+# /run/user/UID/gits-u2f is written by gits-u2f-hint from the PAM stack (installed by ~/.local/share/gits-yubikey/setup.sh):
+# "touch <time>" while pam_u2f waits for a touch, "insert <time>" when no key is plugged in. Prints nothing otherwise.
+f=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/gits-u2f
+[ -r "$f" ] || exit 0
+read -r kind since <"$f" || exit 0
+age=$(( $(date +%s) - ${since:-0} ))
+[ "$age" -lt 60 ] || exit 0
+# blink: bright for half a second, dim for the other half
+if [ $(( $(date +%s%N) / 500000000 % 2 )) -eq 0 ]; then c="#5ef1f5"; else c="#2ed3d7"; fi
+case $kind in
+    touch) printf '<span foreground="%s">󰌆  TOUCH THE KEY</span>  <span foreground="#596977">// коснитесь YubiKey, затем пароль</span>\n' "$c" ;;
+    insert) printf '<span foreground="#e5432b">󰌆  INSERT THE KEY</span>  <span foreground="#596977">// вставьте YubiKey и нажмите Enter</span>\n' ;;
+esac

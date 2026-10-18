@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# gits-yubikey: the YubiKey switch of the settings hub (Super+I).
+#   gits-yubikey menu      pick: key required / password only for 1 h, 8 h, until switched back
+#   gits-yubikey status    one line for the hub ("on", "off", "off until 14:05")
+#   gits-yubikey on | off [TIME]   the same without the menu
+# The switch itself is /usr/local/bin/yubikey-mode (root, installed by ~/.local/share/gits-yubikey/setup.sh); changing it asks
+# through polkit (pkexec): a touch of the key, or the password without it.
+ym=/usr/local/bin/yubikey-mode
+[[ -x $ym ]] || { notify-send -a "GitS Notify" "󰌆  YubiKey" "not set up: sudo ~/.local/share/gits-yubikey/setup.sh"; exit 1; }
+status() {
+    local s; s=$("$ym")
+    case $s in
+        *"back on at "*) echo "off until $(date -d "${s##*back on at }" +%H:%M 2>/dev/null || echo "${s##*back on at }")" ;;
+        *OFF*) echo off ;;
+        *) echo on ;;
+    esac
+}
+switch() {
+    if pkexec "$ym" "$@" >/dev/null; then
+        notify-send -a "GitS Notify" "󰌆  YubiKey" "$("$ym" | sed 's/^YubiKey: //')"
+    else
+        notify-send -a "GitS Notify" -u critical "󰌆  YubiKey" "not changed (authorization cancelled)"
+    fi
+}
+case ${1:-menu} in
+    status) status ;;
+    on) switch on ;;
+    off) shift; switch off "$@" ;;
+    menu)
+        cur=$(status)
+        rows=$'󰌆  Key required at login and lock (password + touch)\n󰌊  Password only for 1 hour\n󰌊  Password only for 8 hours\n󰌊  Password only until switched back'
+        i=$(gits-menu "󰌆  YUBIKEY: $cur" "// 鍵" -format i <<<"$rows") || exit 0
+        case $i in
+            0) switch on ;;
+            1) switch off 1h ;;
+            2) switch off 8h ;;
+            3) switch off ;;
+        esac ;;
+    *) sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac

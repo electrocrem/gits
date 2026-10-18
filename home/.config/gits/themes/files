@@ -42,6 +42,7 @@
 .config/wlogout/style_1.css
 .config/yazi/theme.toml
 .config/zsh/gits/colors.zsh
+.local/bin/gits-lock-u2f
 .local/bin/gits-rec
 .local/bin/gits-sessions
 .local/bin/gits-shot

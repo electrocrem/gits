@@ -1,0 +1,45 @@
+#!/bin/sh
+# gits-u2f-hint begin|end: tell the user that the YubiKey is needed. Run by pam_exec around pam_u2f (see setup.sh).
+#   hyprlock (runs as you): a state file /run/user/UID/gits-u2f, shown by the lock screen label (gits-lock-u2f)
+#   sddm (root, greeter):  "insert" goes to the greeter as a PAM text (pam_exec stdout); "touch" is pam_u2f's own cue
+#   sudo / polkit (root):  a desktop notification in your session while the key waits for a touch, closed afterwards
+# Never fails the login: every error is ignored (the PAM lines are optional).
+action=${1:-begin}
+[ -n "${PAM_USER:-}" ] || exit 0
+uid=$(id -u "$PAM_USER" 2>/dev/null) || exit 0
+key_present() { grep -qsi '^HID_ID=.*:00001050:' /sys/class/hidraw/*/device/uevent; }
+as_user() {   # run a command in the user's session bus, without PAM (setpriv, not su/runuser)
+    [ -S "/run/user/$uid/bus" ] || return 1
+    setpriv --reuid="$uid" --regid="$(id -g "$PAM_USER")" --init-groups --reset-env \
+        env HOME="$(getent passwd "$PAM_USER" | cut -d: -f6)" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" "$@"
+}
+me=$(id -u)
+if [ "$me" = "$uid" ]; then
+    state=/run/user/$uid/gits-u2f
+    case $action in
+        begin) if key_present; then echo "touch $(date +%s)"; else echo "insert $(date +%s)"; fi >"$state" 2>/dev/null ;;
+        end) rm -f "$state" ;;
+    esac
+    exit 0
+fi
+[ "$me" = 0 ] || exit 0
+case ${PAM_SERVICE:-} in
+    sddm*)
+        [ "$action" = begin ] && ! key_present && echo "◈ Вставьте YubiKey и войдите снова (или yubikey-mode off)"
+        exit 0 ;;
+esac
+idf=/run/gits-u2f-$uid.id
+case $action in
+    begin)
+        key_present || exit 0   # no key: sudo / polkit simply ask for the password
+        what=$PAM_SERVICE; [ "$what" = polkit-1 ] && what="запрос прав"
+        id=$(as_user notify-send -p -a "GitS Notify" -u critical -t 30000 -i security-high \
+            "󰌆  YubiKey" "Коснитесь ключа ($what)" 2>/dev/null) && echo "$id" >"$idf"
+        ;;
+    end)
+        [ -s "$idf" ] || exit 0
+        as_user gdbus call --session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications \
+            --method org.freedesktop.Notifications.CloseNotification "$(cat "$idf")" >/dev/null 2>&1
+        rm -f "$idf" ;;
+esac
+exit 0

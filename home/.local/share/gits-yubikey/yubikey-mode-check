@@ -1,0 +1,4 @@
+#!/bin/sh
+# PAM helper (pam_exec) for yubikey-mode: succeeds while the key is required; fails when it is switched off
+# (/etc/yubikey-mode/off), which makes PAM jump over the hint + pam_u2f lines after it ([success=ignore default=2]).
+[ ! -e /etc/yubikey-mode/off ]
