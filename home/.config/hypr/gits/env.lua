@@ -25,18 +25,20 @@ for _, d in ipairs({ "/var/lib/flatpak/exports/bin", (os.getenv("XDG_DATA_HOME")
 end
 env("PATH", path)
 
--- NVIDIA only when the proprietary module is really loaded (hybrid laptops keep the iGPU as the primary)
-local function nvidia_working()
-    local v = io.open("/proc/driver/nvidia/version", "r")
-    if not v then return false end
-    v:close()
-    local s = io.open("/sys/module/nvidia/initstate", "r")
-    if not s then return true end
-    local state = s:read("*l")
-    s:close()
-    return state == "live"
+-- NVIDIA session-wide only when it drives the screen (desktop / MUX "Ultimate" mode). On hybrid laptops the
+-- iGPU stays primary and the dGPU is used per app (prime-run), so it can sleep when nothing needs it.
+local function nvidia_primary()
+    for i = 0, 7 do
+        local d = "/sys/class/drm/card" .. i .. "/device/"
+        local b, v = io.open(d .. "boot_vga", "r"), io.open(d .. "vendor", "r")
+        local boot = b and b:read("*l"); local vendor = v and v:read("*l")
+        if b then b:close() end
+        if v then v:close() end
+        if boot == "1" then return vendor == "0x10de" end
+    end
+    return false
 end
-if nvidia_working() then
+if nvidia_primary() then
     env("LIBVA_DRIVER_NAME", "nvidia")
     env("__GLX_VENDOR_LIBRARY_NAME", "nvidia")
     env("GBM_BACKEND", "nvidia-drm")
