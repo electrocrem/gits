@@ -1,0 +1,15 @@
+# Ghost in the Shell for atuin (Ctrl+R history search). Picked by ATUIN_THEME__NAME=gits in ~/.config/zsh/gits/colors.zsh,
+# recoloured by gits-theme like the rest of the desktop. Palette = docs/PALETTE.md.
+[theme]
+name = "gits"
+
+[colors]
+Base = "#C8F4FF"
+Title = "#2ED3D7"
+Important = "#5EF1F5"
+Guidance = "#398FF0"
+Annotation = "#596977"
+Muted = "#254F5D"
+AlertInfo = "#34D399"
+AlertWarn = "#E8C547"
+AlertError = "#E5432B"

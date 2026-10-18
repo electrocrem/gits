@@ -5,3 +5,6 @@ export FZF_DEFAULT_OPTS="${FZF_DEFAULT_OPTS} \
 --color=bg:#060A14,bg+:#0C1A33,fg:#9FC5D6,fg+:#DDF9FF,hl:#2ED3D7,hl+:#5EF1F5 \
 --color=info:#596977,prompt:#2ED3D7,pointer:#E5432B,marker:#E5432B,spinner:#E5432B \
 --color=header:#596977,border:#254F5D,gutter:#060A14,separator:#242F41,scrollbar:#254F5D"
+
+# atuin (Ctrl+R history search): the GitS theme in ~/.config/atuin/themes/gits.toml (an env override, so your config.toml stays yours)
+export ATUIN_THEME__NAME=gits

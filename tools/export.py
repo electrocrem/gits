@@ -64,6 +64,7 @@ MANIFEST = [
     (".config/tmux/tmux.conf", None),
     (".config/fastfetch/config.jsonc", None),
     (".config/yazi/theme.toml", None),
+    (".config/atuin/themes/gits.toml", None),
     (".local/share/gits/obsidian", ["manifest.json", "theme.css"]),
     (".local/share/gits-cursor/build.py", None),
     (".local/share/gits-icons/build.py", None),

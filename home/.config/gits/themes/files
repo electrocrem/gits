@@ -11,6 +11,7 @@
 
 .config/Kvantum/GitS/GitS.kvconfig
 .config/Kvantum/GitS/GitS.svg
+.config/atuin/themes/gits.toml
 .config/bat/themes/GitS.tmTheme
 .config/btop/themes/gits.theme
 .config/dunst/dunst.conf
