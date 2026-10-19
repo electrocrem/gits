@@ -16,6 +16,7 @@ CONNECT	󰖩  Network	nm-connection-editor	nmcli -t -f NAME,TYPE connection show
 CONNECT	󰂯  Bluetooth	blueman-manager	bluetoothctl show | grep -q 'Powered: yes' && echo "on · $(bluetoothctl devices Connected | wc -l) connected" || echo off
 CONNECT	󰕾  Sound mixer (per application)	gits-panel mixer	wpctl get-volume @DEFAULT_AUDIO_SINK@ | awk '{ printf "%d%%%s\n", $2 * 100 + 0.5, ($3 ? " muted" : "") }'
 CONNECT	󰓃  Sound devices (pavucontrol)	pavucontrol	wpctl inspect @DEFAULT_AUDIO_SINK@ | sed -n 's/.*node.description = "\(.*\)"/\1/p' | head -1
+CONNECT	󰄜  Send to phone (clipboard, screenshot, file, ring; Super+Ctrl+M)	gits-phone menu	gits-phone status
 CONNECT	󰍹  Displays	nwg-displays	hyprctl monitors -j | jq -r 'length as $n | max_by(.width * .height) | "\(.width)x\(.height)@\(.refreshRate | floor)" + (if $n > 1 then " +\($n - 1)" else "" end)'
 CONNECT	󰍽  Touchpad on / off	gits-touchpad toggle	gits-touchpad status
 CONNECT	󰒓  All system settings (KDE: input, keyboard, apps...)	systemsettings
@@ -51,6 +52,7 @@ ROWS
 has_touchpad || entries=$(grep -Pv '\tgits-touchpad toggle(\t|$)' <<<"$entries")
 has_rog || entries=$(grep -Pv '\tgits-rog(\t|$)' <<<"$entries")
 compgen -G '/sys/class/power_supply/BAT*/charge_control_end_threshold' >/dev/null || entries=$(grep -Pv '\tgits-battery limit-menu(\t|$)' <<<"$entries")
+command -v kdeconnect-cli >/dev/null || entries=$(grep -Pv '\tgits-phone menu(\t|$)' <<<"$entries")
 [[ -x /usr/local/bin/yubikey-mode ]] || entries=$(grep -Pv '\tgits-yubikey menu(\t|$)' <<<"$entries")
 [[ -r $extra ]] && entries+=$'\n'$(awk -F'\t' 'NF >= 2 && $1 !~ /^#/ { print "YOURS\t" $1 "\t" $2 "\t" }' "$extra")
 case ${1:-} in

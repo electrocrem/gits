@@ -153,6 +153,7 @@ bind(MOD .. " + K", run("hyprctl switchxkblayout all next"), "[Utilities] toggle
 
 -- ---------------------------------------------------------------- screenshots, recording, picker
 bind(MOD .. " + SHIFT + P", run("hyprpicker -an"), "[Utilities] colour picker", { locked = true })
+bind(MOD .. " + CTRL + M", run("gits-phone menu"), "[Utilities] send to the phone (KDE Connect)")
 bind(MOD .. " + P", run("gits-shot area"), "[Utilities] screenshot a region (annotate)", { locked = true })
 bind(MOD .. " + CTRL + P", run("gits-shot area --no-edit"), "[Utilities] screenshot a region, no editor", { locked = true })
 bind(MOD .. " + ALT + P", run("gits-shot screen"), "[Utilities] print monitor", { locked = true })
