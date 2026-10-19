@@ -104,6 +104,7 @@ bind(MOD .. " + ALT + G", run("gits-workflow toggle gaming"), "[Utilities] game 
 bind(MOD .. " + A", run("gits-panel launch"), "[Launcher] launcher / command palette")
 bind(MOD .. " + TAB", run("gits-panel windows"), "[Launcher] window switcher")
 bind(MOD .. " + grave", run("gits-panel overview"), "[Launcher] workspace overview: thumbnails, drag a window to another workspace")
+bind(MOD .. " + CTRL + W", run("gits-preset menu"), "[Launcher] workspace presets: open a set of apps on their workspaces, save the current one")
 bind(MOD .. " + V", run("gits-panel clip"), "[Launcher] clipboard history")
 bind(MOD .. " + comma", run("gits-panel emoji"), "[Launcher] emoji picker")
 bind(MOD .. " + slash", run("gits-panel keys"), "[Launcher] key bindings")

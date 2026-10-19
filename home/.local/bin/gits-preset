@@ -1,0 +1,277 @@
+#!/usr/bin/env python3
+"""gits-preset: workspace presets. One choice opens a set of applications, each on its workspace (Super+Ctrl+W, Super+I -> Presets).
+
+  gits-preset menu              pick a preset to open; save the current windows as one; delete one
+  gits-preset list              the presets: name <tab> what they open
+  gits-preset open NAME         open it: an app that already runs is moved to its workspace (not started twice), the rest are
+                                started there (in the background, no workspace jumping), then the preset's workspace gets the focus
+  gits-preset save NAME         the windows open now (apps with a .desktop file, terminals with their folder) as preset NAME
+  gits-preset delete NAME
+Presets are JSON files in ~/.config/gits/presets (edit them freely):
+  {"name": "Dev", "icon": "󰅩", "workflow": "", "focus": "2",
+   "apps": [{"app": "app.zen_browser.zen", "class": "app.zen_browser.zen", "workspace": "1"},
+            {"app": "kitty", "dir": "~/gits", "workspace": "2"},
+            {"cmd": "any shell command", "class": "its window class", "workspace": "3"}]}
+"app" is a .desktop file id (started with gtk-launch), "kitty" a terminal in "dir"; "workflow" (optional) is a gits-workflow.
+Two example presets, Dev and Chill, are written the first time, with only the apps that are installed.
+"""
+import json
+import os
+import re
+import shlex
+import subprocess
+import sys
+import time
+
+HOME = os.path.expanduser("~")
+DIR = os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.join(HOME, ".config")), "gits", "presets")
+TERMS = {"kitty"}
+SHELLS = {"zsh", "bash", "fish", "sh", "nu"}
+GENERIC = {"org", "com", "io", "app", "net", "desktop", "client", "browser", "github"}
+
+
+def hypr(*args):
+    try:
+        return json.loads(subprocess.run(["hyprctl", *args, "-j"], capture_output=True, text=True, timeout=3).stdout or "null")
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return None
+
+
+def dispatch(expr):
+    subprocess.run(["hyprctl", "dispatch", expr], capture_output=True, timeout=3)
+
+
+def lua(s):
+    return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def notify(title, body=""):
+    subprocess.run(["notify-send", "-a", "GitS Notify", "-i", "view-grid", f"󰕮  {title}", body], capture_output=True)
+
+
+def desktop_ids():
+    """window class (lower case) -> .desktop id, from StartupWMClass and the file names (Flatpak ids are both)."""
+    import gi
+    gi.require_version("Gio", "2.0")
+    from gi.repository import Gio
+    out = {}
+    for a in Gio.AppInfo.get_all():
+        try:
+            did = (a.get_id() or "").removesuffix(".desktop")
+            wm = (a.get_startup_wm_class() or "").lower()
+        except AttributeError:
+            continue
+        if not did or a.get_nodisplay():
+            continue
+        for k in (wm, did.lower(), did.lower().rsplit(".", 1)[-1]):
+            if k:
+                out.setdefault(k, did)
+    return out
+
+
+def installed(did):
+    return any(os.path.exists(os.path.join(d, "applications", did + ".desktop")) for d in
+               [os.path.join(HOME, ".local/share"), os.path.join(HOME, ".local/share/flatpak/exports/share"),
+                "/var/lib/flatpak/exports/share", "/usr/local/share", "/usr/share"])
+
+
+def path(name):
+    return os.path.join(DIR, re.sub(r"[^\w.-]+", "_", name.strip().lower()) + ".json")
+
+
+def load_all():
+    examples()
+    out = []
+    for f in sorted(os.listdir(DIR)):
+        if f.endswith(".json"):
+            try:
+                p = json.load(open(os.path.join(DIR, f)))
+                p.setdefault("name", f[:-5])
+                out.append(p)
+            except (OSError, ValueError):
+                pass
+    return out
+
+
+def examples():
+    if os.path.isdir(DIR):
+        return
+    os.makedirs(DIR, exist_ok=True)
+    pick = lambda *ids: next((i for i in ids if installed(i)), None)
+    browser = pick("app.zen_browser.zen", "zen", "firefox", "org.mozilla.firefox", "chromium")
+    godot = pick("org.godotengine.Godot", "godot")
+    dev = [{"app": browser, "class": browser, "workspace": "1"}] if browser else []
+    dev.append({"app": "kitty", "dir": "~", "workspace": "2"})
+    if godot:
+        dev.append({"app": godot, "class": "godot", "workspace": "3"})
+    chill = []
+    for ids, cls, ws in ((("steam", "com.valvesoftware.Steam"), "steam", "3"), (("spotify", "com.spotify.Client"), "spotify", "special:music"),
+                         (("org.telegram.desktop", "telegramdesktop"), "org.telegram.desktop", "special:chat")):
+        did = pick(*ids)
+        if did:
+            chill.append({"app": did, "class": cls, "workspace": ws})
+    for p in ({"name": "Dev", "icon": "󰅩", "workflow": "", "focus": "2", "apps": dev},
+              {"name": "Chill", "icon": "󰊴", "workflow": "", "focus": "3", "apps": chill}):
+        if p["apps"]:
+            json.dump(p, open(path(p["name"]), "w"), indent=2, ensure_ascii=False)
+
+
+def summary(p):
+    names = []
+    for a in p.get("apps", []):
+        n = a.get("app") or (shlex.split(a.get("cmd", "?")) or ["?"])[0]
+        parts = [x for x in n.lower().replace("_", ".").split(".") if x not in GENERIC]
+        n = parts[-1] if parts else n   # org.telegram.desktop -> telegram, app.zen_browser.zen -> zen
+        names.append(f"{n.lower()}@{a.get('workspace', '?').removeprefix('special:')}")
+    return " · ".join(names)
+
+
+def shell_dir(pid):
+    """A terminal window's folder: the cwd of the shell it runs."""
+    try:
+        kids = open(f"/proc/{pid}/task/{pid}/children").read().split()
+    except OSError:
+        return None
+    for k in kids:
+        try:
+            if open(f"/proc/{k}/comm").read().strip() in SHELLS:
+                return os.readlink(f"/proc/{k}/cwd")
+        except OSError:
+            pass
+    return None
+
+
+def save(name):
+    ids = desktop_ids()
+    apps, seen = [], set()
+    clients = sorted((c for c in hypr("clients") or [] if c.get("mapped")),
+                     key=lambda c: ((c.get("workspace") or {}).get("id", 0) < 0, (c.get("workspace") or {}).get("id", 0), c.get("at", [0])[0]))
+    for c in clients:
+        cls, ws = c.get("class", ""), (c.get("workspace") or {}).get("name", "")
+        if not cls or not ws or cls.startswith(("gits", "steam_app_")):
+            continue
+        if cls.lower() in TERMS:
+            d = shell_dir(c["pid"]) or HOME
+            d = "~" + d[len(HOME):] if d.startswith(HOME) else d
+            if (cls, ws, d) not in seen:
+                apps.append({"app": cls.lower(), "dir": d, "workspace": ws})
+                seen.add((cls, ws, d))
+            continue
+        did = ids.get(cls.lower()) or ids.get(cls.lower().rsplit(".", 1)[-1])
+        if not did or (did, ws) in seen:
+            continue
+        seen.add((did, ws))
+        apps.append({"app": did, "class": cls, "workspace": ws})
+    if not apps:
+        print("no windows that can be started again", file=sys.stderr)
+        return 1
+    act = (hypr("activeworkspace") or {}).get("name", "1")
+    os.makedirs(DIR, exist_ok=True)
+    p = {"name": name, "icon": "󰕮", "workflow": "", "focus": act, "apps": apps}
+    json.dump(p, open(path(name), "w"), indent=2, ensure_ascii=False)
+    notify(f"Preset saved: {name}", summary(p))
+    print(path(name))
+    return 0
+
+
+def open_preset(name):
+    p = next((p for p in load_all() if p["name"].lower() == name.lower()), None)
+    if p is None:
+        print(f"no preset '{name}'", file=sys.stderr)
+        return 1
+    if p.get("workflow"):
+        subprocess.run(["gits-workflow", "set", p["workflow"]], capture_output=True)
+    clients = [c for c in hypr("clients") or [] if c.get("mapped")]
+    claimed, started, moved = set(), 0, 0
+    for a in p.get("apps", []):
+        ws = str(a.get("workspace", "1"))
+        if a.get("app") in TERMS:
+            here = [c for c in clients if c.get("class", "").lower() == a["app"] and (c.get("workspace") or {}).get("name") == ws
+                    and c["address"] not in claimed]
+            if here:   # a terminal is already there: keep it
+                claimed.add(here[0]["address"])
+                continue
+            d = os.path.expanduser(a.get("dir") or "~")
+            cmd = f"{a['app']} --directory {shlex.quote(d if os.path.isdir(d) else HOME)}"
+        else:
+            cls = (a.get("class") or a.get("app") or "").lower()
+            have = [c for c in clients if c["address"] not in claimed and cls and
+                    (c.get("class", "").lower() == cls or c.get("initialClass", "").lower() == cls)]
+            if have:   # already running: bring it over (scratchpad apps stay in their scratchpad)
+                c = have[0]
+                claimed.add(c["address"])
+                if (c.get("workspace") or {}).get("name") != ws and not ws.startswith("special:"):
+                    dispatch(f'hl.dsp.window.move({{ workspace = {lua(ws)}, follow = false, window = "address:{c["address"]}" }})')
+                    moved += 1
+                continue
+            cmd = f"gtk-launch {shlex.quote(a['app'])}" if a.get("app") else a.get("cmd")
+            if not cmd:
+                continue
+        rule = ws if ws.startswith("special:") else f"{ws} silent"
+        dispatch(f"hl.dsp.exec_cmd({lua(cmd)}, {{ workspace = {lua(rule)} }})")
+        started += 1
+        time.sleep(0.15)
+    if p.get("focus"):
+        time.sleep(0.3)
+        dispatch(f'hl.dsp.focus({{ workspace = {lua(str(p["focus"]))} }})')
+    notify(f"{p.get('icon', '󰕮')}  {p['name']}".strip(), f"{started} started, {moved} moved, {len(claimed) - moved} already in place")
+    return 0
+
+
+def menu():
+    ps = load_all()
+    rows = [f"{p.get('icon', '󰕮')}  {p['name']}   ·   {summary(p)}" for p in ps]
+    rows += ["󰆓  Save the windows open now as a preset…", "󰆴  Delete a preset…", "󰏫  Edit the presets (folder)"]
+    r = subprocess.run(["gits-menu", "󰕮  WORKSPACE PRESETS", "// 配置", "-format", "i"], input="\n".join(rows),
+                       capture_output=True, text=True)
+    if r.returncode != 0 or not r.stdout.strip().isdigit():
+        return 0
+    i = int(r.stdout.strip())
+    if i < len(ps):
+        return open_preset(ps[i]["name"])
+    i -= len(ps)
+    if i == 0:
+        n = subprocess.run(["gits-menu", "󰆓  NAME OF THE NEW PRESET", "// 保存", "--text"], capture_output=True, text=True,
+                           stdin=subprocess.DEVNULL).stdout.strip()
+        return save(n) if n else 0
+    if i == 1 and ps:
+        r = subprocess.run(["gits-menu", "󰆴  DELETE WHICH PRESET?", "// 削除", "-format", "i"], capture_output=True, text=True,
+                           input="\n".join(f"{p.get('icon', '󰕮')}  {p['name']}" for p in ps))
+        if r.returncode == 0 and r.stdout.strip().isdigit():
+            return delete(ps[int(r.stdout.strip())]["name"])
+        return 0
+    if i == 2:
+        subprocess.Popen(["xdg-open", DIR], start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return 0
+
+
+def delete(name):
+    for f in os.listdir(DIR):
+        try:
+            if f.endswith(".json") and json.load(open(os.path.join(DIR, f))).get("name", f[:-5]).lower() == name.lower():
+                os.remove(os.path.join(DIR, f))
+                notify(f"Preset deleted: {name}")
+                return 0
+        except (OSError, ValueError):
+            pass
+    print(f"no preset '{name}'", file=sys.stderr)
+    return 1
+
+
+def main(argv):
+    cmd = argv[0] if argv else "menu"
+    if cmd == "menu":
+        return menu()
+    if cmd == "list":
+        for p in load_all():
+            print(f"{p['name']}\t{summary(p)}")
+        return 0
+    if cmd in ("open", "save", "delete") and len(argv) > 1:
+        name = " ".join(argv[1:])
+        return {"open": open_preset, "save": save, "delete": delete}[cmd](name)
+    print(__doc__.strip(), file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

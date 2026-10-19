@@ -1690,7 +1690,7 @@ class NotifyPopup(Popup):
 class MenuPopup(Popup):
     """A list menu in the GitS style (replaces rofi for gits-wifi / gits-bt / gits-perf / the notification action menu, because
     rofi cannot be closed by clicking away). Lines come from stdin; the choice goes to stdout (its index, or the line, or the typed
-    text in password mode). Exit status 1 = cancelled. Type to filter, Up/Down + Enter or click to choose, Esc / click outside cancels."""
+    text in password / text mode). Exit status 1 = cancelled. Type to filter, Up/Down + Enter or click to choose, Esc / click outside cancels."""
     CARD_W = 460
 
     def __init__(self, monitor, title, tag, mode, lines):
@@ -1707,10 +1707,10 @@ class MenuPopup(Popup):
         root.append(head)
         self.entry = Gtk.Entry()
         self.entry.add_css_class("m-entry")
-        self.entry.set_placeholder_text("password_" if mode == "password" else "filter_")
+        self.entry.set_placeholder_text({"password": "password_", "text": "type here_"}.get(mode, "filter_"))
         root.append(self.entry)
-        if mode == "password":
-            self.entry.set_visibility(False)
+        if mode in ("password", "text"):
+            self.entry.set_visibility(mode == "text")
             self.entry.connect("activate", lambda *_: self._finish(self.entry.get_text()))
         else:
             self.box = Gtk.ListBox()
@@ -4041,7 +4041,7 @@ def main():
     mode = (sys.argv[1:] or ["control"])[0]
     if mode == "menu":
         title, tag, kind = (sys.argv[2:5] + ["", "", "line"])[:3]
-        lines = [] if kind == "password" else [ln.rstrip("\n") for ln in sys.stdin.read().split("\n") if ln.strip()]
+        lines = [] if kind in ("password", "text") else [ln.rstrip("\n") for ln in sys.stdin.read().split("\n") if ln.strip()]
         win = MenuPopup(mon, title, tag, kind, lines)
         win.connect("close-request", lambda *_: (loop.quit(), False)[1])
         win.present()
