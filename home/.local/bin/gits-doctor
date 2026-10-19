@@ -219,8 +219,8 @@ done
 head_ "menus, sounds, widgets extras"
 miss=""; for b in gits-menu gits-wifi gits-bt gits-sound gits-panel gits-osd gits-rog gits-touchpad gits-idle gits-update gits-rec gits-focus gits-project gits-note gits-daynight gits-vol gits-bright gits-shot gits-logout gits-sysmon gits-exit; do command -v "$b" >/dev/null || miss+=" $b"; done
 [[ -z $miss ]] && ok "menus and sound player in PATH (gits-wifi, gits-bt, gits-menu, gits-sound)" || warn "missing from PATH:$miss"
-nw=$(ls "$H/.local/share/gits-sounds"/*.wav 2>/dev/null | wc -l)
-[[ $nw -ge 7 ]] && ok "UI sounds built ($nw wav files)" || warn "UI sounds missing: python3 ~/.local/share/gits-sounds/build.py"
+nw=$(ls "$H/.local/share/gits-sounds"/*.wav "$H/.local/share/gits-sounds"/{soft,glass}/*.wav 2>/dev/null | wc -l)
+[[ $nw -ge 42 ]] && ok "UI sounds built ($nw wav files, packs: $(gits-sound status 2>/dev/null))" || warn "UI sounds missing or old ($nw of 42 wav files): python3 ~/.local/share/gits-sounds/build.py"
 [[ -e $H/.local/state/gits-sounds/off ]] && warn "UI sounds are muted (gits-sound on)" || ok "UI sounds on"
 n=$(grep -c 'gits/banner.zsh' "$H/.config/zsh/user.zsh" 2>/dev/null)
 [[ ${n:-0} -le 1 ]] && ok "terminal banner is hooked once" || warn "banner.zsh is sourced $n times in user.zsh (fastfetch runs several times): keep only the gits block"
@@ -295,8 +295,8 @@ if [[ $FIX == 1 ]]; then
     pgrep -f '[g]its-widgets/widgets.py' >/dev/null || { "$H/.config/gits-widgets/run.sh" start </dev/null >/dev/null 2>&1 && fixed "desktop widgets started"; }
     pgrep -f '[g]its-widgets/osd.py' >/dev/null || { command -v gits-osd >/dev/null && gits-osd start </dev/null >/dev/null 2>&1 && fixed "OSD daemon started"; }
     pgrep -f '[g]its-events.sh' >/dev/null || { [[ -x $H/.config/hypr/scripts/gits-events.sh ]] && GITS_EVENTS_NO_LOGIN=1 setsid -f "$H/.config/hypr/scripts/gits-events.sh" </dev/null >/dev/null 2>&1 && fixed "events daemon started (sounds)"; }
-    nw=$(ls "$H/.local/share/gits-sounds"/*.wav 2>/dev/null | wc -l)
-    [[ $nw -ge 7 ]] || { python3 "$H/.local/share/gits-sounds/build.py" >/dev/null 2>&1 && fixed "UI sounds rebuilt"; }
+    nw=$(ls "$H/.local/share/gits-sounds"/*.wav "$H/.local/share/gits-sounds"/{soft,glass}/*.wav 2>/dev/null | wc -l)
+    [[ $nw -ge 42 ]] || { python3 "$H/.local/share/gits-sounds/build.py" >/dev/null 2>&1 && fixed "UI sounds rebuilt"; }
     # a unit that crashed with the old compositor (Hyprland restart) often hit the start limit before the new one was up:
     # reset it and start it again; one that is really broken just fails again and is reported
     for u in $(systemctl --user --failed --no-legend --plain 2>/dev/null | awk '{print $1}'); do

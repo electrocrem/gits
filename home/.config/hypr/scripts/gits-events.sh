@@ -45,7 +45,7 @@ game_on() {
     game_prev=$(gits-workflow current 2>/dev/null)
     [[ $game_prev == gaming ]] || gits-workflow set gaming >/dev/null 2>&1
     gamemode RegisterGame
-    notify-send -a "GitS Notify" -i applications-games -r 32 "󰊴  Game mode" "$name: gaming workflow, gamemode, notifications paused until you quit"
+    notify-send -a "GitS Notify" -c gits.game -i applications-games -r 32 "󰊴  Game mode" "$name: gaming workflow, gamemode, notifications paused until you quit"
     if [[ $(dunstctl is-paused 2>/dev/null) == false ]]; then sleep 3; dunstctl set-paused true; game_paused=1; fi
 }
 game_off() {
@@ -94,7 +94,7 @@ while sleep "${GITS_EVENTS_POLL:-2}"; do
             if (( pct <= 12 && warned < 2 )); then
                 notify-send -a GitS -u critical -i battery-empty -r 31 "Battery critical" "${pct}%: plug in the charger, the laptop powers off at 8%"; warned=2
             elif (( pct <= 25 && warned < 1 )); then
-                notify-send -a GitS -u normal -i battery-caution -r 31 "Battery low" "${pct}% left (a few minutes on this battery)"; warned=1
+                notify-send -a GitS -u normal -c gits.battery -i battery-caution -r 31 "Battery low" "${pct}% left (a few minutes on this battery)"; warned=1
             fi
         else
             warned=0

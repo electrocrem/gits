@@ -33,7 +33,7 @@ case $action in
     begin)
         key_present || exit 0   # no key: sudo / polkit simply ask for the password
         what=$PAM_SERVICE; [ "$what" = polkit-1 ] && what="authorization"
-        id=$(as_user notify-send -p -a "GitS Notify" -u critical -t 30000 -i security-high \
+        id=$(as_user notify-send -p -a "GitS Notify" -u critical -c gits.touch -t 30000 -i security-high \
             "󰌆  YubiKey" "Touch the key ($what)" 2>/dev/null) && echo "$id" >"$idf"
         ;;
     end)

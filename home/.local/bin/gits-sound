@@ -1,22 +1,61 @@
 #!/usr/bin/env bash
-# gits-sound <notify|login|lock|unlock|plug|unplug|error>   plays a Ghost in the Shell UI sound (detached, quiet).
-#   gits-sound off|on|toggle   mute / unmute all of them (state file, survives reboots)
-# Sounds live in ~/.local/share/gits-sounds (rebuild: python3 build.py there). Same sound at most every 0.8 s.
+# gits-sound <name>   plays a Ghost in the Shell UI sound (detached, quiet). Same sound at most every 0.8 s.
+#   names: notify login lock unlock plug unplug error focus done shot send touch game battery
+#   gits-sound off|on|toggle|status     mute / unmute all of them (state file, survives reboots)
+#   gits-sound pack [terminal|soft|glass]   which voice: bit-crushed blips (default), round sine tones, small bells
+#   gits-sound volume [quiet|normal|loud]   0.35 / 0.6 / 0.9 (GITS_SOUND_VOLUME overrides)
+#   gits-sound demo     play a few of them;  gits-sound menu   all of this in a menu (Super+I -> UI sounds)
+# A notification from our own tools ("GitS Notify") plays the sound named by its category: notify-send -c gits.<name>.
+# Sounds live in ~/.local/share/gits-sounds, the packs in its soft/ and glass/ (rebuild: python3 build.py there).
 dir=${GITS_SOUNDS_DIR:-$HOME/.local/share/gits-sounds}
 state=${XDG_STATE_HOME:-$HOME/.local/state}/gits-sounds
 mkdir -p "$state"
+pack() { local p; p=$(cat "$state/pack" 2>/dev/null); [[ $p == soft || $p == glass ]] && echo "$p" || echo terminal; }
+vol_name() { local v; v=$(cat "$state/volume" 2>/dev/null); [[ $v == quiet || $v == loud ]] && echo "$v" || echo normal; }
+vol() { case $(vol_name) in quiet) echo 0.35 ;; loud) echo 0.9 ;; *) echo 0.6 ;; esac; }
+file() { local p; p=$(pack); [[ $p != terminal && -r $dir/$p/$1.wav ]] && echo "$dir/$p/$1.wav" || echo "$dir/$1.wav"; }
+play() { setsid -f pw-play --volume "${GITS_SOUND_VOLUME:-$(vol)}" "$(file "$1")" >/dev/null 2>&1; }
+demo() { for s in notify send touch unlock; do play "$s"; sleep 0.55; done; }
 case ${1:-} in
     off) touch "$state/off"; exit 0 ;;
     on) rm -f "$state/off"; exit 0 ;;
     toggle) if [[ -e $state/off ]]; then rm -f "$state/off"; echo on; else touch "$state/off"; echo off; fi; exit 0 ;;
-    "") echo "usage: gits-sound <name>|on|off|toggle" >&2; exit 2 ;;
+    status) [[ -e $state/off ]] && echo off || echo "$(pack) · $(vol_name)"; exit 0 ;;
+    pack)
+        [[ -z ${2:-} ]] && { pack; exit 0; }
+        [[ $2 == terminal || $2 == soft || $2 == glass ]] || { echo "packs: terminal soft glass" >&2; exit 2; }
+        echo "$2" >"$state/pack"; play notify; exit 0 ;;
+    volume)
+        [[ -z ${2:-} ]] && { vol_name; exit 0; }
+        [[ $2 == quiet || $2 == normal || $2 == loud ]] || { echo "volume: quiet normal loud" >&2; exit 2; }
+        echo "$2" >"$state/volume"; play notify; exit 0 ;;
+    demo) demo; exit 0 ;;
+    menu)
+        on=$([[ -e $state/off ]] && echo OFF || echo ON) p=$(pack) v=$(vol_name)
+        mark() { [[ $1 == "$2" ]] && echo "  ◂" || true; }
+        rows="󰝚  UI sounds: $([[ $on == ON ]] && echo "switch OFF" || echo "switch ON")
+󰎈  Pack: terminal (bit-crushed blips)$(mark "$p" terminal)
+󰎈  Pack: soft (round tones)$(mark "$p" soft)
+󰎈  Pack: glass (small bells)$(mark "$p" glass)
+󰕿  Volume: quiet$(mark "$v" quiet)
+󰖀  Volume: normal$(mark "$v" normal)
+󰕾  Volume: loud$(mark "$v" loud)
+󰐊  Play a few"
+        i=$(gits-menu "󰝚  UI SOUNDS: $on · $p · $v" "// 音" -format i <<<"$rows") || exit 0
+        case $i in
+            0) "$0" toggle >/dev/null; [[ -e $state/off ]] || play unlock ;;
+            1) "$0" pack terminal ;; 2) "$0" pack soft ;; 3) "$0" pack glass ;;
+            4) "$0" volume quiet ;; 5) "$0" volume normal ;; 6) "$0" volume loud ;;
+            7) demo ;;
+        esac
+        exit 0 ;;
+    ""|-h|--help) sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac
 [[ -e $state/off ]] && exit 0
-wav=$dir/$1.wav
-[[ -r $wav ]] || exit 1
+[[ $1 =~ ^[a-z]+$ && -r $(file "$1") ]] || exit 1
 stamp=$state/last-$1
 now=$(date +%s%N)
 last=$(cat "$stamp" 2>/dev/null || echo 0)
 (( now - last < 800000000 )) && exit 0
 echo "$now" >"$stamp"
-setsid -f pw-play --volume "${GITS_SOUND_VOLUME:-0.6}" "$wav" >/dev/null 2>&1
+play "$1"

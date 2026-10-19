@@ -7,7 +7,7 @@
 #   gits-phone ring      make the phone ring, to find it
 #   gits-phone status    "Pixel 10 Pro · 81%" or "no phone"
 # The phone is the first paired KDE Connect device that is reachable now (GITS_PHONE=<device id> picks one).
-say() { notify-send -a "GitS Notify" -i smartphone "󰄜  ${1}" "${2:-}"; }
+say() { notify-send -a "GitS Notify" ${snd:+-c "gits.$snd"} -i smartphone "󰄜  ${1}" "${2:-}"; }   # snd=send: with the swoosh
 dev=${GITS_PHONE:-$(kdeconnect-cli -a --id-only 2>/dev/null | head -1)}
 name() { kdeconnect-cli -a --id-name-only 2>/dev/null | awk -v d="$dev" '$1 == d { $1 = ""; sub(/^ /, ""); print; exit }'; }
 battery() {
@@ -25,17 +25,17 @@ case ${1:-menu} in
         need
         t=$(wl-paste -n -t text 2>/dev/null)
         [[ -n ${t//[[:space:]]/} ]] || { say "Nothing to send" "the clipboard holds no text"; exit 1; }
-        if [[ $t =~ ^https?://[^[:space:]]+$ ]]; then kdeconnect-cli -d "$dev" --share "$t" >/dev/null && say "Link sent to $(name)" "$t"
-        else kdeconnect-cli -d "$dev" --share-text "$t" >/dev/null && say "Text sent to $(name)" "$(head -c 100 <<<"$t")"; fi ;;
+        if [[ $t =~ ^https?://[^[:space:]]+$ ]]; then kdeconnect-cli -d "$dev" --share "$t" >/dev/null && snd=send say "Link sent to $(name)" "$t"
+        else kdeconnect-cli -d "$dev" --share-text "$t" >/dev/null && snd=send say "Text sent to $(name)" "$(head -c 100 <<<"$t")"; fi ;;
     shot)
         need
         f=$(ls -t "$shot_dir"/*.png 2>/dev/null | head -1)
         [[ -n $f ]] || { say "No screenshot" "nothing in ${shot_dir/#$HOME/~}"; exit 1; }
-        kdeconnect-cli -d "$dev" --share "$f" >/dev/null && say "Screenshot sent to $(name)" "${f##*/}" ;;
+        kdeconnect-cli -d "$dev" --share "$f" >/dev/null && snd=send say "Screenshot sent to $(name)" "${f##*/}" ;;
     file)
         need
         f=$(zenity --file-selection --title="Send to $(name)" --filename="$HOME/" 2>/dev/null) || exit 0
-        kdeconnect-cli -d "$dev" --share "$f" >/dev/null && say "Sent to $(name)" "${f##*/}" ;;
+        kdeconnect-cli -d "$dev" --share "$f" >/dev/null && snd=send say "Sent to $(name)" "${f##*/}" ;;
     ring)
         need
         kdeconnect-cli -d "$dev" --ring >/dev/null && say "Ringing $(name)" ;;
