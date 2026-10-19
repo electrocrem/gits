@@ -153,6 +153,16 @@ need sudo, so the commands to undo them are printed at the end.
   `Super+I` → *Battery charge limit* sets 80 / 85 / 90 / 100 % or one full charge (ASUS laptops through asusctl).
 * **Backups card:** `hl.env("GITS_KUMA", "http://host:3001/status/SLUG")` in `local.lua` shows the Uptime Kuma push monitors of that
   status page whose group is called *backup*, green or red, with the time of the last good run; click backs up this laptop now.
+* **Greeting and daily brief:** at login a short "link established" greeting (a key skips it), then once a day the brief:
+  weather, backups and server (Uptime Kuma), updates, battery and disk, yesterday's screen time (`Super+I` → *Daily brief*).
+  Off: `GITS_HELLO=0`, `GITS_BRIEF=0`.
+* **Screensaver:** digital rain in the theme's colours with a big clock; `Super+I` → *Sleep and power timers* → *Screensaver*
+  (off by default; never over a full-screen game or video). Try it: `gits-saver preview`.
+* **Time report:** `Super+I` → *Time report*: which applications had the focus today / over 7 days (local, names only; not while
+  locked or away). The data is in `~/.local/share/gits/activity`.
+* **Downloads:** `Super+I` → *Sort Downloads*: new files go to Images, Documents, Archives, Apps, Video, Audio, Torrents, Keys,
+  Code; after 30 days to `Old/YYYY-MM`. Nothing is deleted, `gits-downloads undo` puts the last batch back. Off by default.
+* **Lyrics:** the player card and the media popup show the line being sung (lrclib.net; `GITS_LYRICS=0` turns it off).
 * **YubiKey (or any FIDO2 key):** register it once (`pamu2fcfg > ~/.config/Yubico/u2f_keys`), then `sudo ~/.local/share/gits-yubikey/setup.sh`.
   Login and lock screen then want the password and a touch (in that order: password, Enter, touch the blinking key); `sudo` and the
   polkit dialogs take a touch instead of the password. A hint shows wherever the key is waited for. Without the key for a while:

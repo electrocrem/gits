@@ -162,8 +162,91 @@ class Rain(Gtk.DrawingArea):
         cr.show_text(sub)
 
 
+class Hello(Gtk.DrawingArea):
+    """The login greeting (gits-saver hello): a few terminal lines type themselves out, the welcome, then a scan-line wipe opens
+    the desktop. ~2.5 s; any key skips it. No names of shows: the same in every theme."""
+    TYPE, HOLD, WIPE = 1.3, 0.7, 0.45
+
+    def __init__(self, scale, done):
+        super().__init__()
+        self.bg, self.cy, self.cyb, self.red = palette()
+        self.done, self.t0 = done, time.monotonic()
+        u = os.uname()
+        name = (pwd_name() or os.environ.get("USER", "user")).split()[0]
+        theme = "gits"
+        try:
+            theme = re.search(r"^theme=(\S+)", open(os.path.expanduser("~/.local/state/gits/state")).read(), re.M).group(1)
+        except (OSError, AttributeError):
+            pass
+        self.lines = [f"> HANDSHAKE {'.' * 22} OK", f"> USER     {os.environ.get('USER', '?')} @ {u.nodename}",
+                      f"> SHELL    {theme.upper()} · LINUX {u.release.split('-')[0]}", f"> LINK     ESTABLISHED  {time.strftime('%H:%M')}"]
+        self.welcome = f"WELCOME BACK, {name.upper()}"
+        self.set_draw_func(self.draw)
+        GLib.timeout_add(1000 // 30, self.tick)
+
+    def tick(self):
+        if time.monotonic() - self.t0 > self.TYPE + self.HOLD + self.WIPE:
+            self.done()
+            return False
+        self.queue_draw()
+        return True
+
+    def draw(self, _a, cr, w, h):
+        t = time.monotonic() - self.t0
+        cr.set_source_rgb(*self.bg)
+        cr.paint()
+        cr.select_font_face(FONT, cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
+        cr.set_font_size(15)
+        total = sum(len(l) for l in self.lines)
+        shown = int(total * min(1.0, t / self.TYPE))
+        x, y = w / 2 - 260, h / 2 - 110
+        for line in self.lines:
+            part = line[:max(0, shown)]
+            shown -= len(line)
+            cr.set_source_rgba(*self.cy, 0.9)
+            cr.move_to(x, y)
+            cr.show_text(part)
+            if 0 < len(part) < len(line) or (shown <= 0 < len(part) and t < self.TYPE):
+                cr.set_source_rgb(*self.red)   # the cursor
+                cr.rectangle(x + cr.text_extents(part).x_advance + 3, y - 13, 9, 16)
+                cr.fill()
+            y += 26
+        if t > self.TYPE * 0.85:
+            cr.set_font_size(38)
+            e = cr.text_extents(self.welcome)
+            a = min(1.0, (t - self.TYPE * 0.85) / 0.3)
+            cr.set_source_rgba(*self.cyb, a)
+            cr.move_to((w - e.x_advance) / 2, h / 2 + 70)
+            cr.show_text(self.welcome)
+        for i in range(0, int(h), 3):   # CRT scan lines
+            cr.set_source_rgba(0, 0, 0, 0.18)
+            cr.rectangle(0, i, w, 1)
+            cr.fill()
+        if t > self.TYPE + self.HOLD:   # the wipe: the screen opens top-down behind a bright line
+            f = min(1.0, (t - self.TYPE - self.HOLD) / self.WIPE)
+            cr.set_operator(cairo.OPERATOR_CLEAR)
+            cr.rectangle(0, 0, w, h * f)
+            cr.fill()
+            cr.set_operator(cairo.OPERATOR_OVER)
+            cr.set_source_rgb(*self.cyb)
+            cr.rectangle(0, h * f - 2, w, 2)
+            cr.fill()
+
+
+def pwd_name():
+    try:
+        import pwd
+        return pwd.getpwuid(os.getuid()).pw_gecos.split(",")[0]
+    except (KeyError, ImportError):
+        return ""
+
+
 def main():
+    hello = "--hello" in sys.argv
     Gtk.init()
+    css = Gtk.CssProvider()
+    css.load_from_string("window { background: transparent; }")   # the greeting's wipe uncovers the desktop
+    Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
     loop = GLib.MainLoop()
     started = time.monotonic()
     quit_ = lambda *_: (loop.quit(), True)[1] if time.monotonic() - started > 0.8 else False   # ignore the input that is still settling
@@ -180,7 +263,10 @@ def main():
             LS.set_anchor(win, edge, True)
         LS.set_exclusive_zone(win, -1)
         LS.set_keyboard_mode(win, LS.KeyboardMode.EXCLUSIVE)
-        win.set_child(Rain(mon.get_scale_factor()))
+        if hello:
+            win.set_child(Hello(mon.get_scale_factor(), loop.quit))
+        else:
+            win.set_child(Rain(mon.get_scale_factor()))
         win.set_cursor(Gdk.Cursor.new_from_name("none", None))   # no pointer over the rain
         keys = Gtk.EventControllerKey()
         keys.connect("key-pressed", quit_)
@@ -196,7 +282,8 @@ def main():
                 quit_()
             last.setdefault("p", (x, y))
         motion.connect("motion", moved)
-        win.add_controller(motion)
+        if not hello:
+            win.add_controller(motion)
         win.present()
         wins.append(win)
     for sig in (2, 15):

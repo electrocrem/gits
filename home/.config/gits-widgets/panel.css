@@ -196,3 +196,4 @@ button.dd-tile.drop-here { border-color: #E5432B; box-shadow: inset 3px 0 0 #E54
 .act-total { font-size: 16px; font-weight: 800; letter-spacing: 2px; color: #C8F4FF; }
 .act-name { font-size: 10px; font-weight: 700; letter-spacing: 1px; color: #9FC5D6; }
 .act-time { font-size: 10px; font-weight: 700; color: #2ED3D7; }
+.br-val { font-size: 12px; color: #C8F4FF; }

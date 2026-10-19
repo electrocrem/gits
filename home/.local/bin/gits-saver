@@ -3,6 +3,8 @@
 #   gits-saver start     show it (hypridle: Super+I -> Sleep and power timers -> Screensaver); not over a full-screen window
 #   gits-saver stop      take it away (hypridle's on-resume; any key / click / mouse movement does that by itself too)
 #   gits-saver preview   show it now, also over full-screen windows
+#   gits-saver hello     the login greeting (~2.5 s, a key skips it), then the daily brief once a day (gits-panel brief)
+#                        GITS_HELLO=0: no greeting; GITS_BRIEF=0: no brief
 pidf=${XDG_RUNTIME_DIR:-/tmp}/gits-saver.pid
 running() { [[ -s $pidf ]] && kill -0 "$(<"$pidf")" 2>/dev/null; }
 case ${1:-preview} in
@@ -14,7 +16,14 @@ case ${1:-preview} in
         fi
         python3 "$HOME/.config/gits-widgets/saver.py" >/dev/null 2>&1 &
         echo $! >"$pidf" ;;
+    hello)
+        [[ ${GITS_HELLO:-1} == 0 ]] || python3 "$HOME/.config/gits-widgets/saver.py" --hello >/dev/null 2>&1
+        stamp=${XDG_STATE_HOME:-$HOME/.local/state}/gits/brief-last
+        if [[ ${GITS_BRIEF:-1} != 0 && $(cat "$stamp" 2>/dev/null) != "$(date +%F)" ]]; then
+            mkdir -p "${stamp%/*}"; date +%F >"$stamp"
+            gits-panel brief
+        fi ;;
     stop) running && kill "$(<"$pidf")"; rm -f "$pidf" ;;
     status) running && echo on || echo off ;;
-    *) sed -n '2,6p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+    *) sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

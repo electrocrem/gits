@@ -13,6 +13,7 @@ hl.on("hyprland.start", function()
     hl.exec_cmd(home .. "/.config/gits-widgets/run.sh start")   -- desktop widgets
     hl.exec_cmd("gits-osd start")                           -- volume / brightness / keyboard backlight display
     hl.exec_cmd(home .. "/.config/hypr/scripts/gits-events.sh")   -- login chime, plug / lock sounds, battery warnings
+    hl.exec_cmd("sh -c 'sleep 1; command -v gits-saver >/dev/null && gits-saver hello'")   -- login greeting, then the daily brief once a day
     hl.exec_cmd("sh -c 'sleep 6; command -v gits-idle >/dev/null && gits-idle apply'")   -- sleep / lock timers of the current power source
     -- ROG Control Center (ASUS laptops): its autostart entry never runs in a session like this one
     hl.exec_cmd("sh -c 'command -v rog-control-center >/dev/null || exit 0; sleep 8; pgrep -f \"^(/usr/bin/)?rog-control-center\" >/dev/null || exec setsid -f rog-control-center --autostart --background'")

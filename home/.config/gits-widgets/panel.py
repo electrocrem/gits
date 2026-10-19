@@ -2372,6 +2372,133 @@ class DesktopPopup(Popup):
         GLib.timeout_add(400, lambda: (self.dismiss(), False)[1])
 
 
+class BriefPopup(Popup):
+    """The daily brief (gits-panel brief; after the login greeting once a day, Super+I -> Daily brief): weather, backups and
+    home-server services (Uptime Kuma, GITS_KUMA), pending updates, battery and disk, and yesterday's time report. Each line
+    fills in when its answer is there; Esc / click outside closes."""
+    CARD_W = 560
+
+    def __init__(self, monitor):
+        super().__init__(monitor, center=True)
+        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        root.add_css_class("panel")
+        h = datetime.datetime.now().hour
+        part = "MORNING" if 5 <= h < 12 else "AFTERNOON" if h < 18 else "EVENING" if h < 23 else "NIGHT"
+        try:
+            import pwd
+            who = (pwd.getpwuid(os.getuid()).pw_gecos.split(",")[0] or os.environ.get("USER", "")).split()[0]
+        except (KeyError, IndexError):
+            who = os.environ.get("USER", "")
+        head = Gtk.Box(spacing=6)
+        head.append(label(f"󰖨  GOOD {part}, {who.upper()}", "m-head"))
+        sp = Gtk.Box()
+        sp.set_hexpand(True)
+        head.append(sp)
+        head.append(label("// 報告", "m-tag"))
+        root.append(head)
+        root.append(label(datetime.date.today().strftime("%A  %d %B %Y").upper(), "act-total"))
+        self.grid = Gtk.Grid(column_spacing=12, row_spacing=7)
+        root.append(self.grid)
+        self.rows = {}
+        for i, (key, glyph, name) in enumerate((("weather", "󰖐", "WEATHER"), ("backups", "󰁯", "BACKUPS"), ("services", "󰒋", "SERVER"),
+                                                ("updates", "󰚰", "UPDATES"), ("system", "󰂄", "SYSTEM"), ("time", "󱎫", "YESTERDAY"))):
+            g = label(glyph, "l-glyph", 0.5)
+            g.set_size_request(24, -1)
+            self.grid.attach(g, 0, i, 1, 1)
+            self.grid.attach(label(name, "act-name"), 1, i, 1, 1)
+            v = label("…", "br-val")
+            v.set_hexpand(True)
+            v.set_wrap(True)
+            self.grid.attach(v, 2, i, 1, 1)
+            self.rows[key] = v
+        root.append(label("Esc: close · Super+I -> Daily brief to see it again", "m-tag"))
+        self.set_child(root)
+        for key, fn in (("weather", self._weather), ("backups", self._kuma), ("updates", self._updates), ("system", self._system),
+                        ("time", self._time)):
+            threading.Thread(target=self._fill, args=(key, fn), daemon=True).start()
+
+    def _fill(self, key, fn):
+        try:
+            out = fn()
+        except Exception:   # offline, a tool missing: say so instead of hanging on "…"
+            out = None
+        if isinstance(out, dict):
+            for k, v in out.items():
+                GLib.idle_add(self._set, k, v)
+        else:
+            GLib.idle_add(self._set, key, out)
+
+    def _set(self, key, text):
+        self.rows[key].set_text(text or "—")
+        return False
+
+    @staticmethod
+    def _weather():
+        if DEMO:
+            return "+14°C  partly cloudy · Yerevan · wind 3 m/s"
+        loc = os.environ.get("GITS_WEATHER_LOCATION", "")
+        if loc.lower() == "off":
+            return "off (GITS_WEATHER_LOCATION=off)"
+        req = urllib.request.Request("https://wttr.in/" + urllib.parse.quote(loc) + "?format=%t|%C|%l|%w&m", headers={"User-Agent": "curl"})
+        t, c, l, w = (urllib.request.urlopen(req, timeout=8).read().decode().strip().split("|") + ["", "", "", ""])[:4]
+        return f"{t}  {c.lower()} · {l.split(',')[0]} · wind {w}"
+
+    @staticmethod
+    def _kuma():
+        if DEMO:
+            return {"backups": "laptop 3h ago ✓ · pi 6h ago ✓", "services": "6/6 up"}
+        url = os.environ.get("GITS_KUMA", "")
+        m = re.match(r"(https?://[^/]+)/status/([^/?#]+)", url)
+        if not m:
+            return {"backups": "no source (GITS_KUMA in local.lua)", "services": "no source (GITS_KUMA)"}
+        base, slug = m.groups()
+        get = lambda p: json.load(urllib.request.urlopen(f"{base}/api/status-page/{p}", timeout=8))
+        page, beats = get(slug), get(f"heartbeat/{slug}").get("heartbeatList", {})
+        now, bk, up, all_ = time.time(), [], 0, 0
+        for g in page.get("publicGroupList", []):
+            for mon in g.get("monitorList", []):
+                hb = beats.get(str(mon["id"])) or []
+                ok = bool(hb) and hb[-1].get("status") == 1
+                all_ += 1
+                up += ok
+                if re.search(r"backup|бэкап|бекап", g.get("name", ""), re.I):
+                    good = [b for b in hb if b.get("status") == 1]
+                    age = ""
+                    if good:
+                        ts = datetime.datetime.strptime(good[-1]["time"][:19], "%Y-%m-%d %H:%M:%S").replace(tzinfo=datetime.timezone.utc)
+                        s = now - ts.timestamp()
+                        age = f"{int(s // 3600)}h ago" if s >= 3600 else f"{int(s // 60)} min ago"
+                    bk.append(f"{mon['name'].lower().replace(' backup', '')} {age} {'✓' if ok else '✗ OVERDUE'}".strip())
+        return {"backups": " · ".join(bk) or "no backup monitors", "services": f"{up}/{all_} up" + ("" if up == all_ else "  ✗ check Uptime Kuma")}
+
+    @staticmethod
+    def _updates():
+        if DEMO:
+            return "12 (repo 11 · AUR 1)"
+        out = subprocess.run(["gits-update", "--check"], capture_output=True, text=True, timeout=90).stdout.split()
+        n = [int(x) for x in out if x.isdigit()]
+        return (f"{n[0] + n[1]} pending (repo {n[0]} · AUR {n[1]})  → Super+I -> Update" if n[0] + n[1] else "up to date") if len(n) >= 2 else " ".join(out)
+
+    @staticmethod
+    def _system():
+        parts = []
+        bat = sh(["gits-battery", "health"], timeout=3).strip()
+        if bat:
+            parts.append(f"battery {sh(['gits-battery', 'percent'], timeout=3).strip()}% · health {bat.split(' ')[0]}")
+        du = shutil.disk_usage(HOME)
+        parts.append(f"disk {du.free / 2**30:.0f} GB free")
+        return " · ".join(parts)
+
+    @staticmethod
+    def _time():
+        days = json.loads(sh(["gits-activity", "json", "2"], timeout=5) or "{}").get("days", {})
+        y = days.get((datetime.date.today() - datetime.timedelta(days=1)).isoformat(), {})
+        if not y:
+            return "nothing counted"
+        tot, (top, sec) = sum(y.values()), max(y.items(), key=lambda kv: kv[1])
+        return f"{fmt_dur(tot)} at the screen · most: {top} ({fmt_dur(sec)})"
+
+
 class ActivityPopup(Popup):
     """Time report (gits-panel activity, Super+I -> Time report): which applications had the focus today / over 7 days, from
     gits-activity (local, application names only). Tab or the two buttons switch the range; Esc / click outside closes."""
@@ -3539,6 +3666,8 @@ def main():
         win = SettingsPopup(mon)
     elif mode == "activity":
         win = ActivityPopup(mon)
+    elif mode == "brief":
+        win = BriefPopup(mon)
     elif mode in ("appearance", "themes"):
         win = AppearancePopup(mon)
     elif mode == "desktop":
