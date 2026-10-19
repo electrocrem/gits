@@ -1,0 +1,7 @@
+[Unit]
+Description=GitS: sort ~/Downloads every 10 minutes (gits-downloads; Super+I -> Sort Downloads switches it on / off)
+PartOf=gits-session.target
+
+[Timer]
+OnActiveSec=3min
+OnUnitActiveSec=10min

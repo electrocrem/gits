@@ -1,0 +1,7 @@
+[Unit]
+Description=GitS: sort ~/Downloads by type (gits-downloads; does nothing while switched off)
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/gits-downloads run
+Nice=10

@@ -1,0 +1,204 @@
+#!/usr/bin/env python3
+"""gits-downloads: keep ~/Downloads tidy. Off until you switch it on (Super+I -> Sort Downloads, or `gits-downloads on`).
+
+  gits-downloads run [--dry-run]   sort new files into folders by type, move what sat there 30+ days to Old/YYYY-MM
+                                   (gits-downloads.timer runs this every 10 minutes while it is on)
+  gits-downloads on | off | status | toggle
+  gits-downloads undo              put the last batch of moves back where it came from
+  gits-downloads menu              on / off / sort now / undo (the settings hub)
+
+Folders: Images, Documents, Archives, Apps, Video, Audio, Torrents, Keys, Code; anything else stays where it is. Never touches
+files still downloading (.part, .crdownload, ...), hidden ones, folders, or files changed in the last 2 minutes, and never deletes:
+a name that is taken gets " (2)". Every move is logged in ~/.local/state/gits/downloads.log (one JSON batch per line)."""
+import json
+import os
+import shutil
+import subprocess
+import sys
+import time
+
+HOME = os.path.expanduser("~")
+DL = os.environ.get("GITS_DOWNLOADS_DIR") or subprocess.run(["xdg-user-dir", "DOWNLOAD"], capture_output=True, text=True).stdout.strip() \
+    or os.path.join(HOME, "Downloads")
+if os.path.realpath(DL) == os.path.realpath(HOME):   # xdg-user-dir falls back to $HOME: never sort the home folder
+    DL = os.path.join(HOME, "Downloads")
+CONF = os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.join(HOME, ".config")), "gits", "downloads.conf")
+LOG = os.path.join(os.environ.get("XDG_STATE_HOME", os.path.join(HOME, ".local", "state")), "gits", "downloads.log")
+OLD_DAYS, FRESH_S = 30, 120
+KINDS = {
+    "Images": "jpg jpeg png gif webp svg heic heif bmp avif tif tiff ico",
+    "Documents": "pdf doc docx odt rtf txt md epub djvu fb2 xls xlsx ods csv ppt pptx odp",
+    "Archives": "zip rar 7z tar gz tgz xz zst bz2 lz4 iso",
+    "Apps": "appimage deb rpm exe msi apk flatpakref flatpak dmg",
+    "Video": "mp4 mkv webm mov avi m4v wmv",
+    "Audio": "mp3 flac ogg opus wav m4a aac",
+    "Torrents": "torrent",
+    "Keys": "crt pem key pub ovpn p12 pfx asc gpg cer der kdbx",
+    "Code": "json ron yaml yml toml xml sql py sh lua gd js ts html css ini conf",
+}
+EXT = {e: k for k, v in KINDS.items() for e in v.split()}
+PARTIAL = (".part", ".crdownload", ".download", ".tmp", ".!qb", ".opdownload", ".partial")
+
+
+def enabled():
+    try:
+        return any(l.split("=", 1)[1].strip().lower() in ("yes", "on", "true", "1")
+                   for l in open(CONF) if l.strip().startswith("enabled") and "=" in l)
+    except OSError:
+        return False
+
+
+def set_enabled(on):
+    os.makedirs(os.path.dirname(CONF), exist_ok=True)
+    with open(CONF, "w") as f:
+        f.write("# gits-downloads: sort ~/Downloads by type every 10 minutes (Super+I -> Sort Downloads)\n")
+        f.write(f"enabled = {'yes' if on else 'no'}\n")
+
+
+def kind(name):
+    low = name.lower()
+    if low.endswith(".pkg.tar.zst") or low.endswith(".pkg.tar.xz"):
+        return "Apps"
+    return EXT.get(low.rsplit(".", 1)[-1]) if "." in low else None
+
+
+def free(path):
+    """path, or 'name (2).ext', 'name (3).ext'... if it is taken."""
+    if not os.path.exists(path):
+        return path
+    d, b = os.path.split(path)
+    low = b.lower()
+    cut = next((len(b) - len(x) for x in (".tar.gz", ".tar.xz", ".tar.zst", ".tar.bz2", ".pkg.tar.zst") if low.endswith(x)), None)
+    stem, ext = (b[:cut], b[cut + 1:]) if cut else os.path.splitext(b)[0], os.path.splitext(b)[1].lstrip(".")
+    dot = "." if ext else ""
+    n = 2
+    while True:
+        cand = os.path.join(d, f"{stem} ({n}){dot}{ext}")
+        if not os.path.exists(cand):
+            return cand
+        n += 1
+
+
+def plan():
+    now, moves = time.time(), []
+    for e in sorted(os.scandir(DL), key=lambda e: e.name.lower()):   # 1. new files in the top folder -> their kind's folder
+        if not e.is_file(follow_symlinks=False) or e.name.startswith(".") or e.name.lower().endswith(PARTIAL):
+            continue
+        if now - e.stat().st_mtime < FRESH_S:
+            continue
+        k = kind(e.name)
+        if k:
+            moves.append((e.path, os.path.join(DL, k, e.name)))
+    for k in KINDS:   # 2. files that sat in a kind's folder for 30+ days -> Old/YYYY-MM/kind
+        d = os.path.join(DL, k)
+        if not os.path.isdir(d):
+            continue
+        for e in os.scandir(d):
+            if e.is_file(follow_symlinks=False) and now - e.stat().st_mtime > OLD_DAYS * 86400:
+                month = time.strftime("%Y-%m", time.localtime(e.stat().st_mtime))
+                moves.append((e.path, os.path.join(DL, "Old", month, k, e.name)))
+    return moves
+
+
+def notify(text):
+    subprocess.run(["notify-send", "-a", "GitS Notify", "-i", "folder-download", "󰉍  Downloads", text], capture_output=True)
+
+
+def run(dry):
+    moves = plan()
+    done = []
+    for src, dst in moves:
+        dst = free(dst)
+        rel = lambda p: os.path.relpath(p, DL)
+        if dry:
+            print(f"{rel(src)}  ->  {rel(dst)}")
+            continue
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        try:
+            shutil.move(src, dst)
+        except OSError as err:
+            print(f"skip {rel(src)}: {err}", file=sys.stderr)
+            continue
+        done.append([src, dst])
+    if dry:
+        print(f"({len(moves)} move(s); nothing changed: --dry-run)")
+        return 0
+    if done:
+        os.makedirs(os.path.dirname(LOG), exist_ok=True)
+        with open(LOG, "a") as f:
+            f.write(json.dumps({"t": int(time.time()), "moves": done}) + "\n")
+        counts = {}
+        for _, dst in done:
+            k = os.path.relpath(dst, DL).split(os.sep)[0]
+            counts[k] = counts.get(k, 0) + 1
+        notify(", ".join(f"{n} → {k}" for k, n in counts.items()) + "   (undo: gits-downloads undo)")
+    return 0
+
+
+def undo():
+    try:
+        lines = open(LOG).read().splitlines()
+    except OSError:
+        lines = []
+    if not lines:
+        print("nothing to undo")
+        return 1
+    batch = json.loads(lines[-1])
+    back = 0
+    for src, dst in reversed(batch["moves"]):
+        if os.path.exists(dst) and not os.path.exists(src):
+            os.makedirs(os.path.dirname(src), exist_ok=True)
+            shutil.move(dst, src)
+            back += 1
+    with open(LOG, "w") as f:
+        f.write("".join(l + "\n" for l in lines[:-1]))
+    for k in list(KINDS) + ["Old"]:   # folders the batch left empty
+        for root, dirs, files in os.walk(os.path.join(DL, k), topdown=False):
+            if not os.listdir(root):   # (dirs / files of the walk are stale once a child folder was removed)
+                os.rmdir(root)
+    notify(f"put {back} file(s) back")
+    print(f"put {back} file(s) back")
+    return 0
+
+
+def main(argv):
+    cmd = argv[0] if argv else "status"
+    if cmd == "run":
+        if not enabled() and "--force" not in argv and "--dry-run" not in argv:
+            return 0   # the timer fires anyway; switched off = nothing happens
+        return run("--dry-run" in argv)
+    if cmd in ("on", "off"):
+        set_enabled(cmd == "on")
+        print(f"sorting Downloads: {cmd}")
+        if cmd == "on":
+            return run(False)
+        return 0
+    if cmd == "toggle":
+        return main(["off" if enabled() else "on"])
+    if cmd == "status":
+        print("on" if enabled() else "off")
+        return 0
+    if cmd == "undo":
+        return undo()
+    if cmd == "menu":
+        rows = ["󰉍  Sort Downloads: " + ("switch OFF" if enabled() else "switch ON (sorts right away)"), "󰑐  Sort now",
+                "󰕌  Undo the last sort", "󰈙  Show what would move (dry run)"]
+        r = subprocess.run(["gits-menu", "󰉍  DOWNLOADS: " + ("ON" if enabled() else "OFF"), "// 整理", "-format", "i"],
+                           input="\n".join(rows), capture_output=True, text=True)
+        i = r.stdout.strip()
+        if i == "0":
+            return main(["toggle"])
+        if i == "1":
+            return run(False)
+        if i == "2":
+            return undo()
+        if i == "3":
+            out = subprocess.run([sys.argv[0], "run", "--dry-run"], capture_output=True, text=True).stdout
+            notify(out.strip()[-900:] or "nothing to move")
+        return 0
+    print(__doc__.strip(), file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
