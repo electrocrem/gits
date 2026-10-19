@@ -1,0 +1,9 @@
+[Unit]
+Description=GitS: reminders (gits-remind: fires them on time, missed ones at the next login)
+PartOf=gits-session.target
+
+[Service]
+ExecStart=%h/.local/bin/gits-remind run
+Restart=on-failure
+RestartSec=5
+Nice=10

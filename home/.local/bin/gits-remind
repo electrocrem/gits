@@ -1,0 +1,228 @@
+#!/usr/bin/env python3
+"""gits-remind: reminders. Type them in the command palette (Super+A), e.g. "через 20м чайник", "in 1h30 call mum", "в 18:30 созвон",
+"завтра в 9 врач", "remind 45m stretch"; or Super+I -> Reminders.
+
+  gits-remind add TEXT     "WHEN WHAT" or "WHAT WHEN": через / in N м|мин|ч|час|h|m|s, в / at HH[:MM], завтра / tomorrow
+  gits-remind parse TEXT   what add would do: <epoch> <tab> <what>, nothing changed (the palette uses this)
+  gits-remind list         the pending ones;  gits-remind json   the same as JSON
+  gits-remind cancel ID    gits-remind menu   pending ones (pick = cancel) + a new one
+  gits-remind run          the service (gits-remind.service): fires them on time, also after a suspend; one that was due while
+                           the laptop was off fires at the next login, marked "missed"
+A reminder is a notification that stays until you close it (Snooze 10 min / Done), with a sound and, when KDE Connect sees your
+phone, a copy on the phone (GITS_REMIND_PHONE=0: not). Kept in ~/.local/share/gits/reminders.json.
+"""
+import datetime
+import json
+import os
+import re
+import subprocess
+import sys
+import threading
+import time
+
+HOME = os.path.expanduser("~")
+FILE = os.path.join(os.environ.get("XDG_DATA_HOME", os.path.join(HOME, ".local", "share")), "gits", "reminders.json")
+SNOOZE = 600
+UNITS = {"с": 1, "сек": 1, "s": 1, "sec": 1, "м": 60, "мин": 60, "минут": 60, "минуты": 60, "минуту": 60, "m": 60, "min": 60,
+         "mins": 60, "minute": 60, "minutes": 60, "ч": 3600, "час": 3600, "часа": 3600, "часов": 3600, "h": 3600, "hr": 3600,
+         "hour": 3600, "hours": 3600, "д": 86400, "день": 86400, "дня": 86400, "дней": 86400, "d": 86400, "day": 86400, "days": 86400}
+UNIT_RE = "|".join(sorted(map(re.escape, UNITS), key=len, reverse=True))
+DUR = re.compile(rf"(?:(?:через|in)\s+)?((?:\d+(?:[.,]\d+)?\s*(?:{UNIT_RE})\.?\s*)+)(?=\s|$)", re.I)
+PART = re.compile(rf"(\d+(?:[.,]\d+)?)\s*({UNIT_RE})\.?", re.I)
+HALF = re.compile(r"(?:через|in)\s+(полчаса|half an hour|час|an hour|a minute|минуту)(?=\s|$)", re.I)
+CLOCK = re.compile(r"(?:(завтра|tomorrow)\s+)?(?:(?:в|at|к)\s+)?(\d{1,2})(?::|\.|ч\s*)(\d{2})(?=\s|$)|"
+                   r"(?:(завтра|tomorrow)\s+)?(?:в|at|к)\s+(\d{1,2})(?:\s*(?:ч|часов|часа|h|am|pm))?(?=\s|$)", re.I)
+LEAD = re.compile(r"^\s*(?:напомни(?:ть)?(?:\s+мне)?|remind(?:\s+me)?(?:\s+to)?)\s+", re.I)
+
+
+def parse(text, now=None):
+    """-> (epoch, what) or None. The time part may stand first or last; the rest is the message."""
+    now = now or time.time()
+    s = LEAD.sub("", text.strip())
+    s = re.sub(r"(\d+)\s*(ч|h)\s*(\d{1,2})(?=\s|$)", r"\1\2 \3м", s, flags=re.I)   # 1h30 / 1ч30 = 1 h 30 min
+    m = HALF.search(s)
+    if m:
+        secs = {"полчаса": 1800, "half an hour": 1800, "час": 3600, "an hour": 3600, "a minute": 60, "минуту": 60}[m.group(1).lower()]
+        return now + secs, clean(s[:m.start()] + " " + s[m.end():])
+    m = DUR.search(s)
+    if m and PART.search(m.group(1)):
+        secs = sum(float(n.replace(",", ".")) * UNITS[u.lower()] for n, u in PART.findall(m.group(1)))
+        if secs > 0:
+            return now + secs, clean(s[:m.start()] + " " + s[m.end():])
+    m = CLOCK.search(s)
+    if m:
+        tomorrow = bool(m.group(1) or m.group(4))
+        hh = int(m.group(2) or m.group(5))
+        mm = int(m.group(3) or 0)
+        if hh > 23 or mm > 59:
+            return None
+        base = datetime.datetime.fromtimestamp(now)
+        at = base.replace(hour=hh, minute=mm, second=0, microsecond=0)
+        if tomorrow:
+            at += datetime.timedelta(days=1)
+        elif at.timestamp() <= now:
+            at += datetime.timedelta(days=1)   # 9:00 when it is 15:00 = tomorrow
+        rest = s[:m.start()] + " " + s[m.end():]
+        if not tomorrow:
+            rest = re.sub(r"(?:^|\s)(завтра|tomorrow)(?=\s|$)", " ", rest, flags=re.I)
+        return at.timestamp(), clean(rest)
+    return None
+
+
+def clean(s):
+    s = re.sub(r"\s+", " ", s).strip(" ,.:;-—")
+    s = re.sub(r"^(?:что(?:бы)?|to|about|про)\s+", "", s, flags=re.I)
+    return s or "Reminder"
+
+
+def when(t, now=None):
+    now = now or time.time()
+    d = datetime.datetime.fromtimestamp(t)
+    left = t - now
+    if left < 0:
+        return d.strftime("%H:%M")
+    mins = -(-int(left) // 60)   # rounded up: "через 20м" says "in 20 min"
+    rel = f"in {mins} min" if mins < 60 else f"in {mins // 60} h {mins % 60:02d} min"
+    day = "" if d.date() == datetime.date.today() else ("tomorrow " if d.date() == datetime.date.today() + datetime.timedelta(1)
+                                                          else d.strftime("%a %d %b "))
+    return f"{day}{d:%H:%M} ({rel})"
+
+
+def load():
+    try:
+        return json.load(open(FILE))
+    except (OSError, ValueError):
+        return []
+
+
+def save(items):
+    os.makedirs(os.path.dirname(FILE), exist_ok=True)
+    tmp = FILE + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(sorted(items, key=lambda r: r["at"]), f, ensure_ascii=False, indent=1)
+    os.replace(tmp, FILE)
+
+
+def notify(title, body="", *extra):
+    subprocess.run(["notify-send", "-a", "GitS Notify", "-i", "appointment-soon", *extra, title, body], capture_output=True)
+
+
+def add(text):
+    p = parse(text)
+    if not p:
+        notify("󰀠  Reminder: when?", f"“{text}”: say when, e.g. через 20м, in 1h, в 18:30, завтра в 9")
+        print("no time found in that text", file=sys.stderr)
+        return 1
+    at, what = p
+    items = load()
+    rid = max([r["id"] for r in items] + [0]) + 1
+    items.append({"id": rid, "at": int(at), "text": what})
+    save(items)
+    notify(f"󰀠  Reminder set: {when(at)}", what)
+    print(f"{rid}\t{when(at)}\t{what}")
+    return 0
+
+
+def phone(text):
+    if os.environ.get("GITS_REMIND_PHONE", "1") == "0":
+        return
+    dev = subprocess.run(["kdeconnect-cli", "-a", "--id-only"], capture_output=True, text=True).stdout.split()
+    if dev:
+        subprocess.run(["kdeconnect-cli", "-d", dev[0], "--ping-msg", f"⏰ {text}"], capture_output=True, timeout=10)
+
+
+def fire(r, missed=False):
+    """Shown until closed; Snooze puts it back 10 minutes later. Runs in its own thread (notify-send --wait blocks)."""
+    try:
+        phone(r["text"])
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    title = "󰀠  Reminder" + (f" (missed, was due {datetime.datetime.fromtimestamp(r['at']):%H:%M})" if missed else "")
+    out = subprocess.run(["notify-send", "-a", "GitS Notify", "-u", "critical", "-c", "gits.done", "-i", "appointment-soon",
+                          "-A", "snooze=Snooze 10 min", "-A", "done=Done", "--wait", title, r["text"]],
+                         capture_output=True, text=True).stdout.strip()
+    if out == "snooze":
+        items = load()
+        items.append({"id": max([x["id"] for x in items] + [0]) + 1, "at": int(time.time() + SNOOZE), "text": r["text"]})
+        save(items)
+
+
+def run():
+    first = True
+    while True:
+        now = time.time()
+        items = load()
+        due = [r for r in items if r["at"] <= now]
+        if due:
+            save([r for r in items if r["at"] > now])
+            for r in due:   # due long before this start (the laptop was off) = missed
+                threading.Thread(target=fire, args=(r, first and now - r["at"] > 120), daemon=True).start()
+        first = False
+        time.sleep(5)   # wall clock: right after a resume too
+
+
+def menu():
+    items = load()
+    rows = ["󰐕  New reminder…"] + [f"󰀠  {when(r['at'])}   {r['text']}" for r in items]
+    r = subprocess.run(["gits-menu", f"󰀠  REMINDERS: {len(items)}", "// 備忘", "-format", "i"], input="\n".join(rows),
+                       capture_output=True, text=True)
+    if r.returncode != 0 or not r.stdout.strip().isdigit():
+        return 0
+    i = int(r.stdout.strip())
+    if i == 0:
+        t = subprocess.run(["gits-menu", "󰀠  NEW REMINDER: через 20м чай · в 18:30 созвон · in 1h stretch", "// 備忘", "--text"],
+                           capture_output=True, text=True, stdin=subprocess.DEVNULL).stdout.strip()
+        return add(t) if t else 0
+    rr = items[i - 1]
+    c = subprocess.run(["gits-menu", f"󰀠  {rr['text'][:40]}", "// 備忘", "-format", "i"], input="󰆴  Cancel it\n󰜺  Keep it",
+                       capture_output=True, text=True).stdout.strip()
+    if c == "0":
+        return cancel(rr["id"])
+    return 0
+
+
+def cancel(rid):
+    items = load()
+    keep = [r for r in items if str(r["id"]) != str(rid)]
+    if len(keep) == len(items):
+        print(f"no reminder {rid}", file=sys.stderr)
+        return 1
+    save(keep)
+    notify("󰀠  Reminder cancelled", next(r["text"] for r in items if str(r["id"]) == str(rid)))
+    return 0
+
+
+def main(argv):
+    cmd = argv[0] if argv else "menu"
+    rest = " ".join(argv[1:])
+    if cmd == "add" and rest:
+        return add(rest)
+    if cmd == "parse" and rest:
+        p = parse(rest)
+        if not p:
+            return 1
+        print(f"{int(p[0])}\t{when(p[0])}\t{p[1]}")
+        return 0
+    if cmd == "list":
+        for r in load():
+            print(f"{r['id']}\t{when(r['at'])}\t{r['text']}")
+        return 0
+    if cmd == "json":
+        print(json.dumps(load(), ensure_ascii=False))
+        return 0
+    if cmd == "status":
+        n = len(load())
+        print(f"{n} pending" if n else "none")
+        return 0
+    if cmd == "cancel" and rest:
+        return cancel(rest)
+    if cmd == "run":
+        run()
+    if cmd == "menu":
+        return menu()
+    print(__doc__.strip(), file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

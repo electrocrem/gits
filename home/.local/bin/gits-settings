@@ -40,6 +40,7 @@ TOOLS	󰉍  Sort Downloads (by type; 30+ days old to Old/; undo)	gits-downloads 
 TOOLS	󰉋  Open a project (git / Godot)	gits-project
 TOOLS	󰎞  Quick note (Super+N)	gits-note add
 TOOLS	󰎞  Recent notes (copy one)	gits-note list
+TOOLS	󰀠  Reminders (or type "через 20м чай" in Super+A)	gits-remind menu	gits-remind status
 TOOLS	󱎫  Focus timer (pomodoro)	gits-focus menu	gits-focus status
 TOOLS	󰐹  Radio (DATAMOSH: on air, spectrum, tune in / out)	gits-panel radio	gits-radio status
 TOOLS	󰊄  Copy text from the screen (OCR, Super+Ctrl+S)	gits-shot ocr

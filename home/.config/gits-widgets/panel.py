@@ -2883,6 +2883,30 @@ _FUN = {"sqrt": math.sqrt, "sin": math.sin, "cos": math.cos, "tan": math.tan, "l
 _CONST = {"pi": math.pi, "e": math.e}
 
 
+_remind = None
+REMIND_HINT = re.compile(r"^(через|in\s|в\s|at\s|к\s|завтра|tomorrow|напомни|remind)|\d\s*(м|мин|ч|час|h|m|min)\b", re.I)
+
+
+def remind_parse(q):
+    """'через 20м чай' -> (epoch, 'чай', 'in 20 min · 15:20'): gits-remind's own parser, loaded once (no process per key)."""
+    global _remind
+    if len(q) < 4 or not REMIND_HINT.search(q):
+        return None
+    if _remind is None:
+        try:
+            import importlib.util
+            from importlib.machinery import SourceFileLoader
+            loader = SourceFileLoader("gits_remind", os.path.join(HOME, ".local", "bin", "gits-remind"))
+            _remind = importlib.util.module_from_spec(importlib.util.spec_from_loader("gits_remind", loader))
+            loader.exec_module(_remind)
+        except (OSError, SyntaxError, ImportError):
+            _remind = False
+    if not _remind:
+        return None
+    p = _remind.parse(q)
+    return (p[0], p[1], _remind.when(p[0])) if p else None
+
+
 def calc(expr):
     """A safe pocket calculator: numbers, + - * / // % ** ^ ( ), sqrt sin cos tan log ln abs round, pi e. None if it is not maths."""
     expr = expr.strip().replace("^", "**").replace(",", ".")
@@ -3422,6 +3446,9 @@ class LauncherPopup(Popup):
         r = calc(q)
         if r is not None:
             res.append((1e6, Item("calc", f"= {r}", q, glyph="󰃬", act=("copy", r))))
+        rem = remind_parse(q)
+        if rem:
+            res.append((2e6, Item("remind", f"Remind: {rem[1]}", rem[2], glyph="󰀠", act=("remind", q))))
         for it in self.items:
             sc = fuzzy(q, it.match)
             if it.kind == "note" and len(q) < 3:
@@ -3437,7 +3464,7 @@ class LauncherPopup(Popup):
         while (c := self.box.get_first_child()) is not None:
             self.box.remove(c)
         rows = self._search(self.entry.get_text())
-        tags = {"app": "APP", "set": "SETTINGS", "prj": "PROJECT", "win": "WINDOW", "note": "NOTE", "calc": "CALC", "web": "WEB", "clip": "", "emoji": "", "key": ""}
+        tags = {"app": "APP", "set": "SETTINGS", "prj": "PROJECT", "win": "WINDOW", "note": "NOTE", "calc": "CALC", "remind": "REMIND", "web": "WEB", "clip": "", "emoji": "", "key": ""}
         for it in rows:
             row = Gtk.ListBoxRow()
             row.add_css_class("lrow")
@@ -3531,6 +3558,8 @@ class LauncherPopup(Popup):
             cmd = ["bash", "-c", f"printf %s {shlex.quote(arg)} | wl-copy"]
         elif kind == "copy":
             cmd = ["bash", "-c", f"printf %s {shlex.quote(arg)} | wl-copy && notify-send -a 'GitS Notify' -t 2500 'Copied' {shlex.quote(arg[:80])}"]
+        elif kind == "remind":
+            cmd = ["gits-remind", "add", arg]
         elif kind == "web":
             import urllib.parse
             cmd = ["xdg-open", "https://duckduckgo.com/?q=" + urllib.parse.quote_plus(arg)]

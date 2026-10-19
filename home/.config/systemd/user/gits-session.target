@@ -1,3 +1,3 @@
 [Unit]
 Description=Ghost in the Shell session (bar, notifications, idle, night light, wallpaper, clipboard, applets)
-Wants=gits-activity.service gits-overview.service gits-downloads.timer gits-bar.service gits-panel.service gits-notifications.service gits-idle.service gits-sunset.service gits-wallpaper.service gits-clip-text.service gits-clip-image.service gits-clip-persist.service gits-polkit.service gits-applet-network.service gits-applet-bluetooth.service gits-applet-media.service
+Wants=gits-activity.service gits-overview.service gits-remind.service gits-downloads.timer gits-bar.service gits-panel.service gits-notifications.service gits-idle.service gits-sunset.service gits-wallpaper.service gits-clip-text.service gits-clip-image.service gits-clip-persist.service gits-polkit.service gits-applet-network.service gits-applet-bluetooth.service gits-applet-media.service
