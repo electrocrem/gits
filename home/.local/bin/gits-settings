@@ -17,6 +17,7 @@ CONNECT	󰂯  Bluetooth	blueman-manager	bluetoothctl show | grep -q 'Powered: ye
 CONNECT	󰕾  Sound mixer (per application)	gits-panel mixer	wpctl get-volume @DEFAULT_AUDIO_SINK@ | awk '{ printf "%d%%%s\n", $2 * 100 + 0.5, ($3 ? " muted" : "") }'
 CONNECT	󰓃  Sound devices (pavucontrol)	pavucontrol	wpctl inspect @DEFAULT_AUDIO_SINK@ | sed -n 's/.*node.description = "\(.*\)"/\1/p' | head -1
 CONNECT	󰝚  UI sounds: pack, volume (Super+Shift+U = on / off)	gits-sound menu	gits-sound status
+CONNECT	󰕓  Drives: USB sticks, SD cards (open, eject, automount)	gits-drives menu	gits-drives status
 CONNECT	󰄜  Send to phone (clipboard, screenshot, file, ring; Super+Ctrl+M)	gits-phone menu	gits-phone status
 CONNECT	󰍹  Displays	nwg-displays	hyprctl monitors -j | jq -r 'length as $n | max_by(.width * .height) | "\(.width)x\(.height)@\(.refreshRate | floor)" + (if $n > 1 then " +\($n - 1)" else "" end)'
 CONNECT	󰍽  Touchpad on / off	gits-touchpad toggle	gits-touchpad status

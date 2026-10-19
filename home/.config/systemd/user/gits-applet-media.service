@@ -1,9 +1,9 @@
 [Unit]
-Description=removable media tray applet
+Description=removable media tray applet (mounting and notifications: gits-drives.service)
 PartOf=gits-session.target
 
 [Service]
-ExecStart=/usr/bin/udiskie --no-automount --smart-tray
+ExecStart=/usr/bin/udiskie --no-automount --no-notify --smart-tray
 Restart=on-failure
 RestartSec=1
 

@@ -1,0 +1,9 @@
+[Unit]
+Description=GitS: removable drives (gits-drives: mount on plug-in, Open / Eject notification, warning when pulled out)
+PartOf=gits-session.target
+
+[Service]
+ExecStart=%h/.local/bin/gits-drives run
+Restart=on-failure
+RestartSec=5
+Nice=10
