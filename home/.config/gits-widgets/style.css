@@ -54,6 +54,7 @@ button.flat-btn:hover { background: alpha(@cy, 0.16); color: @cyb; border-color:
 .m-title { font-size: 13px; font-weight: 800; color: @fg; margin-top: 6px; }
 .m-artist { font-size: 11px; color: @mid; }
 .m-time { font-size: 9px; color: @dim; }
+.m-lyric { font-size: 11px; font-style: italic; color: @cyb; margin-top: 2px; }
 
 /* weather */
 .w-temp { font-size: 40px; font-weight: 800; color: @fg; }

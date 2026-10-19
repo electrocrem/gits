@@ -49,6 +49,11 @@ gi.require_version("GdkPixbuf", "2.0")
 gi.require_version("Gio", "2.0")
 from gi.repository import Gdk, GdkPixbuf, Gio, GLib, GLibUnix, GObject, Gtk, Pango  # noqa: E402
 from gi.repository import Gtk4LayerShell as LS  # noqa: E402
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    import lyrics as lyrics_mod   # synced lyrics under the player (lrclib.net)
+except ImportError:
+    lyrics_mod = None
 # gtk4-layer-shell only has to be preloaded into THIS process: every child (bash, git, nmcli, hyprctl...) inherited it and loaded GTK's
 # libraries for nothing, which made each spawned command several times slower
 os.environ.pop("LD_PRELOAD", None)
@@ -819,6 +824,10 @@ class PlayerPage(ArtMixin, Gtk.Box):
         times.append(self.t_pos)
         times.append(self.t_len)
         self.append(times)
+        self.lyric = label("", "m-lyric", 0.5)   # the line being sung (lyrics.py, lrclib.net); GITS_LYRICS=0: off
+        self.lyric.set_ellipsize(Pango.EllipsizeMode.END)
+        self.append(self.lyric)
+        self.lyrics = lyrics_mod.Lyrics() if lyrics_mod else None
 
         ctl = Gtk.Box(spacing=6, homogeneous=True)
         def btn(text, cb, css="ctl"):
@@ -898,9 +907,10 @@ class PlayerPage(ArtMixin, Gtk.Box):
             data = ["Paused", "", "Wired ambient mix (10 hours)", "", str(36000 * 10**6), str(725 * 10**6), "firefox", "Off", "None", "1.00"]
         else:
             fmt = "\t".join(["{{status}}", "{{artist}}", "{{title}}", "{{mpris:artUrl}}", "{{mpris:length}}", "{{position}}",
-                            "{{playerName}}"])
+                            "{{playerName}}", "{{album}}"])
             out = self._pcout("metadata", "--format", fmt)
             parts = out.split("\t")
+            self.album = parts.pop() if len(parts) == 8 else ""
             data = parts + [self._pcout("shuffle"), self._pcout("loop"), self._pcout("volume")] if len(parts) == 7 else None
         GLib.idle_add(self._show, data)
 
@@ -931,6 +941,7 @@ class PlayerPage(ArtMixin, Gtk.Box):
             self.seek.set_value(ps)
         self.t_pos.set_text(fmt_time(ps))
         self.t_len.set_text(fmt_time(self.length))
+        self.lyric.set_text(self.lyrics.line(artist, title, getattr(self, "album", ""), self.length, ps) if self.lyrics and not DEMO else "")
         self.seek.set_sensitive(self.length > 0)
         try:
             self.vol.set_value(float(vol) * 100)

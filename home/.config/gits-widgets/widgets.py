@@ -61,6 +61,12 @@ try:
 except ImportError:  # the audio card is skipped
     np = None
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from lyrics import Lyrics   # synced lyrics under the player (lrclib.net)
+except ImportError:
+    Lyrics = None
+
 gi.require_version("Gtk", "4.0")
 gi.require_version("Gdk", "4.0")
 gi.require_version("Gtk4LayerShell", "1.0")
@@ -394,6 +400,9 @@ class MediaCard(Card):
         times.append(self.t_pos)
         times.append(self.t_len)
         self.body.append(times)
+        self.lyric = label("", "m-lyric", 0.5, ellipsize=True)   # the line being sung (lyrics.py, lrclib.net); GITS_LYRICS=0: off
+        self.body.append(self.lyric)
+        self.lyrics = Lyrics() if Lyrics else None
         ctl = Gtk.Box(spacing=8, halign=Gtk.Align.CENTER)
         ctl.set_margin_top(4)
         self.b_prev = IconButton("prev", lambda: self.pc("previous"))
@@ -427,16 +436,16 @@ class MediaCard(Card):
     def query(self):
         if DEMO:   # a made-up track (cover from GITS_WIDGETS_ART) so the screenshots show the card in use
             art = os.environ.get("GITS_WIDGETS_ART", "")
-            return ["Playing", "Lain Iwakura", "Serial Experiments Lain - Duvet", ("file://" + art) if art else "", "232000000", "84000000"]
+            return ["Playing", "Lain Iwakura", "Serial Experiments Lain - Duvet", ("file://" + art) if art else "", "232000000", "84000000", ""]
         fmt = "\t".join(["{{status}}", "{{artist}}", "{{title}}", "{{mpris:artUrl}}", "{{mpris:length}}",
-                         "{{position}}"])
+                         "{{position}}", "{{album}}"])
         try:
             out = subprocess.run(["gits-media", "metadata", "--format", fmt], capture_output=True, text=True,
                                  timeout=1.5).stdout.rstrip("\n")
         except (OSError, subprocess.TimeoutExpired):
             return None
         parts = out.split("\t")
-        return parts if len(parts) == 6 else None
+        return parts if len(parts) == 7 else None
 
     def update(self):
         p = self.query()
@@ -454,10 +463,11 @@ class MediaCard(Card):
             self.t_pos.set_text("0:00")
             self.t_len.set_text("0:00")
             self.b_play.kind = "play"
+            self.lyric.set_text("")
             self.prog.queue_draw()
             self.b_play.queue_draw()
             return
-        status, artist, title, art, length, pos = p
+        status, artist, title, art, length, pos, album = p
         self.title.set_text(title or "—")
         self.artist.set_text(artist)
         self.playing = status == "Playing"
@@ -470,6 +480,7 @@ class MediaCard(Card):
         self.frac = min(1.0, ps / ln) if ln > 0 else 0.0
         self.t_pos.set_text(fmt_time(ps))
         self.t_len.set_text(fmt_time(ln))
+        self.lyric.set_text(self.lyrics.line(artist, title, album, ln, ps) if self.lyrics and not DEMO else "")
         self.prog.queue_draw()
         if art != self.art_key:
             self.art_key = art
@@ -2564,7 +2575,7 @@ class App:
             plan.append(("spectrum", AudioCard, "L", 0, LW, 160, {}))
         if not (many and os.environ.get("GITS_WIDGETS_SECOND", "1") != "0"):   # with a second monitor SYS.LOG lives there
             plan.append(("log", LogCard, "L", 0, LW, 300, {}))
-        plan += [("media", MediaCard, "L", 1, MW, 372, {}),
+        plan += [("media", MediaCard, "L", 1, MW, 390, {}),
                  ("weather", WeatherCard, "L", 1, MW, 108, {}),
                  ("net", NetCard, "L", 1, MW, 132, {})]
         if DEMO or self.link:

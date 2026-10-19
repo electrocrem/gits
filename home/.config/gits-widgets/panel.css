@@ -52,6 +52,7 @@ scale:disabled { opacity: 0.35; }
 .m-title { font-size: 13px; font-weight: 800; color: #C8F4FF; }
 .m-artist { font-size: 10px; color: #9FC5D6; }
 .m-time { font-size: 9px; color: #596977; }
+.m-lyric { font-size: 12px; font-style: italic; color: #5EF1F5; margin-top: 2px; }
 .ctl { background: rgba(12, 26, 51, 0.8); border: 1px solid alpha(#2ED3D7, 0.28); font-size: 15px; color: #9FC5D6; padding: 6px 0; }
 .ctl:hover { border-color: alpha(#2ED3D7, 0.8); color: #5EF1F5; }
 .ctl.on { color: #5EF1F5; border-color: #2ED3D7; }
