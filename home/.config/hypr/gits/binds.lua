@@ -99,6 +99,7 @@ bind(MOD .. " + SHIFT + L", run("gits-layout select"), "[Layout Management] sele
 bind(MOD .. " + SHIFT + Y", run("gits-anim select"), "[Theming] select window animations")
 bind(MOD .. " + SHIFT + X", run("gits-workflow select"), "[Theming] select workflow (default / gaming / editing / powersaver / snappy)")
 bind(MOD .. " + ALT + G", run("gits-workflow toggle gaming"), "[Utilities] game mode", { locked = true })
+bind(MOD .. " + SHIFT + G", run("gits-panel games"), "[Launcher] game library: installed Steam games, Enter plays")
 
 -- ---------------------------------------------------------------- launchers and menus (all GTK popups, see gits-panel)
 bind(MOD .. " + A", run("gits-panel launch"), "[Launcher] launcher / command palette")

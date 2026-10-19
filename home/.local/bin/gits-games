@@ -1,0 +1,163 @@
+#!/usr/bin/env python3
+"""gits-games: your installed Steam games (the game library popup, gits-panel games, Super+Shift+G).
+
+  gits-games list           name <tab> hours played <tab> size <tab> last played, most recently played first
+  gits-games json           the same with the app id and the cover image (Steam's own library cache), for the popup
+  gits-games play APPID     start it through Steam (started in the background, minimised, if it is not running); the gaming
+                            workflow and gamemode follow by themselves (gits-events.sh sees the game start)
+Reads Steam's files only (app manifests in every library folder, playtime from userdata/*/config/localconfig.vdf).
+Proton, the Steam Linux Runtimes and the redistributables are left out.
+"""
+import glob
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+
+HOME = os.path.expanduser("~")
+ROOTS = [os.path.join(HOME, ".local/share/Steam"), os.path.join(HOME, ".steam/steam"),
+         os.path.join(HOME, ".var/app/com.valvesoftware.Steam/.local/share/Steam")]
+TOOLS = re.compile(r"^(Proton|Steam Linux Runtime|Steamworks Common|SteamVR Performance)", re.I)
+
+
+def vdf(text):
+    """Valve's KeyValues text -> nested dicts (enough for manifests and localconfig)."""
+    toks = re.findall(r'"((?:[^"\\]|\\.)*)"|([{}])', text)
+    stack, cur, key = [], {}, None
+    for s, brace in toks:
+        if brace == "{":
+            new = {}
+            cur[key] = new
+            stack.append(cur)
+            cur, key = new, None
+        elif brace == "}":
+            cur = stack.pop() if stack else cur
+        elif key is None:
+            key = s
+        else:
+            cur[key] = s
+            key = None
+    return cur
+
+
+def steam_root():
+    return next((r for r in ROOTS if os.path.isdir(os.path.join(r, "steamapps"))), None)
+
+
+def libraries(root):
+    libs = [root]
+    try:
+        d = vdf(open(os.path.join(root, "steamapps", "libraryfolders.vdf"), errors="replace").read())
+        for v in (d.get("libraryfolders") or {}).values():
+            if isinstance(v, dict) and v.get("path"):
+                libs.append(v["path"])
+    except OSError:
+        pass
+    return list(dict.fromkeys(os.path.realpath(p) for p in libs))
+
+
+def playtimes(root):
+    """appid -> (minutes, last played) from every Steam user on this machine."""
+    out = {}
+    for f in glob.glob(os.path.join(root, "userdata", "*", "config", "localconfig.vdf")):
+        try:
+            d = vdf(open(f, errors="replace").read())
+        except OSError:
+            continue
+        apps = (((d.get("UserLocalConfigStore") or {}).get("Software") or {}).get("Valve") or {}).get("Steam", {}).get("apps", {})
+        if not apps:
+            apps = (((d.get("UserLocalConfigStore") or {}).get("Software") or {}).get("valve") or {}).get("Steam", {}).get("apps", {})
+        for aid, v in apps.items():
+            if isinstance(v, dict):
+                m, last = int(v.get("Playtime", 0) or 0), int(v.get("LastPlayed", 0) or 0)
+                pm, pl = out.get(aid, (0, 0))
+                out[aid] = (pm + m, max(pl, last))
+    return out
+
+
+def cover(root, aid):
+    base = os.path.join(root, "appcache", "librarycache", aid)
+    for name in ("library_600x900.jpg", "library_capsule.jpg"):
+        hits = glob.glob(os.path.join(base, name)) + glob.glob(os.path.join(base, "*", name))
+        if hits:
+            return hits[0]
+    old = os.path.join(root, "appcache", "librarycache", f"{aid}_library_600x900.jpg")
+    return old if os.path.exists(old) else ""
+
+
+def games():
+    root = steam_root()
+    if not root:
+        return []
+    pt = playtimes(root)
+    out = []
+    for lib in libraries(root):
+        for f in glob.glob(os.path.join(lib, "steamapps", "appmanifest_*.acf")):
+            try:
+                st = vdf(open(f, errors="replace").read()).get("AppState", {})
+            except OSError:
+                continue
+            aid, name = st.get("appid", ""), st.get("name", "")
+            if not aid or not name or TOOLS.match(name):
+                continue
+            mins, last = pt.get(aid, (0, 0))
+            last = max(last, int(st.get("LastPlayed", 0) or 0))
+            out.append({"id": aid, "name": name, "size": int(st.get("SizeOnDisk", 0) or 0), "minutes": mins, "last": last,
+                        "ready": int(st.get("StateFlags", 4) or 4) & 4 == 4 and not int(st.get("StateFlags", 4) or 4) & 2,
+                        "cover": cover(root, aid)})
+    return sorted(out, key=lambda g: (-g["last"], g["name"].lower()))
+
+
+def hours(m):
+    return f"{m / 60:.0f} h" if m >= 600 else f"{m / 60:.1f} h" if m >= 60 else f"{m} min" if m else "never played"
+
+
+def gb(b):
+    return f"{b / 1e9:.1f} GB" if b < 1e11 else f"{b / 1e9:.0f} GB"
+
+
+def ago(t):
+    if not t:
+        return "never"
+    s = time.time() - t
+    return "today" if s < 86400 else f"{int(s // 86400)} d ago" if s < 60 * 86400 else time.strftime("%b %Y", time.localtime(t))
+
+
+def play(aid):
+    if not aid.isdigit():
+        return 2
+    running = subprocess.run(["pgrep", "-x", "steam"], capture_output=True).returncode == 0
+    cmd = ["steam", f"steam://rungameid/{aid}"] if running else ["steam", "-silent", f"steam://rungameid/{aid}"]
+    if not running and os.path.isdir(os.path.join(HOME, ".var/app/com.valvesoftware.Steam")) and not shutil_which("steam"):
+        cmd = ["flatpak", "run", "com.valvesoftware.Steam", *cmd[1:]]
+    subprocess.Popen(cmd, start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    name = next((g["name"] for g in games() if g["id"] == aid), aid)
+    subprocess.run(["notify-send", "-a", "GitS Notify", "-i", "applications-games", "󰊴  Starting", name + ("" if running else " (Steam starts first)")],
+                   capture_output=True)
+    return 0
+
+
+def shutil_which(x):
+    import shutil
+    return shutil.which(x)
+
+
+def main(argv):
+    cmd = argv[0] if argv else "list"
+    if cmd == "json":
+        print(json.dumps(games()))
+        return 0
+    if cmd == "list":
+        for g in games():
+            print(f"{g['name']}\t{hours(g['minutes'])}\t{gb(g['size'])}\t{ago(g['last'])}")
+        return 0
+    if cmd == "play" and len(argv) > 1:
+        return play(argv[1])
+    print(__doc__.strip(), file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

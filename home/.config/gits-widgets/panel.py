@@ -3736,6 +3736,137 @@ class CleanPopup(Popup):
         return False
 
 
+class GamesPopup(Popup):
+    """Game library (gits-panel games, Super+Shift+G): the installed Steam games as covers, most recently played first, with hours
+    played, last played and size. Type to filter, arrows move, Enter / click plays (through Steam: gits-games play), Esc closes."""
+    TOP = 9
+    COLS, TW, TH = 5, 132, 198
+
+    def __init__(self, monitor):
+        super().__init__(monitor, center=True)
+        try:
+            self.games = json.loads(sh(["gits-games", "json"], timeout=8, real=True) or "[]")
+        except ValueError:
+            self.games = []
+        geo = self._screen()
+        self.COLS = max(3, min(self.COLS, (geo.width - 80) // (self.TW + 12)))
+        self.CARD_W = self.COLS * (self.TW + 12) + 24
+        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        root.add_css_class("panel")
+        head = Gtk.Box(spacing=6)
+        head.append(label("󰊴  GAMES // 遊戯", "m-head"))
+        sp = Gtk.Box()
+        sp.set_hexpand(True)
+        head.append(sp)
+        total = sum(g["size"] for g in self.games)
+        head.append(label(f"{len(self.games)} installed · {total / 1e9:.0f} GB", "m-tag"))
+        root.append(head)
+        self.entry = Gtk.Entry()
+        self.entry.add_css_class("m-entry")
+        self.entry.set_placeholder_text("type to filter_")
+        self.entry.connect("changed", lambda *_: self._fill())
+        self.entry.connect("activate", lambda *_: self._play())
+        keys = Gtk.EventControllerKey()
+        keys.connect("key-pressed", self._key)
+        self.entry.add_controller(keys)
+        root.append(self.entry)
+        self.grid = Gtk.Grid(row_spacing=12, column_spacing=12)
+        sc = Gtk.ScrolledWindow()
+        sc.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        sc.set_propagate_natural_height(True)
+        sc.set_max_content_height(max(260, geo.height - 260))
+        sc.set_child(self.grid)
+        root.append(sc)
+        self.info = label("", "g-info")
+        self.info.set_ellipsize(Pango.EllipsizeMode.END)
+        root.append(self.info)
+        if not self.games:
+            self.info.set_text("no Steam games installed (or Steam was never started here)")
+        self.tiles, self.sel = [], 0
+        self._fill()
+        self.set_child(root)
+        GLib.idle_add(lambda: (self.entry.grab_focus(), False)[1])
+
+    @staticmethod
+    def _hours(m):
+        return f"{m / 60:.0f} h" if m >= 600 else f"{m / 60:.1f} h" if m >= 60 else f"{m} min" if m else "new"
+
+    @staticmethod
+    def _ago(t):
+        if not t:
+            return "never played"
+        s = time.time() - t
+        return "today" if s < 86400 else f"{int(s // 86400)} d ago" if s < 60 * 86400 else time.strftime("%b %Y", time.localtime(t))
+
+    def _fill(self):
+        while (c := self.grid.get_first_child()) is not None:
+            self.grid.remove(c)
+        q = self.entry.get_text().strip().lower()
+        self.shown = [g for g in self.games if q in g["name"].lower()]
+        self.tiles = []
+        for i, g in enumerate(self.shown):
+            b = Gtk.Button()
+            b.add_css_class("g-tile")
+            col_ = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+            ov = Gtk.Overlay()
+            if g.get("cover"):
+                pic = Gtk.Picture.new_for_filename(g["cover"])
+                pic.set_content_fit(Gtk.ContentFit.COVER)
+                pic.set_can_shrink(True)
+            else:
+                pic = label("󰊴", "g-nocover", 0.5)
+            pic.set_size_request(self.TW, self.TH)
+            ov.set_child(pic)
+            if not g.get("ready", True):
+                badge = label("UPDATE", "g-badge")
+                badge.set_halign(Gtk.Align.END)
+                badge.set_valign(Gtk.Align.START)
+                ov.add_overlay(badge)
+            col_.append(ov)
+            name = label(g["name"].replace("™", "").replace("®", ""), "g-name")
+            name.set_ellipsize(Pango.EllipsizeMode.END)
+            name.set_max_width_chars(14)
+            col_.append(name)
+            col_.append(label(f"{self._hours(g['minutes'])} · {self._ago(g['last'])}", "g-meta"))
+            b.set_child(col_)
+            b.connect("clicked", lambda _b, i=i: (setattr(self, "sel", i), self._play()))
+            ent = Gtk.EventControllerMotion()
+            ent.connect("enter", lambda *_a, i=i: self._select(i))
+            b.add_controller(ent)
+            self.grid.attach(b, i % self.COLS, i // self.COLS, 1, 1)
+            self.tiles.append(b)
+        self._select(0 if self.shown else -1)
+
+    def _select(self, i):
+        self.sel = i
+        for k, t in enumerate(self.tiles):
+            (t.add_css_class if k == i else t.remove_css_class)("sel")
+        if 0 <= i < len(self.shown):
+            g = self.shown[i]
+            hrs = self._hours(g["minutes"]) + " played" if g["minutes"] else "never played"
+            state = "" if g.get("ready", True) else "   ·   needs an update in Steam"
+            self.info.set_text(f"{g['name'].upper()}   ·   {hrs}   ·   last: {self._ago(g['last'])}   ·   {g['size'] / 1e9:.1f} GB{state}"
+                               "   ·   Enter = play")
+        elif self.games:
+            self.info.set_text("nothing matches")
+
+    def _key(self, _c, kv, *_):
+        step = {Gdk.KEY_Right: 1, Gdk.KEY_Left: -1, Gdk.KEY_Down: self.COLS, Gdk.KEY_Up: -self.COLS}.get(kv)
+        if step is None or not self.shown:
+            return False
+        if kv in (Gdk.KEY_Left, Gdk.KEY_Right) and self.entry.get_text():
+            return False   # editing the filter
+        self._select(max(0, min(len(self.shown) - 1, self.sel + step)))
+        self.tiles[self.sel].grab_focus()   # scrolls it into view
+        self.entry.grab_focus_without_selecting()
+        return True
+
+    def _play(self):
+        if 0 <= self.sel < len(self.shown):
+            fire(["gits-games", "play", self.shown[self.sel]["id"]])
+            self.dismiss()
+
+
 class OverviewPopup(Popup):
     """Workspace overview (gits-panel overview, Super+grave): every workspace as a thumbnail (gits-overview keeps them, in RAM)
     with its windows as icons. Click / Enter / 1-9 = go there, click an icon = focus that window, drag an icon onto another
@@ -4097,6 +4228,8 @@ def main():
         win = OverviewPopup(mon)
     elif mode == "clean":
         win = CleanPopup(mon)
+    elif mode == "games":
+        win = GamesPopup(mon)
     elif mode in ("appearance", "themes"):
         win = AppearancePopup(mon)
     elif mode == "desktop":

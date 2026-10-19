@@ -228,3 +228,13 @@ button.cl-go { padding: 6px 18px; background: #2ED3D7; color: #060A14; font-size
 button.cl-go:hover { background: #5EF1F5; }
 button.cl-go:disabled { background: alpha(#2ED3D7, 0.2); color: #596977; }
 button.cl-row.empty { opacity: 0.45; }
+
+/* game library (gits-panel games) */
+button.g-tile { padding: 4px; border: 1px solid alpha(#2ED3D7, 0.15); background: transparent; }
+button.g-tile.sel { border-color: #5EF1F5; background: alpha(#2ED3D7, 0.10); box-shadow: 0 0 0 1px alpha(#5EF1F5, 0.5); }
+.g-name { font-size: 10px; font-weight: 700; color: #C8F4FF; }
+.g-meta { font-size: 8px; color: #596977; }
+button.g-tile.sel .g-meta { color: #9FC5D6; }
+.g-nocover { font-size: 40px; color: #254F5D; background: #0C1A33; }
+.g-badge { font-size: 8px; font-weight: 800; letter-spacing: 1px; color: #060A14; background: #E8C547; padding: 1px 5px; margin: 4px; }
+.g-info { font-size: 10px; font-weight: 700; letter-spacing: 1px; color: #9FC5D6; }

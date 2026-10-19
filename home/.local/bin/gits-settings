@@ -48,6 +48,7 @@ TOOLS	󰐹  Radio (DATAMOSH: on air, spectrum, tune in / out)	gits-panel radio	g
 TOOLS	󰊄  Copy text from the screen (OCR, Super+Ctrl+S)	gits-shot ocr
 TOOLS	󰕰  Workspace overview (Super+`; drag a window to another workspace)	gits-panel overview
 TOOLS	󰕮  Workspace presets (Super+Ctrl+W; open / save a set of apps)	gits-preset menu	gits-preset list | cut -f1 | paste -sd, | sed "s/,/, /g"
+TOOLS	󰊴  Game library (Super+Shift+G; Steam games, Enter plays)	gits-panel games
 TOOLS	󰑋  Screen recording: area (again = stop)	gits-rec toggle area	gits-rec status
 TOOLS	󰑋  Screen recording: whole screen	gits-rec toggle screen
 SYSTEM	󰌆  YubiKey at login and lock (switch off for a while)	gits-yubikey menu	gits-yubikey status
