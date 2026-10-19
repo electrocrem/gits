@@ -1,0 +1,12 @@
+[Unit]
+Description=GitS: sound bars on the desktop (ambient.py: a spectrum along the bottom while something plays, only when the desktop is visible)
+PartOf=gits-session.target gits-wallpaper.service
+After=gits-wallpaper.service
+
+[Service]
+# after the wallpaper daemon: layers of one level stack by creation order, the bars must be above the wallpaper
+ExecStartPre=/bin/sleep 2
+ExecStart=/usr/bin/python3 %h/.config/gits-widgets/ambient.py
+Restart=on-failure
+RestartSec=5
+Nice=10

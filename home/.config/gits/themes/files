@@ -19,6 +19,7 @@
 .config/gits-widgets/osd.py
 .config/gits-widgets/panel.css
 .config/gits-widgets/panel.py
+.config/gits-widgets/ambient.py
 .config/gits-widgets/saver.py
 .config/gits-widgets/style.css
 .config/gits-widgets/widgets.py
