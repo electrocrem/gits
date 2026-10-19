@@ -85,5 +85,6 @@ satty                     # screenshot annotation
 wf-recorder               # gits-rec, Super+Alt+R
 tesseract
 tesseract-data-eng
+tesseract-data-rus        # OCR of Russian text too (gits-shot ocr picks eng+rus when it is there)
 wlogout
 gettext                   # envsubst for the wlogout style
