@@ -1,0 +1,9 @@
+[Unit]
+Description=GitS: time report tracker (gits-activity: focused application per 5 s, local only)
+PartOf=gits-session.target
+
+[Service]
+ExecStart=%h/.local/bin/gits-activity run
+Restart=on-failure
+RestartSec=5
+Nice=10

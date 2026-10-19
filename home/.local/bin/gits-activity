@@ -1,0 +1,147 @@
+#!/usr/bin/env python3
+"""gits-activity: how long each application had the focus, per day. Local only, application names only (no window titles).
+
+  gits-activity run            the tracker (gits-activity.service): Hyprland's activewindow events, counted in 5 s steps,
+                               except while the screen is locked or you are away (hypridle: 5 min without input; a playing
+                               video keeps you "present")
+  gits-activity away | back    hypridle's listener calls these
+  gits-activity report [DAYS]  text summary (default: today)
+  gits-activity json [DAYS]    {"days": {date: {app: seconds}}} for the time report popup (gits-panel activity)
+Data: ~/.local/share/gits/activity/YYYY-MM-DD.json ({"class": seconds}); delete the folder to forget it all.
+"""
+import datetime
+import json
+import os
+import socket
+import sys
+import threading
+import time
+
+HOME = os.path.expanduser("~")
+DIR = os.path.join(os.environ.get("XDG_DATA_HOME", os.path.join(HOME, ".local", "share")), "gits", "activity")
+RUN = os.environ.get("XDG_RUNTIME_DIR", "/tmp")
+AWAY = os.path.join(RUN, "gits-away")
+STEP = 5
+
+
+def day_file(d):
+    return os.path.join(DIR, f"{d}.json")
+
+
+def load(d):
+    try:
+        with open(day_file(d)) as f:
+            return {k: float(v) for k, v in json.load(f).items()}
+    except (OSError, ValueError):
+        return {}
+
+
+def save(d, data):
+    os.makedirs(DIR, exist_ok=True)
+    tmp = day_file(d) + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump({k: round(v) for k, v in sorted(data.items(), key=lambda kv: -kv[1])}, f, indent=0)
+    os.replace(tmp, day_file(d))
+
+
+def locked():
+    for p in os.listdir("/proc"):
+        if p.isdigit():
+            try:
+                with open(f"/proc/{p}/comm") as f:
+                    if f.read().strip() == "hyprlock":
+                        return True
+            except OSError:
+                pass
+    return False
+
+
+def run():
+    sig = os.environ.get("HYPRLAND_INSTANCE_SIGNATURE", "")
+    sock_path = os.path.join(RUN, "hypr", sig, ".socket2.sock")
+    state = {"cls": ""}
+    try:   # the window that has the focus now (the events only tell about changes)
+        import subprocess
+        state["cls"] = json.loads(subprocess.run(["hyprctl", "activewindow", "-j"], capture_output=True, text=True,
+                                                 timeout=3).stdout or "{}").get("class", "")
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        pass
+
+    def listen():
+        while True:
+            try:
+                s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                s.connect(sock_path)
+                buf = b""
+                while True:
+                    chunk = s.recv(4096)
+                    if not chunk:
+                        break
+                    buf += chunk
+                    *lines, buf = buf.split(b"\n")
+                    for line in lines:
+                        if line.startswith(b"activewindow>>"):
+                            state["cls"] = line[14:].decode(errors="replace").split(",", 1)[0].strip()
+            except OSError:
+                pass
+            time.sleep(5)   # Hyprland restarted / not up yet: reconnect
+
+    threading.Thread(target=listen, daemon=True).start()
+    today = datetime.date.today().isoformat()
+    data, last_save = load(today), time.monotonic()
+    while True:
+        time.sleep(STEP)
+        d = datetime.date.today().isoformat()
+        if d != today:
+            save(today, data)
+            today, data = d, load(d)
+        cls = state["cls"]
+        if cls and not os.path.exists(AWAY) and not locked():
+            data[cls] = data.get(cls, 0) + STEP
+        if time.monotonic() - last_save > 60:
+            save(today, data)
+            last_save = time.monotonic()
+
+
+def days(n):
+    t = datetime.date.today()
+    return {(t - datetime.timedelta(days=i)).isoformat(): load((t - datetime.timedelta(days=i)).isoformat()) for i in range(n)}
+
+
+def fmt(s):
+    s = int(s)
+    return f"{s // 3600}h{s % 3600 // 60:02d}" if s >= 3600 else f"{s // 60} min"
+
+
+def main(argv):
+    cmd = argv[0] if argv else "report"
+    if cmd == "run":
+        run()
+    elif cmd == "away":
+        open(AWAY, "w").close()
+    elif cmd == "back":
+        try:
+            os.remove(AWAY)
+        except OSError:
+            pass
+    elif cmd in ("report", "json"):
+        n = int(argv[1]) if len(argv) > 1 and argv[1].isdigit() else (1 if cmd == "report" else 7)
+        ds = days(n)
+        if cmd == "json":
+            print(json.dumps({"days": ds}))
+            return 0
+        tot = {}
+        for d in ds.values():
+            for k, v in d.items():
+                tot[k] = tot.get(k, 0) + v
+        print(f"{'today' if n == 1 else f'last {n} days'}: {fmt(sum(tot.values()))}")
+        for k, v in sorted(tot.items(), key=lambda kv: -kv[1])[:15]:
+            print(f"  {fmt(v):>7}  {k}")
+    else:
+        print(__doc__.strip(), file=sys.stderr)
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

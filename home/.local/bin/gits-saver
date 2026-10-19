@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# gits-saver: the screensaver (~/.config/gits-widgets/saver.py, digital rain in the theme's colours).
+#   gits-saver start     show it (hypridle: Super+I -> Sleep and power timers -> Screensaver); not over a full-screen window
+#   gits-saver stop      take it away (hypridle's on-resume; any key / click / mouse movement does that by itself too)
+#   gits-saver preview   show it now, also over full-screen windows
+pidf=${XDG_RUNTIME_DIR:-/tmp}/gits-saver.pid
+running() { [[ -s $pidf ]] && kill -0 "$(<"$pidf")" 2>/dev/null; }
+case ${1:-preview} in
+    start|preview)
+        running && exit 0
+        if [[ $1 == start ]] && command -v hyprctl >/dev/null; then
+            fs=$(hyprctl activewindow -j 2>/dev/null | jq -r '.fullscreen // 0' 2>/dev/null)
+            [[ $fs != 0 && $fs != false && -n $fs ]] && exit 0   # a game or a video in full screen: leave it alone
+        fi
+        python3 "$HOME/.config/gits-widgets/saver.py" >/dev/null 2>&1 &
+        echo $! >"$pidf" ;;
+    stop) running && kill "$(<"$pidf")"; rm -f "$pidf" ;;
+    status) running && echo on || echo off ;;
+    *) sed -n '2,6p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac

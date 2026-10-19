@@ -2,18 +2,18 @@
 # gits-idle: sleep / lock / screen-off timers for hypridle, separately for AC power and battery.
 #   gits-idle menu               pick a timer in a menu (Super+I -> Sleep & power timers, the panel's SLEEP TIMERS button)
 #   gits-idle show               print the timers (minutes, 0 = never)
-#   gits-idle set ac|bat dim|lock|off|sleep MINUTES
+#   gits-idle set ac|bat saver|dim|lock|off|sleep MINUTES
 #   gits-idle apply              write the profile of the current power source into ~/.config/hypr/hypridle.conf and restart
 #                                hypridle if that changed anything (run at login and on every plug / unplug by gits-events.sh)
-# Stages, in order: dim the screen -> lock -> screen off -> suspend. Changing one keeps the order (earlier stages are pulled down
+# Stages, in order: screensaver (gits-saver, off by default) -> dim the screen -> lock -> screen off -> suspend. Changing one keeps the order (earlier stages are pulled down
 # to it, later ones up). The listeners between the "gits-idle" markers are generated; the rest of hypridle.conf is left alone.
 # Screen off is `hl.dsp.dpms` (the old `hyprctl dispatch dpms off` does not exist in the Lua config).
 conf=${GITS_IDLE_CONF:-$HOME/.config/hypr/hypridle.conf}
 state=${XDG_STATE_HOME:-$HOME/.local/state}/gits-idle/settings
-stages=(dim lock off sleep)
-declare -A label=([dim]="Dim screen" [lock]="Lock" [off]="Screen off" [sleep]="Sleep")
-declare -A val=([ac.dim]=1 [ac.lock]=2 [ac.off]=5 [ac.sleep]=8 [bat.dim]=1 [bat.lock]=2 [bat.off]=5 [bat.sleep]=8)  
-[[ -r $state ]] && while IFS== read -r k v; do [[ $k =~ ^(ac|bat)\.(dim|lock|off|sleep)$ && $v =~ ^[0-9]+$ ]] && val[$k]=$v; done <"$state"
+stages=(saver dim lock off sleep)
+declare -A label=([saver]="Screensaver" [dim]="Dim screen" [lock]="Lock" [off]="Screen off" [sleep]="Sleep")
+declare -A val=([ac.saver]=0 [bat.saver]=0 [ac.dim]=1 [ac.lock]=2 [ac.off]=5 [ac.sleep]=8 [bat.dim]=1 [bat.lock]=2 [bat.off]=5 [bat.sleep]=8)  
+[[ -r $state ]] && while IFS== read -r k v; do [[ $k =~ ^(ac|bat)\.(saver|dim|lock|off|sleep)$ && $v =~ ^[0-9]+$ ]] && val[$k]=$v; done <"$state"
 
 save() { mkdir -p "$(dirname "$state")"; for k in "${!val[@]}"; do echo "$k=${val[$k]}"; done | sort >"$state"; }
 source_now() {
@@ -44,6 +44,9 @@ set_value() {  # profile stage minutes: keep dim <= lock <= off <= sleep (0 = ne
 generate() {  # profile -> hypridle listener text
     local p=$1
     echo "# >>> gits-idle ($p profile, generated: change it with 'gits-idle menu')"
+    # away after 5 min without input (a playing video inhibits this): the time report (gits-activity) stops counting
+    printf 'listener {\n    timeout = 300\n    on-timeout = ~/.local/bin/gits-activity away\n    on-resume = ~/.local/bin/gits-activity back\n}\n'
+    ((${val[$p.saver]} > 0)) && printf 'listener {\n    timeout = %d\n    on-timeout = ~/.local/bin/gits-saver start\n    on-resume = ~/.local/bin/gits-saver stop\n}\n' $((${val[$p.saver]} * 60))
     ((${val[$p.dim]} > 0)) && printf 'listener {\n    timeout = %d\n    on-timeout = brightnessctl -s && brightnessctl s 1%%\n    on-resume = brightnessctl -r\n}\n' $((${val[$p.dim]} * 60))
     ((${val[$p.lock]} > 0)) && printf 'listener {\n    timeout = %d\n    on-timeout = loginctl lock-session\n}\n' $((${val[$p.lock]} * 60))
     ((${val[$p.off]} > 0)) && printf 'listener {\n    timeout = %d\n    on-timeout = hyprctl dispatch '"'"'hl.dsp.dpms({ action = "off" })'"'"'\n    on-resume = hyprctl dispatch '"'"'hl.dsp.dpms({ action = "on" })'"'"'\n}\n' $((${val[$p.off]} * 60))
@@ -102,7 +105,7 @@ menu() {
 case ${1:-menu} in
     menu) menu ;;
     show) for p in ac bat; do for s in "${stages[@]}"; do printf '%s.%s=%s\n' "$p" "$s" "${val[$p.$s]}"; done; done ;;
-    set) [[ $2 =~ ^(ac|bat)$ && $4 =~ ^[0-9]+$ ]] || { echo "usage: gits-idle set ac|bat dim|lock|off|sleep MINUTES" >&2; exit 2; }
+    set) [[ $2 =~ ^(ac|bat)$ && $4 =~ ^[0-9]+$ ]] || { echo "usage: gits-idle set ac|bat saver|dim|lock|off|sleep MINUTES" >&2; exit 2; }
          set_value "$2" "$3" "$4" && save && [[ $(source_now) == "$2" ]] && apply ;;
     apply) apply ;;
     *) echo "usage: gits-idle [menu|show|set ...|apply]" >&2; exit 2 ;;

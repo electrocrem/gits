@@ -32,6 +32,7 @@ POWER	󰁹  Power profile	$HOME/.config/waybar/scripts/gits-perf.sh menu	powerpr
 POWER	󰂄  Battery charge limit (80 / 85 / 90 / 100 %, or full once)	gits-battery limit-menu	gits-battery limit
 POWER	󰤄  Sleep and power timers (dim / lock / screen off / sleep)	gits-idle menu	gits-idle show | awk -F'[.=]' '$1 == "ac" { v = v (v ? "/" : "") $3 } END { print v " min" }'
 POWER	󰢮  ROG Control Center	gits-rog
+TOOLS	󱎫  Time report (which apps, today / 7 days)	gits-panel activity	gits-activity report | head -1 | sed 's/^today: //'
 TOOLS	󰉍  Sort Downloads (by type; 30+ days old to Old/; undo)	gits-downloads menu	gits-downloads status
 TOOLS	󰉋  Open a project (git / Godot)	gits-project
 TOOLS	󰎞  Quick note (Super+N)	gits-note add

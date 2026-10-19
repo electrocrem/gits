@@ -8,6 +8,8 @@ tools the bar modules use, so the bar and the panel never disagree for long.
 """
 import ast
 import hashlib
+import datetime
+import glob
 import json
 import math
 import operator
@@ -2370,6 +2372,164 @@ class DesktopPopup(Popup):
         GLib.timeout_add(400, lambda: (self.dismiss(), False)[1])
 
 
+class ActivityPopup(Popup):
+    """Time report (gits-panel activity, Super+I -> Time report): which applications had the focus today / over 7 days, from
+    gits-activity (local, application names only). Tab or the two buttons switch the range; Esc / click outside closes."""
+    CARD_W = 520
+    TOP = 9
+
+    def __init__(self, monitor):
+        super().__init__(monitor, center=True)
+        try:
+            self.days = json.loads(sh(["gits-activity", "json", "7"], timeout=5, real=True) or "{}").get("days", {})
+        except ValueError:
+            self.days = {}
+        if DEMO:
+            self.days = {(datetime.date.today() - datetime.timedelta(days=i)).isoformat(): d for i, d in enumerate(
+                [{"kitty": 7300, "godot": 5400, "app.zen_browser.zen": 3900, "org.telegram.desktop": 1500, "steam_app_4078430": 4200},
+                 {"kitty": 9000, "app.zen_browser.zen": 5000, "godot": 2000}, {"steam_app_4078430": 8000, "kitty": 3000}, {}, {"kitty": 4000},
+                 {"godot": 6000, "kitty": 5000}, {"app.zen_browser.zen": 3000}])}
+        self.names = self._app_names()
+        self.range = 1
+        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        root.add_css_class("panel")
+        head = Gtk.Box(spacing=6)
+        head.append(label("󱎫  TIME // 時間", "m-head"))
+        sp = Gtk.Box()
+        sp.set_hexpand(True)
+        head.append(sp)
+        self.b_day, self.b_week = Gtk.Button(label="TODAY"), Gtk.Button(label="7 DAYS")
+        for b, n in ((self.b_day, 1), (self.b_week, 7)):
+            b.add_css_class("ap-toggle")
+            b.connect("clicked", lambda _b, n=n: self._show(n))
+            head.append(b)
+        root.append(head)
+        self.total = label("", "act-total")
+        root.append(self.total)
+        self.week = Gtk.DrawingArea()
+        self.week.set_content_height(64)
+        self.week.set_draw_func(self._draw_week)
+        root.append(self.week)
+        self.list = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        root.append(self.list)
+        root.append(label("local only: application names, no titles · ~/.local/share/gits/activity", "m-tag"))
+        keys = Gtk.EventControllerKey()
+        keys.connect("key-pressed", lambda _c, kv, *_: (self._show(8 - self.range), True)[1] if kv == Gdk.KEY_Tab else False)
+        self.add_controller(keys)
+        self.set_child(root)
+        self._show(1)
+
+    @staticmethod
+    def _app_names():
+        """window class -> (name, GIcon) from the installed .desktop files (StartupWMClass, file id, Flatpak id)."""
+        out = {}
+        for a in Gio.AppInfo.get_all():
+            try:
+                keys = {(a.get_startup_wm_class() or "").lower(), (a.get_id() or "").removesuffix(".desktop").lower()}
+            except AttributeError:
+                continue
+            for k in keys - {""}:
+                out.setdefault(k, (a.get_name(), a.get_icon()))
+        return out
+
+    def _name(self, cls):
+        hit = self.names.get(cls.lower()) or self.names.get(cls.lower().split(".")[-1])
+        if hit:
+            return hit
+        m = re.fullmatch(r"steam_app_(\d+)", cls)
+        if m:   # the game's name from its Steam app manifest
+            for lib in glob.glob(os.path.join(HOME, ".local/share/Steam/steamapps")) + glob.glob(os.path.join(HOME, ".var/app/com.valvesoftware.Steam/.local/share/Steam/steamapps")):
+                try:
+                    nm = re.search(r'"name"\s+"([^"]+)"', open(os.path.join(lib, f"appmanifest_{m.group(1)}.acf")).read())
+                    if nm:
+                        return (nm.group(1), None)
+                except OSError:
+                    pass
+            return (f"Steam game {m.group(1)}", None)
+        return (cls, None)
+
+    def _sum(self, n):
+        keys = sorted(self.days)[-n:]
+        tot = {}
+        for d in keys:
+            for k, v in self.days.get(d, {}).items():
+                tot[k] = tot.get(k, 0) + v
+        return tot
+
+    def _show(self, n):
+        self.range = n
+        (self.b_day.add_css_class if n == 1 else self.b_day.remove_css_class)("sel")
+        (self.b_week.add_css_class if n == 7 else self.b_week.remove_css_class)("sel")
+        self.week.set_visible(n == 7)
+        tot = self._sum(n)
+        all_s = sum(tot.values())
+        self.total.set_text(f"{'TODAY' if n == 1 else 'LAST 7 DAYS'}  {fmt_dur(all_s)}" + (f"  ·  {fmt_dur(all_s / 7)} / day" if n == 7 else ""))
+        while (c := self.list.get_first_child()) is not None:
+            self.list.remove(c)
+        top = sorted(tot.items(), key=lambda kv: -kv[1])[:self.TOP]
+        if not top:
+            self.list.append(label("nothing counted yet: the tracker starts with the session (gits-activity.service)", "row-name"))
+        peak = top[0][1] if top else 1
+        for cls, sec in top:
+            name, icon = self._name(cls)
+            row = Gtk.Box(spacing=8)
+            if icon is not None:
+                img = Gtk.Image.new_from_gicon(icon)
+                img.set_pixel_size(20)
+                img.add_css_class("l-icon")
+                row.append(img)
+            else:
+                g = label("󰣆", "l-glyph", 0.5)
+                g.set_size_request(20, -1)
+                row.append(g)
+            col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            col.set_hexpand(True)
+            line = Gtk.Box()
+            nm = label(name.upper(), "act-name")
+            nm.set_hexpand(True)
+            nm.set_ellipsize(Pango.EllipsizeMode.END)
+            line.append(nm)
+            line.append(label(fmt_dur(sec), "act-time", 1.0))
+            col.append(line)
+            bar = Gtk.DrawingArea()
+            bar.set_content_height(5)
+            bar.set_draw_func(lambda _a, cr, w, h, f=sec / peak: self._bar(cr, w, h, f))
+            col.append(bar)
+            row.append(col)
+            self.list.append(row)
+
+    @staticmethod
+    def _bar(cr, w, h, f):
+        cr.set_source_rgba(0.18, 0.83, 0.84, 0.18)
+        cr.rectangle(0, 0, w, h)
+        cr.fill()
+        cr.set_source_rgba(0.18, 0.83, 0.84, 1.0)
+        cr.rectangle(0, 0, max(2, w * f), h)
+        cr.fill()
+
+    def _draw_week(self, _a, cr, w, h):
+        keys = sorted(self.days)[-7:]
+        vals = [sum(self.days.get(d, {}).values()) for d in keys]
+        peak = max(vals + [1])
+        bw = w / max(len(keys), 1)
+        for i, (d, v) in enumerate(zip(keys, vals)):
+            bh = (h - 14) * v / peak
+            cr.set_source_rgba(0.18, 0.83, 0.84, 1.0 if d == keys[-1] else 0.55)
+            cr.rectangle(i * bw + 6, h - 14 - bh, bw - 12, max(bh, 1))
+            cr.fill()
+            cr.set_source_rgba(0.35, 0.41, 0.47, 1)
+            cr.select_font_face("JetBrainsMono Nerd Font", 0, 1)
+            cr.set_font_size(9)
+            t = datetime.date.fromisoformat(d).strftime("%a").upper()
+            cr.move_to(i * bw + bw / 2 - cr.text_extents(t).x_advance / 2, h - 2)
+            cr.show_text(t)
+
+
+def fmt_dur(s):
+    s = int(s)
+    return f"{s // 3600}h{s % 3600 // 60:02d}" if s >= 3600 else f"{s // 60} min"
+
+
 class MixerPopup(Popup):
     """Sound mixer: master volume + mute of the default output, a button per output device, and one slider per application that
     is playing (streams of one app are grouped). Refreshes every 1.5 s while open (apps come and go)."""
@@ -3377,6 +3537,8 @@ def main():
         win = NotePopup(mon)
     elif mode == "settings":
         win = SettingsPopup(mon)
+    elif mode == "activity":
+        win = ActivityPopup(mon)
     elif mode in ("appearance", "themes"):
         win = AppearancePopup(mon)
     elif mode == "desktop":
