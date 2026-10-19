@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # gits-battery icon|percent|status|charging: the battery for the lock screen, and for anything else that wants a glyph or a number.
 # Several batteries are averaged. Prints nothing on a machine without one.
+#   gits-battery health          "67% · 41.3 / 62.0 Wh" (what it holds now against new; cycles too when the firmware tells)
+#   gits-battery time            "1h05 left" / "full in 40 min" from the present power draw (empty when unknown)
+#   gits-battery limit [N|once]  the charge limit: show it, set it (20-100; asusctl on ASUS laptops, else root is needed), or charge
+#                                to 100 % once (ASUS one-shot) and fall back to the limit afterwards
+#   gits-battery limit-menu      pick one in a menu (Super+I -> Battery charge limit)
 sum=0; n=0; state=
 for b in /sys/class/power_supply/BAT*; do
     [[ -r $b/capacity ]] || continue
@@ -9,7 +14,49 @@ for b in /sys/class/power_supply/BAT*; do
 done
 ((n)) || exit 0
 pct=$((sum / n))
+b0=$(ls -d /sys/class/power_supply/BAT* 2>/dev/null | head -1)
+rd() { cat "$b0/$1" 2>/dev/null; }
 case ${1:-icon} in
+    health)
+        full=$(rd energy_full) design=$(rd energy_full_design); unit=Wh
+        [[ -z $full ]] && { full=$(rd charge_full); design=$(rd charge_full_design); unit=Ah; }
+        [[ $full =~ ^[0-9]+$ && $design =~ ^[0-9]+$ && $design -gt 0 ]] || exit 0
+        cyc=$(rd cycle_count)
+        awk -v f="$full" -v d="$design" -v u="$unit" -v c="$cyc" 'BEGIN { printf "%d%% · %.1f / %.1f %s%s\n", f * 100 / d + 0.5, f / 1e6, d / 1e6, u, (c > 0 ? " · " c " cycles" : "") }' ;;
+    time)
+        now=$(rd energy_now) full=$(rd energy_full) pw=$(rd power_now)
+        [[ $now =~ ^[0-9]+$ && $pw =~ ^[0-9]+$ && $pw -gt 100000 ]] || exit 0
+        lim=$(rd charge_control_end_threshold); [[ $lim =~ ^[0-9]+$ ]] || lim=100
+        case $state in
+            Discharging) m=$((now * 60 / pw)) ;;
+            Charging) m=$(( (full * lim / 100 - now) * 60 / pw )); ((m > 0)) || exit 0 ;;
+            *) exit 0 ;;
+        esac
+        h=$((m / 60)); m=$((m % 60))
+        if [[ $state == Discharging ]]; then ((h)) && printf '%dh%02d left\n' $h $m || echo "$m min left"
+        else ((h)) && printf 'full in %dh%02d\n' $h $m || echo "full in $m min"; fi ;;
+    limit)
+        cur=$(rd charge_control_end_threshold)
+        [[ -n $cur ]] || { echo "no charge limit on this battery" >&2; exit 1; }
+        case ${2:-} in
+            "") echo "$cur%" ;;
+            once)
+                command -v asusctl >/dev/null || { echo "a one-time full charge needs asusctl (ASUS)" >&2; exit 1; }
+                asusctl battery oneshot >/dev/null && notify-send -a "GitS Notify" "󰂄  Battery" "charging to 100 % once, then back to the $cur% limit" ;;
+            *)
+                [[ $2 =~ ^[0-9]+$ ]] && (($2 >= 20 && $2 <= 100)) || { echo "limit: 20-100" >&2; exit 2; }
+                if command -v asusctl >/dev/null; then asusctl battery limit "$2" >/dev/null
+                elif [[ -w $b0/charge_control_end_threshold ]]; then echo "$2" >"$b0/charge_control_end_threshold"
+                else echo "setting the limit needs root here: echo $2 | sudo tee $b0/charge_control_end_threshold" >&2; exit 1; fi
+                notify-send -a "GitS Notify" "󰂄  Battery" "charge limit $(rd charge_control_end_threshold)%" ;;
+        esac ;;
+    limit-menu)
+        cur=$(rd charge_control_end_threshold)
+        rows=$'󰂀  80 %   (longest battery life, laptop mostly plugged in)\n󰂁  85 %\n󰂂  90 %\n󰁹  100 %  (full range, wears the battery faster)\n󰂄  Charge to 100 % once (then back to the limit)'
+        i=$(gits-menu "󰂄  CHARGE LIMIT: ${cur}%" "// 充電" -format i <<<"$rows") || exit 0
+        case $i in
+            0) exec "$0" limit 80 ;; 1) exec "$0" limit 85 ;; 2) exec "$0" limit 90 ;; 3) exec "$0" limit 100 ;; 4) exec "$0" limit once ;;
+        esac ;;
     percent) echo "$pct" ;;
     status) echo "$state" ;;
     charging) [[ $state == Charging ]] ;;
@@ -17,5 +64,5 @@ case ${1:-icon} in
         # Full / Not charging count as plugged in too: this laptop's charge limit keeps it at "Not charging" around 98 %
         if [[ $state == Discharging ]]; then icons=(󰂎 󰁺 󰁻 󰁼 󰁽 󰁾 󰁿 󰂀 󰂁 󰂂 󰁹); else icons=(󰢟 󰢜 󰂆 󰂇 󰂈 󰢝 󰂉 󰢞 󰂊 󰂋 󰂅); fi
         echo "${icons[pct / 10]}" ;;
-    *) echo "usage: gits-battery icon|percent|status|charging" >&2; exit 2 ;;
+    *) echo "usage: gits-battery icon|percent|status|charging|health|time|limit [N|once]|limit-menu" >&2; exit 2 ;;
 esac

@@ -64,6 +64,7 @@ button.flat-btn:hover { background: alpha(@cy, 0.16); color: @cyb; border-color:
 .b-big { font-size: 26px; font-weight: 800; color: @fg; }
 .b-big.low { color: @red; }
 .b-state { font-size: 9px; font-weight: 700; letter-spacing: 1px; color: @mid; margin-top: 6px; }
+.b-health { font-size: 9px; font-weight: 700; letter-spacing: 1px; color: @dim; margin-top: 6px; }
 
 /* graph */
 .g-cpu { font-size: 10px; font-weight: 800; color: @cyb; }
@@ -98,3 +99,10 @@ entry.t-entry placeholder { color: @dim; }
 .s-state { font-size: 9px; font-weight: 800; letter-spacing: 2px; color: @cy; margin-top: 4px; }
 .s-docker { font-size: 9px; font-weight: 700; letter-spacing: 1px; color: @mid; }
 .s-state.bad, .s-docker.bad { color: @red; }
+/* backups card */
+.bk-dot { font-size: 9px; }
+.bk-name { font-size: 10px; font-weight: 700; letter-spacing: 1px; color: @mid; }
+.bk-age { font-size: 9px; font-weight: 700; letter-spacing: 1px; color: @dim; }
+.bk-dot.bk-ok { color: #34D399; }
+.bk-dot.bk-bad, .bk-age.bk-bad { color: @red; }
+.bk-dot.bk-wait { color: @dim; }

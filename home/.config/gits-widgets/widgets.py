@@ -31,6 +31,7 @@ import os
 import random
 import re
 import select
+import shutil
 import subprocess
 import threading
 import time
@@ -592,6 +593,9 @@ class BatteryCard(Card):
         self.body.append(top)
         self.bar = self.area(self._draw, -1, 8)
         self.body.append(self.bar)
+        self.health = label("", "b-health")   # wear (holds now / new), the charge limit, time left or to the limit
+        self.health.set_ellipsize(Pango.EllipsizeMode.END)
+        self.body.append(self.health)
         self.update()
 
     def read(self, name):
@@ -609,7 +613,29 @@ class BatteryCard(Card):
         self.state.set_text({"Full": "FULLY CHARGED", "Charging": "CHARGING ↑", "Discharging": "ON BATTERY",
                              "Not charging": "PLUGGED IN"}.get(self.status, self.status.upper()))
         (self.big.add_css_class if low else self.big.remove_css_class)("low")
+        self.health.set_text(self.health_line())
         self.bar.queue_draw()
+
+    def health_line(self):
+        """'HEALTH 67% · LIMIT 85% · FULL IN 27 MIN' from sysfs (the same numbers as `gits-battery health / time / limit`)."""
+        parts = []
+        try:
+            full, design = int(self.read("energy_full") or 0), int(self.read("energy_full_design") or 0)
+            if full and design:
+                parts.append(f"HEALTH {round(full * 100 / design)}%")
+            lim = self.read("charge_control_end_threshold")
+            if lim and lim != "100":
+                parts.append(f"LIMIT {lim}%")
+            now, pw = int(self.read("energy_now") or 0), int(self.read("power_now") or 0)
+            if pw > 100000 and self.status in ("Charging", "Discharging"):
+                goal = full * int(lim or 100) / 100
+                mins = int((now if self.status == "Discharging" else max(0, goal - now)) * 60 / pw)
+                if mins:
+                    t = f"{mins // 60}H{mins % 60:02d}" if mins >= 60 else f"{mins} MIN"
+                    parts.append(f"{t} LEFT" if self.status == "Discharging" else f"FULL IN {t}")
+        except ValueError:
+            pass
+        return " · ".join(parts)
 
     def _draw(self, area, cr, w, h):
         n, gap = 24, 2
@@ -2293,6 +2319,89 @@ class UpdatesCard(Card):
         self.l_up.set_text(f"UP {fmt_uptime(up)} · LINUX {os.uname().release.split('-')[0]}")
 
 
+BACKUP_STAMP = os.path.join(os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")), "laptop-backup", "last-ok")
+
+
+def backups_probe():
+    """[(name, state, age s or None)] for the backups card. With GITS_KUMA (an Uptime Kuma status page URL, http://host:3001/status/SLUG):
+    every monitor of its groups whose name says backup / бэкап; the age is since its last good heartbeat, the state its latest one
+    ("ok" / "bad"). Without it: this machine's laptop-backup stamp only (ok while younger than two days)."""
+    rows, now = [], time.time()
+    url = os.environ.get("GITS_KUMA", "").strip()
+    m = re.match(r"(https?://[^/]+)/status/([^/?#]+)", url)
+    if m:
+        base, slug = m.groups()
+        get = lambda path: json.load(urllib.request.urlopen(f"{base}/api/status-page/{path}", timeout=8))
+        page, beats = get(slug), get(f"heartbeat/{slug}").get("heartbeatList", {})
+        for g in page.get("publicGroupList", []):
+            if not re.search(r"backup|бэкап|бекап", g.get("name", ""), re.I):
+                continue
+            for mon in g.get("monitorList", []):
+                hb = beats.get(str(mon["id"])) or []
+                good = [b for b in hb if b.get("status") == 1]
+                age = None
+                if good:
+                    ts = datetime.datetime.strptime(good[-1]["time"][:19], "%Y-%m-%d %H:%M:%S").replace(tzinfo=datetime.timezone.utc)
+                    age = now - ts.timestamp()
+                state = "ok" if hb and hb[-1].get("status") == 1 else "bad" if hb else "wait"
+                rows.append((mon["name"], state, age))
+    elif os.path.exists(BACKUP_STAMP):
+        age = now - os.path.getmtime(BACKUP_STAMP)
+        rows.append(("Laptop backup", "ok" if age < 2 * 86400 else "bad", age))
+    return rows
+
+
+def fmt_age(s):
+    if s is None:
+        return "NEVER"
+    s = int(s)
+    return "JUST NOW" if s < 120 else f"{s // 60} MIN AGO" if s < 3600 else f"{s // 3600}H AGO" if s < 172800 else f"{s // 86400}D AGO"
+
+
+class BackupsCard(Card):
+    """The backups at a glance: laptop and home server, from Uptime Kuma's push monitors (GITS_KUMA) or this machine's
+    laptop-backup stamp. Green = last run fine, red = Kuma marked it down (missed or failed). Click: back up this laptop now."""
+
+    def __init__(self, app, **kw):
+        super().__init__(app, "SYS.BACKUP // 保存", **kw)
+        self.poll = None if DEMO else BackgroundPoll(backups_probe, 300)
+        self.l_sum = label("…", "n-meta", ellipsize=True)
+        self.body.append(self.l_sum)
+        self.list = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
+        self.body.append(self.list)
+        self.shown = None
+        if shutil.which("laptop-backup"):
+            clickable(self, self.run_now)
+        self.update()
+
+    def run_now(self):
+        subprocess.Popen(["bash", "-c", "systemd-run --user --quiet --collect --unit=laptop-backup-now laptop-backup && "
+                          "notify-send -a 'GitS Notify' '󰁯  Backup' 'backing up the laptop now (journalctl --user -u laptop-backup-now)'"],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+
+    def update(self):
+        rows = [("Laptop backup", "ok", 5400), ("Pi backup", "ok", 21600)] if DEMO else (self.poll.value if self.poll else None)
+        if rows is None:
+            return
+        view = [(n, s, fmt_age(a)) for n, s, a in rows]
+        if view == self.shown:
+            return
+        self.shown = view
+        while (c := self.list.get_first_child()) is not None:
+            self.list.remove(c)
+        bad = sum(s == "bad" for _, s, _ in view)
+        self.l_sum.set_text("NO BACKUP SOURCE (GITS_KUMA)" if not view else f"{len(view) - bad}/{len(view)} OK" + (f" · {bad} OVERDUE" if bad else ""))
+        (self.l_sum.add_css_class if bad else self.l_sum.remove_css_class)("bad")
+        for name, state, age in view:
+            row = Gtk.Box(spacing=6)
+            row.append(label("●", f"bk-dot bk-{state}"))
+            n = label(name.upper(), "bk-name", ellipsize=True)
+            n.set_hexpand(True)
+            row.append(n)
+            row.append(label(age, f"bk-age bk-{state}", 1.0))
+            self.list.append(row)
+
+
 def bt_probe():
     devs = []
     out = subprocess.run(["bluetoothctl", "devices", "Connected"], capture_output=True, text=True, timeout=10).stdout
@@ -2463,13 +2572,15 @@ class App:
                      ("services", ServicesCard, "L", 1, MW, 236, {"link": self.link})]
         plan += [("notes", NotesCard, "L", 0, LW, 170, {})]
         if bats:
-            plan.append(("battery", BatteryCard, "R", 0, RW, 92, {"bat": bats[0]}))
+            plan.append(("battery", BatteryCard, "R", 0, RW, 112, {"bat": bats[0]}))
         plan += [("rings", RingsCard, "R", 0, RW, 132, {"stats": self.stats}),
                  ("graph", GraphCard, "R", 0, RW, 132, {"stats": self.stats}),
                  ("todo", TodoCard, "R", 0, RW, 250, {})]
         if DEMO or self.link:
             plan += [("torrents", TorrentCard, "R", 0, RW, 196, {"link": self.link}),
                      ("watching", WatchCard, "R", 0, RW, 214, {"link": self.link})]
+        if DEMO or os.environ.get("GITS_KUMA") or shutil.which("laptop-backup"):
+            plan.append(("backups", BackupsCard, "R", 0, RW, 96, {}))
         plan += [("updates", UpdatesCard, "R", 0, RW, 110, {}),
                  ("bluetooth", BluetoothCard, "R", 0, RW, 120, {})]
         if has_gpu:
@@ -2553,7 +2664,7 @@ class App:
         self.stats.refresh()
         for c in self.cards:
             if isinstance(c, (RingsCard, GraphCard, BatteryCard, WeatherCard, NetCard, GpuCard, DiskCard, TopCard, ServerCard,
-                              ServerFeed, UpdatesCard, BluetoothCard)):
+                              ServerFeed, UpdatesCard, BluetoothCard, BackupsCard)):
                 c.update()
         return True
 

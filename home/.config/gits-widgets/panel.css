@@ -135,6 +135,7 @@ list { background: transparent; }
 .l-title { font-size: 12px; font-weight: 700; color: #C8F4FF; }
 .l-sub { font-size: 9px; color: #596977; }
 .l-glyph { font-size: 17px; color: #2ED3D7; }
+.l-thumb { border: 1px solid alpha(#2ED3D7, 0.35); }
 .l-tag { font-size: 8px; font-weight: 700; letter-spacing: 1px; color: #596977; }
 .lrow:selected .l-title, .lrow:selected .l-glyph { color: #060A14; }
 /* app icons as one-colour cyan: grey, then sepia turned to the GitS hue; dark on the selected (cyan) row */

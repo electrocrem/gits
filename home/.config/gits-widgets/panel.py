@@ -2148,7 +2148,7 @@ class DesktopPopup(Popup):
                ("services", "server services *", "L"), ("notes", "memo + focus timer", "L"),
                ("battery", "battery", "R"), ("rings", "cpu / ram / ssd rings", "R"), ("graph", "cpu / ram graph", "R"),
                ("todo", "to-do", "R"), ("torrents", "torrents *", "R"), ("watching", "now watching *", "R"),
-               ("updates", "updates + uptime", "R"), ("bluetooth", "bluetooth devices", "R"), ("gpu", "gpu", "R"),
+               ("backups", "backups (kuma / laptop)", "R"), ("updates", "updates + uptime", "R"), ("bluetooth", "bluetooth devices", "R"), ("gpu", "gpu", "R"),
                ("disks", "disks", "R"), ("top", "busiest processes", "R"))
     WIDGETS_OFF = {"gpu", "disks", "top"}
     CONF = os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.join(HOME, ".config")), "gits", "widgets.conf")
@@ -2854,7 +2854,8 @@ class LauncherPopup(Popup):
         sp = Gtk.Box()
         sp.set_hexpand(True)
         head.append(sp)
-        self.l_hint = label("Enter: copy · Esc: close" if mode == "emoji" else "Esc: close" if mode == "keys" else "Enter: run · Esc: close", "m-tag")
+        self.l_hint = label("Enter: copy · Del: remove · Ctrl+S: pin · Esc: close" if mode == "clip" else
+                            "Enter: copy · Esc: close" if mode == "emoji" else "Esc: close" if mode == "keys" else "Enter: run · Esc: close", "m-tag")
         head.append(self.l_hint)
         root.append(head)
         self.entry = Gtk.Entry()
@@ -2899,16 +2900,87 @@ class LauncherPopup(Popup):
         except (OSError, ValueError):
             return {}
 
+    PINS = os.path.join(os.environ.get("XDG_DATA_HOME", os.path.join(HOME, ".local", "share")), "gits", "clip-pins.json")
+    THUMBS = os.path.join(os.environ.get("XDG_CACHE_HOME", os.path.join(HOME, ".cache")), "gits-widgets", "clip")
+
+    def _pins(self):
+        try:
+            return [p for p in json.load(open(self.PINS)) if isinstance(p, str)]
+        except (OSError, ValueError):
+            return []
+
+    def _save_pins(self, pins):
+        os.makedirs(os.path.dirname(self.PINS), exist_ok=True)
+        with open(self.PINS, "w") as f:
+            json.dump(pins, f, ensure_ascii=False, indent=1)
+
+    def _clip_thumb(self, it, pic):
+        """Decode an image entry of the history (cliphist decode ID) into a small cached PNG, off the main thread."""
+        path = os.path.join(self.THUMBS, f"{it.ident}.png")
+
+        def work():
+            if not os.path.exists(path):
+                try:
+                    data = subprocess.run(["cliphist", "decode", it.ident], capture_output=True, timeout=5).stdout
+                    loader = GdkPixbuf.PixbufLoader()
+                    loader.write(data)
+                    loader.close()
+                    pb = loader.get_pixbuf()
+                    s = min(96 / pb.get_width(), 56 / pb.get_height(), 1.0)
+                    os.makedirs(self.THUMBS, exist_ok=True)
+                    pb.scale_simple(max(1, int(pb.get_width() * s)), max(1, int(pb.get_height() * s)),
+                                    GdkPixbuf.InterpType.BILINEAR).savev(path, "png", [], [])
+                except Exception:   # not an image after all, or cliphist gone: the glyph stays
+                    return
+            GLib.idle_add(lambda: (pic.set_filename(path), pic.set_visible(True), False)[2])
+        threading.Thread(target=work, daemon=True).start()
+
+    def _clip_delete(self, it):
+        if it.act[0] == "pin":
+            self._save_pins([p for p in self._pins() if p != it.act[1]])
+        elif not DEMO:
+            subprocess.run(["cliphist", "delete"], input=it.line.encode(), timeout=5)
+            try:
+                os.remove(os.path.join(self.THUMBS, f"{it.ident}.png"))
+            except OSError:
+                pass
+        self.items = [x for x in self.items if x is not it]
+        self._refresh()
+
+    def _clip_pin(self, it):
+        pins = self._pins()
+        if it.act[0] == "pin":
+            pins = [p for p in pins if p != it.act[1]]
+        elif not getattr(it, "image", False) and not it.title.startswith("image "):
+            text = it.match if DEMO else subprocess.run(["cliphist", "decode", it.ident], capture_output=True, text=True, timeout=5).stdout
+            if text and text not in pins:
+                pins.insert(0, text)
+        else:
+            self.l_hint.set_text("only text can be pinned")
+            return
+        if not DEMO:
+            self._save_pins(pins)
+        self.items = self._gather()
+        self._refresh()
+
     def _gather(self):
         items = []
         if self.mode == "clip":
+            pins = [] if DEMO else self._pins()
+            for text in pins:
+                items.append(Item("clip", " ".join(text.split())[:110], f"pinned · {len(text)} chars", glyph="󰐃",
+                                  match=text, act=("pin", text), ident="pin"))
             rows = [f"{i}\t{t}" for i, t in enumerate(DEMO_CLIPS, 1)] if DEMO else sh(["cliphist", "list"], timeout=3).splitlines()[:80]
             for ln in rows:
                 cid, _, text = ln.partition("\t")
                 binary = text.startswith("[[ binary data")
-                items.append(Item("clip", text.replace("[[ binary data ", "image ").rstrip(" ]]") if binary else " ".join(text.split())[:110],
-                                  "image" if binary else f"{len(text)} chars", glyph="󰋩" if binary else "󰅍",
-                                  match=text, act=("clip", cid), ident=cid))
+                if not binary and text in pins:
+                    continue
+                it = Item("clip", text.replace("[[ binary data ", "image ").rstrip(" ]]") if binary else " ".join(text.split())[:110],
+                          "image" if binary else f"{len(text)} chars", glyph="󰋩" if binary else "󰅍",
+                          match=text, act=("clip", cid), ident=cid)
+                it.line, it.image = ln, binary and re.search(r"\b(png|jpe?g|webp|gif|bmp)\b", text) is not None
+                items.append(it)
             return items
         if self.mode == "windows" and DEMO:
             for i, (t, c, ws) in enumerate(DEMO_WINDOWS):
@@ -3042,6 +3114,16 @@ class LauncherPopup(Popup):
                 g = label(it.glyph, "l-glyph", 0.5)
                 g.set_size_request(28, -1)
                 h.append(g)
+            if it.kind == "clip" and getattr(it, "image", False) and not DEMO:
+                slot = Gtk.Box()   # a fixed 96x56 frame: a tall picture must not stretch the row
+                slot.set_size_request(96, 56)
+                pic = Gtk.Picture(halign=Gtk.Align.CENTER, valign=Gtk.Align.CENTER)
+                pic.set_can_shrink(False)   # the cached thumbnail is already at most 96x56
+                pic.add_css_class("l-thumb")
+                pic.set_visible(False)
+                slot.append(pic)
+                h.append(slot)
+                self._clip_thumb(it, pic)
             col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
             col.set_hexpand(True)
             t = label(it.title, "l-title")
@@ -3063,6 +3145,11 @@ class LauncherPopup(Popup):
             self.box.select_row(first)
 
     def _key(self, _c, kv, state, *_):
+        if self.mode == "clip" and (kv == Gdk.KEY_Delete or (state & Gdk.ModifierType.CONTROL_MASK and kv == Gdk.KEY_s)):
+            row = self.box.get_selected_row()
+            if row is not None:
+                (self._clip_delete if kv == Gdk.KEY_Delete else self._clip_pin)(row.item)
+            return True
         if kv in (Gdk.KEY_Down, Gdk.KEY_Up) or (state & Gdk.ModifierType.CONTROL_MASK and kv in (Gdk.KEY_n, Gdk.KEY_p)):
             down = kv in (Gdk.KEY_Down, Gdk.KEY_n)
             cur = self.box.get_selected_row()
@@ -3101,6 +3188,8 @@ class LauncherPopup(Popup):
             cmd = ["gits-project", "--open", arg]
         elif kind == "win":
             cmd = ["hyprctl", "dispatch", f'hl.dsp.focus({{ window = "address:{arg}" }})']
+        elif kind == "pin":
+            cmd = ["bash", "-c", f"printf %s {shlex.quote(arg)} | wl-copy"]
         elif kind == "copy":
             cmd = ["bash", "-c", f"printf %s {shlex.quote(arg)} | wl-copy && notify-send -a 'GitS Notify' -t 2500 'Copied' {shlex.quote(arg[:80])}"]
         elif kind == "web":

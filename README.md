@@ -146,6 +146,13 @@ need sudo, so the commands to undo them are printed at the end.
   nothing is installed there. `GITS_SERVER_NAME` changes the name on the card.
 * **Desktop cards and the bar:** `Super+I` → *Widgets and bar*: click a tile to show / hide it, drag it (or Alt+arrows) to change
   the order; cards stay on their side of the screen, bar modules in their part of the bar. *DEFAULTS* puts both back.
+* **Games:** while a Steam game runs the desktop switches itself to the *gaming* workflow, puts the game in gamemode and pauses
+  notifications; all of it goes back when you quit (and you are told how many notifications came in). Off: `GITS_AUTO_GAMEMODE=0`.
+* **Clipboard history** (`Super+V`): pictures show a preview; `Del` removes an entry, `Ctrl+S` pins a text so it stays on top for good.
+* **Battery:** the battery card shows its health (what it holds now against new), the charge limit and the time left;
+  `Super+I` → *Battery charge limit* sets 80 / 85 / 90 / 100 % or one full charge (ASUS laptops through asusctl).
+* **Backups card:** `hl.env("GITS_KUMA", "http://host:3001/status/SLUG")` in `local.lua` shows the Uptime Kuma push monitors of that
+  status page whose group is called *backup*, green or red, with the time of the last good run; click backs up this laptop now.
 * **YubiKey (or any FIDO2 key):** register it once (`pamu2fcfg > ~/.config/Yubico/u2f_keys`), then `sudo ~/.local/share/gits-yubikey/setup.sh`.
   Login and lock screen then want the password and a touch (in that order: password, Enter, touch the blinking key); `sudo` and the
   polkit dialogs take a touch instead of the password. A hint shows wherever the key is waited for. Without the key for a while:

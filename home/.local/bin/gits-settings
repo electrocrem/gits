@@ -29,6 +29,7 @@ DESKTOP	󰌌  Key bindings	gits-panel keys
 DESKTOP	󰈙  Hyprland config (options, rules, key bindings)	xdg-open $HOME/.config/hypr/gits
 POWER	󰓅  Workflow (default / gaming / editing / powersaver)	gits-workflow select	gits-workflow current | sed 's/^[0-9]*-//'
 POWER	󰁹  Power profile	$HOME/.config/waybar/scripts/gits-perf.sh menu	powerprofilesctl get
+POWER	󰂄  Battery charge limit (80 / 85 / 90 / 100 %, or full once)	gits-battery limit-menu	gits-battery limit
 POWER	󰤄  Sleep and power timers (dim / lock / screen off / sleep)	gits-idle menu	gits-idle show | awk -F'[.=]' '$1 == "ac" { v = v (v ? "/" : "") $3 } END { print v " min" }'
 POWER	󰢮  ROG Control Center	gits-rog
 TOOLS	󰉋  Open a project (git / Godot)	gits-project
@@ -45,6 +46,7 @@ ROWS
 )
 has_touchpad || entries=$(grep -Pv '\tgits-touchpad toggle(\t|$)' <<<"$entries")
 has_rog || entries=$(grep -Pv '\tgits-rog(\t|$)' <<<"$entries")
+compgen -G '/sys/class/power_supply/BAT*/charge_control_end_threshold' >/dev/null || entries=$(grep -Pv '\tgits-battery limit-menu(\t|$)' <<<"$entries")
 [[ -x /usr/local/bin/yubikey-mode ]] || entries=$(grep -Pv '\tgits-yubikey menu(\t|$)' <<<"$entries")
 [[ -r $extra ]] && entries+=$'\n'$(awk -F'\t' 'NF >= 2 && $1 !~ /^#/ { print "YOURS\t" $1 "\t" $2 "\t" }' "$extra")
 case ${1:-} in
