@@ -2966,15 +2966,27 @@ class SettingsPopup(Popup):
         sc.set_child(cols)
         root.append(sc)
         self.rows, self.sections, self.sel = [], {}, None
+        self.cache = self._read_cache()
         for ln in sh(["gits-settings", "--table"], timeout=5, real=True).splitlines():
             f = ln.split("\t")
             if len(f) >= 3:
                 self._add_row(f[0] or "YOURS", f[1], f[2], f[3] if len(f) > 3 else "")
         self.set_child(root)
         threading.Thread(target=self._load_info, daemon=True).start()
+        # every value from the cache at once; then refresh them in the background, a few at a time and at low priority, and
+        # the slow ones (update check, health check) only when their cached answer is old: opening the hub stays smooth
+        now, todo = time.time(), []
         for r in self.rows:
-            if r.status:
-                threading.Thread(target=self._load_status, args=(r,), daemon=True).start()
+            if not r.status:
+                continue
+            hit = self.cache.get(r.status)
+            if hit:
+                self._show_status(r, hit["v"], cached=True)
+            ttl = next((s for k, s in self.SLOW.items() if k in r.status), 0)
+            if not hit or now - hit["t"] > ttl:
+                todo.append(r)
+        if todo:
+            threading.Thread(target=self._refresh_statuses, args=(todo,), daemon=True).start()
         GLib.idle_add(lambda: (self.entry.grab_focus(), False)[1])
 
     def _add_row(self, section, lab, cmd, status):
@@ -3019,11 +3031,38 @@ class SettingsPopup(Popup):
         self.rows.append(b)
 
     # -- data
-    def _load_status(self, row):
-        out = sh(["bash", "-c", row.status], timeout=25 if "--check" in row.status else 6)
-        GLib.idle_add(self._show_status, row, out.splitlines()[0].strip() if out else "")
+    STATUS_CACHE = os.path.join(os.environ.get("XDG_CACHE_HOME", os.path.join(HOME, ".cache")), "gits-widgets", "settings-status.json")
+    SLOW = {"gits-update --check": 1800, "gits-doctor": 600}   # seconds a cached answer of these stays good
 
-    def _show_status(self, row, text):
+    def _read_cache(self):
+        try:
+            return json.load(open(self.STATUS_CACHE))
+        except (OSError, ValueError):
+            return {}
+
+    def _refresh_statuses(self, rows):
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            for _ in pool.map(self._load_status, rows):
+                pass
+        try:
+            os.makedirs(os.path.dirname(self.STATUS_CACHE), exist_ok=True)
+            with open(self.STATUS_CACHE + ".tmp", "w") as f:
+                json.dump(self.cache, f)
+            os.replace(self.STATUS_CACHE + ".tmp", self.STATUS_CACHE)
+        except OSError:
+            pass
+
+    def _load_status(self, row):
+        slow = any(k in row.status for k in self.SLOW)
+        out = sh(["nice", "-n", "10", "bash", "-c", row.status], timeout=25 if slow else 6)
+        text = out.splitlines()[0].strip() if out else ""
+        self.cache[row.status] = {"v": text, "t": time.time()}
+        GLib.idle_add(self._show_status, row, text)
+
+    def _show_status(self, row, text, cached=False):
+        for c in ("bad", "warn", "dim"):
+            row.val.remove_css_class(c)
         row.val.set_text(text or "—")
         row.val.set_tooltip_text(text or None)
         low = text.lower()
@@ -3033,6 +3072,8 @@ class SettingsPopup(Popup):
             row.val.add_css_class("warn")
         elif low in ("off", "stopped", "—", "") or low.startswith("off"):
             row.val.add_css_class("dim")
+        row.text = getattr(row, "base_text", row.text)
+        row.base_text = row.text
         row.text += " " + low
 
     def _load_info(self):
