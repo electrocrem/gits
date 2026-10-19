@@ -1,0 +1,7 @@
+[Unit]
+Description=GitS: fetch your git projects, evening reminder of work not on GitHub (gits-gitcheck tick)
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/gits-gitcheck tick
+Nice=10

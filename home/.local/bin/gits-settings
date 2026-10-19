@@ -39,7 +39,7 @@ POWER	󰢮  ROG Control Center	gits-rog
 TOOLS	󰖨  Daily brief (weather, backups, server, updates, yesterday)	gits-panel brief
 TOOLS	󱎫  Time report (which apps, today / 7 days)	gits-panel activity	gits-activity report | head -1 | sed 's/^today: //'
 TOOLS	󰉍  Sort Downloads (by type; 30+ days old to Old/; undo)	gits-downloads menu	gits-downloads status
-TOOLS	󰉋  Open a project (git / Godot)	gits-project
+TOOLS	󰉋  Open a project (git / Godot; ● uncommitted ↑ to push ↓ to pull)	gits-project	gits-gitcheck status
 TOOLS	󰎞  Quick note (Super+N)	gits-note add
 TOOLS	󰎞  Recent notes (copy one)	gits-note list
 TOOLS	󰀠  Reminders (or type "через 20м чай" in Super+A)	gits-remind menu	gits-remind status

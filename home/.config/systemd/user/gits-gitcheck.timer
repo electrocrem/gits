@@ -1,0 +1,8 @@
+[Unit]
+Description=GitS: gits-gitcheck every 30 minutes (fetch; at 21:00+ once a day the reminder)
+PartOf=gits-session.target
+
+[Timer]
+OnActiveSec=3min
+OnUnitActiveSec=30min
+OnCalendar=*-*-* 21:00:00

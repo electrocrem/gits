@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# gits-gitcheck: your git projects (the ones gits-project lists) kept honest (gits-gitcheck.timer, every 30 min).
+#   gits-gitcheck tick      what the timer runs: fetch every repo with a remote (quietly, in parallel, https or a loaded ssh key
+#                           only, never a prompt), so ↓N in Super+O is real; at 21:00 or later, once a day, the reminder below
+#   gits-gitcheck fetch     only the fetch
+#   gits-gitcheck remind    a notification listing your repos with uncommitted (●N) or unpushed (↑N) work, Open projects / Later
+#   gits-gitcheck status    one line for the settings hub ("2 to push · 1 to pull" / "all clean")
+#   gits-gitcheck list      repo <tab> state, for your repos that need something
+# "Your" repos: origin on github.com/$GITS_GIT_OWNER (default: your GitHub name from `gh`, else git config github.user), or
+# listed in GITS_GIT_MINE="name name". Others (clones of someone's project) are fetched but never nagged about.
+state=${XDG_STATE_HOME:-$HOME/.local/state}/gits
+mkdir -p "$state"
+owner=${GITS_GIT_OWNER:-$(cat "$state/git-owner" 2>/dev/null)}
+if [[ -z $owner ]]; then
+    owner=$(timeout 5 gh api user -q .login 2>/dev/null || git config github.user || true)
+    [[ -n $owner ]] && echo "$owner" >"$state/git-owner"
+fi
+export GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=8"
+
+repos() { gits-project --tsv | while IFS=$'\t' read -r name dir _; do [[ -e $dir/.git ]] && printf '%s\t%s\n' "$name" "$dir"; done; }
+mine() {   # $1 name, $2 dir
+    [[ " ${GITS_GIT_MINE:-} " == *" $1 "* ]] && return 0
+    local url; url=$(git -C "$2" remote get-url origin 2>/dev/null) || return 1
+    [[ -n $owner && ${url,,} == *"github.com"[:/]"${owner,,}/"* ]]
+}
+state_of() {   # "●N ↑N ↓N" or nothing when clean
+    local out head dirty ahead behind s=""
+    out=$(timeout 5 git -C "$1" status --porcelain=v1 -b 2>/dev/null) || return 0
+    head=${out%%$'\n'*}; dirty=0; [[ $out == *$'\n'* ]] && dirty=$(grep -c . <<<"${out#*$'\n'}")
+    ahead=$(sed -n 's/.*ahead \([0-9]*\).*/\1/p' <<<"$head"); behind=$(sed -n 's/.*behind \([0-9]*\).*/\1/p' <<<"$head")
+    ((dirty)) && s+="●$dirty "; [[ -n $ahead ]] && s+="↑$ahead "; [[ -n $behind ]] && s+="↓$behind "
+    printf '%s' "${s% }"
+}
+fetch() {
+    repos | {   # the loop runs in the pipe's subshell: its wait is the one that sees the fetches
+        while IFS=$'\t' read -r _ dir; do
+            git -C "$dir" remote 2>/dev/null | grep -q . || continue
+            timeout 60 nice -n 10 git -C "$dir" fetch --quiet --no-tags --no-recurse-submodules 2>/dev/null &
+        done
+        wait
+    }
+}
+list() { repos | while IFS=$'\t' read -r name dir; do mine "$name" "$dir" || continue; s=$(state_of "$dir"); [[ -n $s ]] && printf '%s\t%s\n' "$name" "$s"; done; }
+remind() {
+    local l; l=$(list)
+    [[ -z $l ]] && return 0
+    local n; n=$(grep -c . <<<"$l")
+    local body; body=$(awk -F'\t' '{ printf "%s  %s\n", $1, $2 }' <<<"$l" | head -8)
+    (
+        a=$(notify-send -a "GitS Notify" -i git -A open="Open projects" -A later="Later" --wait \
+            "  $n project(s) with work not on GitHub" "$body"$'\n'"● uncommitted files · ↑ commits to push · ↓ to pull")
+        [[ $a == open ]] && gits-project
+    ) &
+    disown
+}
+case ${1:-status} in
+    tick)
+        fetch
+        today=$(date +%F)
+        if (( 10#$(date +%H) >= 21 )) && [[ $(cat "$state/gitcheck-reminded" 2>/dev/null) != "$today" ]]; then
+            echo "$today" >"$state/gitcheck-reminded"
+            remind
+        fi ;;
+    fetch) fetch ;;
+    remind) remind ;;
+    list) list ;;
+    status)
+        l=$(list); push=$(grep -cE '●|↑' <<<"$l"); pull=$(grep -c '↓' <<<"$l")
+        if [[ -z $l ]]; then echo "all clean"; else
+            out=(); ((push)) && out+=("$push to commit / push"); ((pull)) && out+=("$pull to pull")
+            (IFS=,; echo "${out[*]}" | sed 's/,/ · /g'); fi ;;
+    *) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac
