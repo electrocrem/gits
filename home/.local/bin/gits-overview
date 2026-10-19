@@ -1,0 +1,146 @@
+#!/usr/bin/env python3
+"""gits-overview: thumbnails for the workspace overview (gits-panel overview, Super+grave).
+
+  gits-overview run    the snapshotter (gits-overview.service): a small JPEG of each monitor's visible workspace, taken
+                       ~0.7 s after the windows there changed (switch, open, close, move) and at most every 3 s; again
+                       every 2 min while nothing happens. Not while the screen is locked, you are away or in gaming mode,
+                       and not while a popup, the screensaver, an OSD or a notification covers the screen.
+  gits-overview snap   take them now
+  gits-overview path   where they are
+Thumbnails live in $XDG_RUNTIME_DIR/gits-overview/<workspace name>.jpg: RAM only, gone at logout, never on disk.
+"""
+import json
+import os
+import socket
+import subprocess
+import sys
+import threading
+import time
+
+HOME = os.path.expanduser("~")
+RUN = os.environ.get("XDG_RUNTIME_DIR", "/tmp")
+DIR = os.path.join(RUN, "gits-overview")
+STATE = os.environ.get("XDG_STATE_HOME", os.path.join(HOME, ".local", "state"))
+AWAY = os.path.join(RUN, "gits-away")   # gits-activity's flag (hypridle: 5 min without input)
+EVENTS = (b"workspace>>", b"activespecial>>", b"openwindow>>", b"closewindow>>", b"movewindow>>", b"changefloatingmode>>",
+          b"fullscreen>>")
+QUIET, GAP, IDLE = 0.7, 3.0, 120.0
+SCALE = os.environ.get("GITS_OVERVIEW_SCALE", "0.25")
+
+
+def hypr(*args):
+    try:
+        return json.loads(subprocess.run(["hyprctl", *args, "-j"], capture_output=True, text=True, timeout=3).stdout or "null")
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return None
+
+
+def blocked():
+    if os.path.exists(AWAY):
+        return True
+    try:
+        if "workflow=gaming" in open(os.path.join(STATE, "gits", "state")).read().split():
+            return True   # a grim every few seconds is a frame-time hiccup in a game
+    except OSError:
+        pass
+    for p in os.listdir("/proc"):
+        if p.isdigit():
+            try:
+                with open(f"/proc/{p}/comm") as f:
+                    if f.read().strip() == "hyprlock":
+                        return True
+            except OSError:
+                pass
+    return False
+
+
+COVERS = ("gits-panel", "gits-saver", "gits-osd", "notifications", "rofi", "hyprpicker", "selection")
+
+
+def covered():
+    """A popup, the screensaver, an OSD or a notification is over the screen: the thumbnail waits until it is gone."""
+    for mon in (hypr("layers") or {}).values():
+        for level in (mon.get("levels") or {}).values():
+            if any(l.get("namespace", "") in COVERS for l in level):
+                return True
+    return False
+
+
+def snap():
+    """One JPEG per monitor, named after what it shows (its scratchpad when one is open over the workspace)."""
+    os.makedirs(DIR, mode=0o700, exist_ok=True)
+    for m in hypr("monitors") or []:
+        if m.get("disabled"):
+            continue
+        name = (m.get("specialWorkspace") or {}).get("name") or (m.get("activeWorkspace") or {}).get("name")
+        if not name:
+            continue
+        out = os.path.join(DIR, name.replace("/", "_") + ".jpg")
+        tmp = out + ".tmp"
+        r = subprocess.run(["grim", "-o", m["name"], "-s", SCALE, "-t", "jpeg", "-q", "75", tmp], capture_output=True, timeout=5)
+        if r.returncode == 0:
+            os.replace(tmp, out)
+    alive = {w.get("name", "").replace("/", "_") + ".jpg" for w in hypr("workspaces") or []}
+    for f in os.listdir(DIR):   # workspaces that are gone
+        if f.endswith(".jpg") and f not in alive:
+            try:
+                os.remove(os.path.join(DIR, f))
+            except OSError:
+                pass
+
+
+def run():
+    sig = os.environ.get("HYPRLAND_INSTANCE_SIGNATURE", "")
+    sock_path = os.path.join(RUN, "hypr", sig, ".socket2.sock")
+    st = {"dirty": True, "ev": 0.0}
+
+    def listen():
+        while True:
+            try:
+                s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                s.connect(sock_path)
+                buf = b""
+                while True:
+                    chunk = s.recv(4096)
+                    if not chunk:
+                        break
+                    buf += chunk
+                    *lines, buf = buf.split(b"\n")
+                    if any(ln.startswith(EVENTS) for ln in lines):
+                        st["dirty"], st["ev"] = True, time.monotonic()
+            except OSError:
+                pass
+            time.sleep(5)   # Hyprland restarted / not up yet: reconnect
+
+    threading.Thread(target=listen, daemon=True).start()
+    last = 0.0
+    while True:
+        time.sleep(0.25)
+        now = time.monotonic()
+        due = (st["dirty"] and now - st["ev"] > QUIET and now - last > GAP) or now - last > IDLE
+        if not due or blocked() or covered():
+            continue
+        st["dirty"] = False
+        last = now
+        try:
+            snap()
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+
+
+def main(argv):
+    cmd = argv[0] if argv else ""
+    if cmd == "run":
+        run()
+    elif cmd == "snap":
+        snap()
+    elif cmd == "path":
+        print(DIR)
+    else:
+        print(__doc__.strip(), file=sys.stderr)
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

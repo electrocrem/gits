@@ -42,6 +42,7 @@ snapshot, updates the system, and then runs the repair.
 |---|---|
 | `Super+A` | launcher and command palette |
 | `Super+V` · `Super+Tab` · `Super+,` | clipboard history · window switcher · emoji picker |
+| ``Super+` `` | workspace overview: thumbnails, drag a window's icon to another workspace |
 | `Super+/` | every shortcut, searchable |
 | `Super+Shift+M` · `Super+R` | media popup with all players · the radio |
 | `Super+Shift+C` · `Super+Alt+V` · `Super+Shift+N` | control panel · sound mixer · notification centre |

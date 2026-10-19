@@ -3547,6 +3547,201 @@ class LauncherPopup(Popup):
 _display_ready = False
 
 
+class OverviewPopup(Popup):
+    """Workspace overview (gits-panel overview, Super+grave): every workspace as a thumbnail (gits-overview keeps them, in RAM)
+    with its windows as icons. Click / Enter / 1-9 = go there, click an icon = focus that window, drag an icon onto another
+    workspace = move the window there (the "+" tile = a new workspace), arrows move the selection, Esc / click outside close."""
+    TOP = 9
+
+    def __init__(self, monitor):
+        super().__init__(monitor, center=True)
+        self.names = ActivityPopup._app_names()
+        geo = self._screen()
+        self.mons = {m["name"]: m for m in json.loads(sh(["hyprctl", "monitors", "-j"]) or "[]")}
+        try:
+            self.clients = [c for c in json.loads(sh(["hyprctl", "clients", "-j"]) or "[]") if c.get("mapped")]
+            wss = json.loads(sh(["hyprctl", "workspaces", "-j"]) or "[]")
+        except ValueError:
+            self.clients, wss = [], []
+        cur = next((m for m in self.mons.values() if m.get("focused")), {})
+        self.cur = (cur.get("activeWorkspace") or {}).get("name", "")
+        snapdir = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "gits-overview")
+        self.snaps = snapdir
+        normal = sorted((w for w in wss if w.get("id", 0) > 0), key=lambda w: w["id"])
+        free = next(i for i in range(1, 100) if i not in {w["id"] for w in normal})
+        spaces = [(w["name"], str(w["id"]), w.get("monitor", "")) for w in normal] + [(str(free), "+", cur.get("name", ""))]
+        specials = [(w["name"], w["name"].removeprefix("special:"), w.get("monitor", "")) for w in wss if w.get("id", 0) < 0]
+        cols = min(len(spaces), 4)
+        self.CARD_W = min(geo.width - 64, 1120)
+        mw, mh = max(cur.get("width", 16), 1) / cur.get("scale", 1), max(cur.get("height", 10), 1) / cur.get("scale", 1)
+        tw = (self.CARD_W - 26 - (cols - 1) * 10) // cols
+        rows = -(-len(spaces) // cols)
+        room = geo.height - 110 - 90 - (70 if specials else 0)
+        tw = int(min(tw, room / rows * mw / mh - 10))   # every row must fit the screen
+        self.tw, self.th = tw, int(tw * mh / mw)
+        self.CARD_W = cols * tw + (cols - 1) * 10 + 26
+
+        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        root.add_css_class("panel")
+        head = Gtk.Box(spacing=6)
+        head.append(label("󰕰  WORKSPACES // 作業空間", "m-head"))
+        sp = Gtk.Box()
+        sp.set_hexpand(True)
+        head.append(sp)
+        head.append(label("click / 1-9 go · drag an icon to move the window", "m-tag"))
+        root.append(head)
+        grid = Gtk.Grid(row_spacing=10, column_spacing=10)
+        self.tiles = []
+        for i, (name, num, mon) in enumerate(spaces):
+            t = self._tile(name, num, mon, self.tw, self.th)
+            grid.attach(t, i % cols, i // cols, 1, 1)
+            self.tiles.append(t)
+        root.append(grid)
+        if specials:
+            root.append(label("SCRATCHPADS // 隠", "tag"))
+            row = Gtk.Box(spacing=10)
+            sw = max(120, self.tw // 2)
+            for name, short, mon in specials:
+                t = self._tile(name, short, mon, sw, int(sw * mh / mw), special=True)
+                row.append(t)
+                self.tiles.append(t)
+        if specials:
+            root.append(row)
+        self.sel = next((i for i, t in enumerate(self.tiles) if t.ws == self.cur), 0)
+        self._mark()
+        keys = Gtk.EventControllerKey()
+        keys.connect("key-pressed", self._key)
+        self.add_controller(keys)
+        self.set_child(root)
+
+    def _tile(self, name, num, mon, w, h, special=False):
+        ov = Gtk.Overlay()
+        ov.add_css_class("ov-tile")
+        ov.ws, ov.special, ov.new = name, special, num == "+"
+        if name == self.cur:
+            ov.add_css_class("cur")
+        snap = os.path.join(self.snaps, name.replace("/", "_") + ".jpg")
+        wins = [c for c in self.clients if (c.get("workspace") or {}).get("name") == name]
+        if os.path.exists(snap) and not ov.new:
+            pic = Gtk.Picture.new_for_filename(snap)
+            pic.set_content_fit(Gtk.ContentFit.COVER)
+            pic.set_can_shrink(True)
+            body = pic
+        else:   # no thumbnail yet: the windows as outlines where they are
+            body = Gtk.DrawingArea()
+            body.set_draw_func(self._draw_plan, wins, self.mons.get(mon, {}), ov.new)
+        body.set_size_request(w, h)
+        ov.set_child(body)
+        ov.add_overlay(label(num if not ov.new else "+  NEW", "ov-num" + (" new" if ov.new else "")))
+        ov.get_last_child().set_halign(Gtk.Align.START)
+        ov.get_last_child().set_valign(Gtk.Align.START)
+        chips = Gtk.Box(spacing=3)
+        chips.set_halign(Gtk.Align.START)
+        chips.set_valign(Gtk.Align.END)
+        chips.set_margin_start(4)
+        chips.set_margin_bottom(4)
+        for c in sorted(wins, key=lambda c: (c.get("at") or [0, 0])[0])[: max(1, w // 26)]:
+            chips.append(self._chip(c))
+        ov.add_overlay(chips)
+        click = Gtk.GestureClick()
+        click.connect("released", lambda *_a, ov=ov: self._go(ov))
+        ov.add_controller(click)
+        dt = Gtk.DropTarget.new(GObject.TYPE_STRING, Gdk.DragAction.MOVE)
+        dt.connect("enter", lambda _t, _x, _y, ov=ov: (ov.add_css_class("drop-here"), Gdk.DragAction.MOVE)[1])
+        dt.connect("leave", lambda _t, ov=ov: ov.remove_css_class("drop-here"))
+        dt.connect("drop", lambda _t, val, _x, _y, ov=ov: self._move(val, ov))
+        ov.add_controller(dt)
+        return ov
+
+    def _chip(self, c):
+        b = Gtk.Button()
+        b.add_css_class("ov-chip")
+        name, icon = self._name(c.get("class", ""))
+        if icon is not None:
+            img = Gtk.Image.new_from_gicon(icon)
+            img.set_pixel_size(18)
+            b.set_child(img)
+        else:
+            b.set_child(label("󰖯", "ov-glyph", 0.5))
+        b.set_tooltip_text(f"{name}: {c.get('title', '')}"[:120])
+        b.connect("clicked", lambda _b, a=c["address"]: self._run(f'hl.dsp.focus({{ window = "address:{a}" }})'))
+        src = Gtk.DragSource(actions=Gdk.DragAction.MOVE)
+        src.connect("prepare", lambda _s, _x, _y, a=c["address"]: Gdk.ContentProvider.new_for_value(a))
+        src.connect("drag-begin", lambda s, _d, b=b: (s.set_icon(Gtk.WidgetPaintable.new(b), 10, 10), b.add_css_class("dragging")))
+        src.connect("drag-end", lambda _s, _d, _del, b=b: b.remove_css_class("dragging"))
+        b.add_controller(src)
+        return b
+
+    def _name(self, cls):
+        low = (cls or "").lower()
+        hit = self.names.get(low) or self.names.get(low.rsplit(".", 1)[-1])
+        return hit if hit else (cls or "window", None)
+
+    @staticmethod
+    def _draw_plan(_area, cr, w, h, wins, mon, new):
+        cr.set_source_rgba(0.05, 0.1, 0.2, 0.9)
+        cr.rectangle(0, 0, w, h)
+        cr.fill()
+        if new or not wins or not mon:
+            return
+        sc = mon.get("scale", 1) or 1
+        mw, mh = mon["width"] / sc, mon["height"] / sc
+        for c in wins:
+            (x, y), (cw, ch) = c.get("at", [0, 0]), c.get("size", [0, 0])
+            x, y = (x - mon.get("x", 0)) * w / mw, (y - mon.get("y", 0)) * h / mh
+            cr.set_source_rgba(0.18, 0.83, 0.84, 0.10)
+            cr.rectangle(x + 2, y + 2, cw * w / mw - 4, ch * h / mh - 4)
+            cr.fill_preserve()
+            cr.set_source_rgba(0.18, 0.83, 0.84, 0.55)
+            cr.set_line_width(1)
+            cr.stroke()
+
+    def _run(self, expr):
+        fire(["hyprctl", "dispatch", expr])
+        self.dismiss()
+
+    def _go(self, ov):
+        if ov.special:
+            short = ov.ws.removeprefix("special:")
+            self._run(f'hl.dsp.workspace.toggle_special("{short}")')
+        else:
+            self._run(f'hl.dsp.focus({{ workspace = "{ov.ws}" }})')
+
+    def _move(self, addr, ov):
+        ov.remove_css_class("drop-here")
+        if not re.fullmatch(r"0x[0-9a-f]+", addr or ""):
+            return False
+        fire(["hyprctl", "dispatch", f'hl.dsp.window.move({{ workspace = "{ov.ws}", follow = false, window = "address:{addr}" }})'])
+        GLib.timeout_add(250, self._rebuild)
+        return True
+
+    def _rebuild(self):
+        """Reopen with the new layout (the thumbnails catch up ~1 s later, when gits-overview has taken them)."""
+        fire(["gits-panel", "overview"])
+        return False
+
+    def _mark(self):
+        for i, t in enumerate(self.tiles):
+            (t.add_css_class if i == self.sel else t.remove_css_class)("sel")
+
+    def _key(self, _c, kv, _code, _st):
+        cols = max(1, self.CARD_W // (self.tw + 10))
+        step = {Gdk.KEY_Right: 1, Gdk.KEY_Left: -1, Gdk.KEY_Down: cols, Gdk.KEY_Up: -cols, Gdk.KEY_Tab: 1, Gdk.KEY_ISO_Left_Tab: -1}
+        if kv in step:
+            self.sel = max(0, min(len(self.tiles) - 1, self.sel + step[kv]))
+            self._mark()
+            return True
+        if kv in (Gdk.KEY_Return, Gdk.KEY_KP_Enter, Gdk.KEY_space):
+            self._go(self.tiles[self.sel])
+            return True
+        ch = Gdk.keyval_to_unicode(kv)
+        if ch and chr(ch).isdigit() and chr(ch) != "0":
+            t = next((t for t in self.tiles if t.ws == chr(ch)), None)
+            self._run(f'hl.dsp.focus({{ workspace = "{chr(ch)}" }})') if t is None else self._go(t)
+            return True
+        return False
+
+
 def setup_display():
     """GTK + panel.css, once (a spare does this before it gets its popup)."""
     global _display_ready
@@ -3709,6 +3904,8 @@ def main():
         win = ActivityPopup(mon)
     elif mode == "brief":
         win = BriefPopup(mon)
+    elif mode == "overview":
+        win = OverviewPopup(mon)
     elif mode in ("appearance", "themes"):
         win = AppearancePopup(mon)
     elif mode == "desktop":

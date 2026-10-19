@@ -1,0 +1,9 @@
+[Unit]
+Description=GitS: workspace overview thumbnails (gits-overview: a small JPEG per workspace, in RAM only)
+PartOf=gits-session.target
+
+[Service]
+ExecStart=%h/.local/bin/gits-overview run
+Restart=on-failure
+RestartSec=5
+Nice=10
