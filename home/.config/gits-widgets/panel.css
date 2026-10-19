@@ -210,3 +210,21 @@ button.ov-chip { background: alpha(#060A14, 0.85); border: 1px solid alpha(#2ED3
 button.ov-chip:hover { border-color: #5EF1F5; }
 button.ov-chip.dragging { opacity: 0.35; }
 .ov-glyph { font-size: 14px; color: #9FC5D6; }
+
+/* free disk space (gits-panel clean) */
+button.cl-row { padding: 6px 8px; border: 1px solid alpha(#2ED3D7, 0.18); background: transparent; }
+button.cl-row:hover { border-color: alpha(#2ED3D7, 0.7); }
+button.cl-row.sel { border-color: alpha(#5EF1F5, 0.6); background: alpha(#2ED3D7, 0.08); }
+.cl-tick { font-size: 15px; color: #596977; min-width: 18px; }
+button.cl-row.sel .cl-tick { color: #5EF1F5; }
+.cl-title { font-size: 11px; font-weight: 700; color: #C8F4FF; }
+.cl-what { font-size: 9px; color: #596977; }
+.cl-size { font-size: 12px; font-weight: 800; color: #9FC5D6; min-width: 70px; }
+button.cl-row.sel .cl-size { color: #5EF1F5; }
+button.cl-row.done .cl-size { color: #2ED3D7; }
+button.cl-row.skip .cl-size { color: #E8C547; }
+.cl-total { font-size: 12px; font-weight: 800; letter-spacing: 1px; color: #C8F4FF; }
+button.cl-go { padding: 6px 18px; background: #2ED3D7; color: #060A14; font-size: 11px; font-weight: 800; letter-spacing: 2px; }
+button.cl-go:hover { background: #5EF1F5; }
+button.cl-go:disabled { background: alpha(#2ED3D7, 0.2); color: #596977; }
+button.cl-row.empty { opacity: 0.45; }

@@ -1,0 +1,313 @@
+#!/usr/bin/env python3
+"""gits-clean: free disk space, only from things that are safe to delete (Super+I -> Free disk space, gits-panel clean).
+
+  gits-clean list              the items: id, root?, title, what it removes
+  gits-clean size ID           bytes it would free now, then a short detail (one line, tab separated)
+  gits-clean scan              every item with its size, as a table, and the total
+  gits-clean clean ID...       clean these; prints "done ID FREED_BYTES" per item. Items marked root run in ONE pkexec call
+                               (one polkit prompt / YubiKey touch for all of them)
+Items: package cache (keeps the installed version), AUR build cache, uv's unused packages, the trash, Steam shader caches of
+games that are no longer installed, the Spotify cache (not while Spotify runs), caches untouched for 60+ days, system logs
+older than 2 weeks, crash dumps, orphaned packages (off by default in the popup). Nothing in your files, settings or games.
+"""
+import glob
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+
+HOME = os.path.expanduser("~")
+CACHE = os.environ.get("XDG_CACHE_HOME", os.path.join(HOME, ".cache"))
+TRASH = os.path.join(os.environ.get("XDG_DATA_HOME", os.path.join(HOME, ".local", "share")), "Trash")
+STALE_DAYS = 60
+# handled by their own item, or ours / live: never "stale"
+KNOWN = {"uv", "paru", "yay", "spotify", "gits-widgets", "gits", "fontconfig", "thumbnails", "mesa_shader_cache",
+         "nvidia", "radv_builtin_shaders", "zsh", "atuin", "starship"}
+ITEMS = [   # id, root, default on, title, what
+    ("pacman", True, True, "Package cache", "old package versions in /var/cache/pacman (the installed one stays: downgrades still work)"),
+    ("aur", False, True, "AUR build cache", "sources and builds of paru / yay (fetched again on the next AUR update)"),
+    ("uv", False, True, "Python uv cache", "packages no uv environment uses any more (uv cache prune)"),
+    ("trash", False, True, "Trash", "everything in the trash"),
+    ("shaders", False, True, "Shaders of removed games", "Steam shader caches of games that are no longer installed"),
+    ("spotify", False, True, "Spotify cache", "streamed music, fetched again when played (skipped while Spotify runs)"),
+    ("stale", False, True, "Old caches", f"app caches nothing touched for {STALE_DAYS}+ days (~/.cache)"),
+    ("journal", True, True, "System logs", "journal entries older than 2 weeks"),
+    ("coredumps", True, True, "Crash dumps", "saved core dumps of crashed programs (/var/lib/systemd/coredump)"),
+    ("orphans", True, False, "Orphaned packages", "packages nothing needs any more (pacman -Rns $(pacman -Qtdq))"),
+]
+ROOT = {i[0] for i in ITEMS if i[1]}
+
+
+def human(n):
+    for u in ("B", "K", "M", "G", "T"):
+        if abs(n) < 1024 or u == "T":
+            return f"{n:.1f} {u}" if u in ("G", "T") else f"{n:.0f} {u}"
+        n /= 1024
+
+
+def du(*paths):
+    """Bytes on disk (allocated blocks, like du; hard links once)."""
+    seen, total = set(), 0
+    for p in paths:
+        if not os.path.lexists(p):
+            continue
+        if os.path.isfile(p) or os.path.islink(p):
+            st = os.lstat(p)
+            total += st.st_blocks * 512
+            continue
+        for root, dirs, files in os.walk(p, onerror=lambda e: None):
+            for f in files:
+                try:
+                    st = os.lstat(os.path.join(root, f))
+                except OSError:
+                    continue
+                if st.st_nlink > 1:
+                    if (st.st_dev, st.st_ino) in seen:
+                        continue
+                    seen.add((st.st_dev, st.st_ino))
+                total += st.st_blocks * 512
+    return total
+
+
+def out(cmd, timeout=60):
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+
+
+def running(name):
+    for p in os.listdir("/proc"):
+        if p.isdigit():
+            try:
+                with open(f"/proc/{p}/comm") as f:
+                    if f.read().strip() == name:
+                        return True
+            except OSError:
+                pass
+    return False
+
+
+GIB = {"B": 1, "KiB": 1024, "MiB": 1024 ** 2, "GiB": 1024 ** 3, "TiB": 1024 ** 4}
+
+
+def paccache_size():
+    total, n = 0, 0
+    for args in (["-dk1"], ["-duk0"]):
+        m = re.search(r"(\d+) candidates \(disk space saved: ([\d.]+) (\w+)\)", out(["paccache", *args]))
+        if m:
+            n += int(m.group(1))
+            total += float(m.group(2)) * GIB.get(m.group(3), 1)
+    return int(total), f"{n} old package files"
+
+
+def steam_roots():
+    roots = [os.path.join(HOME, ".local/share/Steam"), os.path.join(HOME, ".var/app/com.valvesoftware.Steam/.local/share/Steam")]
+    libs = []
+    for r in roots:
+        vdf = os.path.join(r, "steamapps", "libraryfolders.vdf")
+        try:
+            libs += re.findall(r'"path"\s+"([^"]+)"', open(vdf).read())
+        except OSError:
+            pass
+    return [os.path.join(p, "steamapps") for p in dict.fromkeys(roots + libs) if os.path.isdir(os.path.join(p, "steamapps"))]
+
+
+def orphan_shaders():
+    apps = steam_roots()
+    installed = {re.search(r"appmanifest_(\d+)", f).group(1) for a in apps for f in glob.glob(os.path.join(a, "appmanifest_*.acf"))}
+    dirs = []
+    for a in apps:
+        for d in glob.glob(os.path.join(a, "shadercache", "*")):
+            base = os.path.basename(d)
+            if base.isdigit() and base not in installed and int(base) > 1000:   # small ids are Steam's own runtimes
+                dirs.append(d)
+    return dirs
+
+
+def spotify_dirs():
+    return [p for p in (os.path.join(CACHE, "spotify"), os.path.join(HOME, ".var/app/com.spotify.Client/cache")) if os.path.isdir(p)]
+
+
+def stale_dirs():
+    now, found = time.time(), []
+    try:
+        entries = list(os.scandir(CACHE))
+    except OSError:
+        return found
+    for e in entries:
+        if e.name in KNOWN or e.name.startswith(".") or not e.is_dir(follow_symlinks=False):
+            continue
+        newest = e.stat(follow_symlinks=False).st_mtime
+        for root, dirs, files in os.walk(e.path, onerror=lambda err: None):
+            for f in dirs + files:
+                try:
+                    newest = max(newest, os.lstat(os.path.join(root, f)).st_mtime)
+                except OSError:
+                    pass
+            if now - newest < STALE_DAYS * 86400:
+                break
+        if now - newest >= STALE_DAYS * 86400:
+            found.append(e.path)
+    return found
+
+
+def orphans():
+    return out(["pacman", "-Qtdq"]).split()
+
+
+def size(item):
+    if item == "pacman":
+        return paccache_size()
+    if item == "aur":
+        ds = [os.path.join(CACHE, h) for h in ("paru", "yay") if os.path.isdir(os.path.join(CACHE, h))]
+        return du(*ds), " + ".join(os.path.basename(d) for d in ds) or "none"
+    if item == "uv":
+        d = os.path.join(CACHE, "uv")
+        return du(d), "the whole cache; prune frees the unused part" if os.path.isdir(d) else "none"
+    if item == "trash":
+        n = len(os.listdir(os.path.join(TRASH, "files"))) if os.path.isdir(os.path.join(TRASH, "files")) else 0
+        return du(TRASH), f"{n} item(s)"
+    if item == "shaders":
+        ds = orphan_shaders()
+        return du(*ds), f"{len(ds)} removed game(s)"
+    if item == "spotify":
+        if running("spotify"):
+            return 0, "Spotify is running: close it first"
+        return du(*spotify_dirs()), "streamed music"
+    if item == "stale":
+        ds = stale_dirs()
+        return du(*ds), ", ".join(os.path.basename(d) for d in ds[:5]) + (" ..." if len(ds) > 5 else "") or "none"
+    if item == "journal":
+        total = out(["journalctl", "--disk-usage"])
+        m = re.search(r"take up ([\d.]+)([KMGT]?)", total)
+        b = int(float(m.group(1)) * {"": 1, "K": 1024, "M": 1024 ** 2, "G": 1024 ** 3, "T": 1024 ** 4}[m.group(2)]) if m else 0
+        return b // 2, f"{human(b)} of logs in total; about half is older than 2 weeks"
+    if item == "coredumps":
+        ds = glob.glob("/var/lib/systemd/coredump/*")
+        return du(*ds), f"{len(ds)} dump(s)"
+    if item == "orphans":
+        names = orphans()
+        b = 0
+        if names:
+            for m in re.finditer(r"Installed Size\s*:\s*([\d.]+) (\w+)", out(["pacman", "-Qi", *names])):
+                b += float(m.group(1)) * GIB.get(m.group(2), 1)
+        return int(b), " ".join(names[:6]) + (" ..." if len(names) > 6 else "") if names else "none"
+    raise KeyError(item)
+
+
+def rm(path):
+    try:
+        if os.path.isdir(path) and not os.path.islink(path):
+            shutil.rmtree(path, ignore_errors=True)
+        else:
+            os.remove(path)
+    except OSError:
+        pass
+
+
+def clean_user(item):
+    if item == "aur":
+        for h in ("paru", "yay"):
+            d = os.path.join(CACHE, h)
+            if os.path.isdir(d):
+                for e in os.listdir(d):
+                    rm(os.path.join(d, e))
+    elif item == "uv":
+        if shutil.which("uv"):
+            subprocess.run(["uv", "cache", "prune"], capture_output=True, timeout=600)
+    elif item == "trash":
+        for sub in ("files", "info", "expunged"):
+            d = os.path.join(TRASH, sub)
+            if os.path.isdir(d):
+                for e in os.listdir(d):
+                    rm(os.path.join(d, e))
+    elif item == "shaders":
+        for d in orphan_shaders():
+            rm(d)
+    elif item == "spotify":
+        if not running("spotify"):
+            for d in spotify_dirs():
+                for e in os.listdir(d):
+                    rm(os.path.join(d, e))
+    elif item == "stale":
+        for d in stale_dirs():
+            rm(d)
+
+
+def clean_root(items):
+    """Runs as root (pkexec gits-clean root-clean ...): only these fixed commands."""
+    for item in items:
+        if item == "pacman":
+            subprocess.run(["paccache", "-rk1"], capture_output=True)
+            subprocess.run(["paccache", "-ruk0"], capture_output=True)
+        elif item == "journal":
+            subprocess.run(["journalctl", "--vacuum-time=2weeks"], capture_output=True)
+        elif item == "coredumps":
+            for f in glob.glob("/var/lib/systemd/coredump/*"):
+                rm(f)
+        elif item == "orphans":
+            names = orphans()
+            if names:
+                subprocess.run(["pacman", "-Rns", "--noconfirm", *names], capture_output=True)
+        print(f"root-done {item}", flush=True)
+
+
+def free_bytes():
+    st = os.statvfs(HOME)
+    return st.f_bavail * st.f_frsize
+
+
+def clean(items):
+    """Frees per item = size before minus size after (what the item itself measures), so other disk activity does not count."""
+    items = [i for i in items if i in {x[0] for x in ITEMS}]
+    before = {i: size(i)[0] for i in items}
+    for i in [i for i in items if i not in ROOT]:
+        clean_user(i)
+        print(f"done {i} {max(0, before[i] - size(i)[0])}", flush=True)
+    root = [i for i in items if i in ROOT]
+    if root:
+        r = subprocess.run(["pkexec", "/usr/bin/python3", "-I", os.path.realpath(__file__), "root-clean", *root], capture_output=True, text=True)
+        ok = set(re.findall(r"^root-done (\w+)$", r.stdout, re.M))
+        for i in root:
+            if i in ok:
+                print(f"done {i} {max(0, before[i] - size(i)[0])}", flush=True)
+            else:
+                print(f"fail {i} not authorized", flush=True)
+    print(f"free {free_bytes()}", flush=True)
+
+
+def main(argv):
+    cmd = argv[0] if argv else ""
+    if cmd == "list":
+        for i, root, on, title, what in ITEMS:
+            print(f"{i}\t{'root' if root else 'user'}\t{'on' if on else 'off'}\t{title}\t{what}")
+    elif cmd == "json":
+        print(json.dumps([{"id": i, "root": r, "on": on, "title": t, "what": w} for i, r, on, t, w in ITEMS]))
+    elif cmd == "size" and len(argv) == 2:
+        b, detail = size(argv[1])
+        print(f"{b}\t{detail}")
+    elif cmd == "scan":
+        total = 0
+        for i, *_ in ITEMS:
+            b, detail = size(i)
+            total += b
+            print(f"{i:10} {human(b):>9}  {detail}")
+        print(f"{'total':10} {human(total):>9}  (free now: {human(free_bytes())})")
+    elif cmd == "clean" and len(argv) > 1:
+        clean(argv[1:])
+    elif cmd == "root-clean" and os.geteuid() == 0:
+        clean_root([i for i in argv[1:] if i in ROOT])
+    elif cmd == "free":
+        print(human(free_bytes()) + " free")
+    else:
+        print(__doc__.strip(), file=sys.stderr)
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

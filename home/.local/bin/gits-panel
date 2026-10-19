@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# gits-panel [control|media|radio|notify|mixer|note|launch|clip|windows|emoji|keys|appearance|themes|desktop|settings|overview|close]: the popups under the bar. Running the same one again closes it; the other one replaces it.
+# gits-panel [control|media|radio|notify|mixer|note|launch|clip|windows|emoji|keys|appearance|themes|desktop|settings|overview|clean|close]: the popups under the bar. Running the same one again closes it; the other one replaces it.
 #   control  toggles, sliders, power profile, charge limit   (Super+Shift+C, waybar power-profile module)
 #   media    player: cover, seek, transport, volume          (Super+Shift+M, click on the player module)
 #   radio    web radio: cover, live spectrum, listeners, tune in/out (Super+R; the radio itself is `gits-radio`)
@@ -9,6 +9,7 @@
 #   clip     clipboard history (Super+V)
 #   windows  window switcher, most recent first (Super+Tab)
 #   overview every workspace as a thumbnail with its windows; click goes there, drag an icon moves the window (Super+grave)
+#   clean    free disk space: package / AUR / uv caches, trash, old logs... with sizes, tick and clean (Super+I -> Free disk space)
 #   emoji    emoji and symbol picker by name, Enter copies (Super+comma)
 #   keys     every key binding with its description (Super+slash)
 #   desktop     which desktop widgets and which bar modules are shown (Super+I -> Desktop; gits-bar, ~/.config/gits/widgets.conf)
@@ -24,8 +25,8 @@ alive=0; [[ $pid =~ ^[0-9]+$ ]] && grep -qa 'panel.py' "/proc/$pid/cmdline" 2>/d
 if ((alive)); then for _ in {1..30}; do kill -0 "$pid" 2>/dev/null || break; sleep 0.05; done; rm -f "$pidfile"; fi
 case $mode in
     close) exit 0 ;;
-    control|media|radio|notify|mixer|note|launch|clip|windows|emoji|keys|appearance|themes|desktop|settings|activity|brief|overview) ((alive)) && [[ $cur == "$mode" ]] && exit 0 ;;   # pressed again = close
-    *) echo "usage: gits-panel [control|media|radio|notify|mixer|note|launch|clip|windows|emoji|keys|appearance|themes|desktop|settings|overview|close]" >&2; exit 2 ;;
+    control|media|radio|notify|mixer|note|launch|clip|windows|emoji|keys|appearance|themes|desktop|settings|activity|brief|overview|clean) ((alive)) && [[ $cur == "$mode" ]] && exit 0 ;;   # pressed again = close
+    *) echo "usage: gits-panel [control|media|radio|notify|mixer|note|launch|clip|windows|emoji|keys|appearance|themes|desktop|settings|overview|clean|close]" >&2; exit 2 ;;
 esac
 log=${XDG_RUNTIME_DIR:-/tmp}/gits-panel.log
 # the warm spare of gits-panel.service (popupd.py) shows it at once; without it panel.py starts cold (~0.2 s more). socat, not the

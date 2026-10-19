@@ -3547,6 +3547,166 @@ class LauncherPopup(Popup):
 _display_ready = False
 
 
+def fmt_bytes(n):
+    for u in ("B", "K", "M", "G", "T"):
+        if n < 1024 or u == "T":
+            return f"{n:.1f} {u}" if u in ("G", "T") else f"{n:.0f} {u}"
+        n /= 1024
+
+
+class CleanPopup(Popup):
+    """Free disk space (gits-panel clean, Super+I -> Free disk space): what gits-clean can delete, item by item with its size
+    (measured in the background), ticked = cleaned. The system items (package cache, logs, crash dumps, orphans) go through ONE
+    polkit prompt. Click a row to tick it, Enter or the button cleans, Esc / click outside close."""
+    CARD_W = 520
+    TOP = 9
+
+    def __init__(self, monitor):
+        super().__init__(monitor, center=True)
+        try:
+            self.items = json.loads(sh(["gits-clean", "json"], real=True) or "[]")
+        except ValueError:
+            self.items = []
+        self.sizes, self.rows, self.busy = {}, {}, False
+        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        root.add_css_class("panel")
+        head = Gtk.Box(spacing=6)
+        head.append(label("󰃢  FREE DISK SPACE // 掃除", "m-head"))
+        sp = Gtk.Box()
+        sp.set_hexpand(True)
+        head.append(sp)
+        self.free = label(sh(["gits-clean", "free"], real=True), "m-tag")
+        head.append(self.free)
+        root.append(head)
+        for it in self.items:
+            b = Gtk.Button()
+            b.add_css_class("cl-row")
+            box = Gtk.Box(spacing=8)
+            tick = label("", "cl-tick", 0.5)
+            col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+            col.set_hexpand(True)
+            col.append(label(it["title"] + ("   󰒃" if it["root"] else ""), "cl-title"))
+            det = label(it["what"], "cl-what")
+            det.set_wrap(True)
+            det.set_max_width_chars(52)
+            col.append(det)
+            size = label("…", "cl-size", 1.0)
+            for w in (tick, col, size):
+                box.append(w)
+            b.set_child(box)
+            b.on, b.tick, b.size, b.det, b.id = it["on"], tick, size, det, it["id"]
+            b.connect("clicked", lambda _b: self._flip(_b))
+            self.rows[it["id"]] = b
+            self._paint(b)
+            root.append(b)
+        foot = Gtk.Box(spacing=8)
+        self.total = label("measuring…", "cl-total")
+        self.total.set_hexpand(True)
+        foot.append(self.total)
+        self.go = Gtk.Button(label="CLEAN")
+        self.go.add_css_class("cl-go")
+        self.go.connect("clicked", lambda *_: self._clean())
+        foot.append(self.go)
+        root.append(foot)
+        root.append(label("󰒃 = system item: one polkit prompt for all of them · nothing from your files, settings or games", "m-tag"))
+        keys = Gtk.EventControllerKey()
+        keys.connect("key-pressed", lambda _c, kv, *_: (self._clean(), True)[1] if kv in (Gdk.KEY_Return, Gdk.KEY_KP_Enter) else False)
+        self.add_controller(keys)
+        self.set_child(root)
+        threading.Thread(target=self._measure, daemon=True).start()
+
+    def _measure(self):
+        from concurrent.futures import ThreadPoolExecutor
+
+        def one(i):
+            raw = sh(["nice", "-n", "10", "gits-clean", "size", i], timeout=120, real=True)
+            b, _, detail = raw.partition("\t")
+            GLib.idle_add(self._sized, i, int(b) if b.isdigit() else 0, detail)
+        with ThreadPoolExecutor(max_workers=4) as ex:
+            list(ex.map(one, list(self.rows)))
+
+    def _sized(self, i, b, detail):
+        self.sizes[i] = b
+        r = self.rows[i]
+        r.size.set_text(("≤ " if i == "uv" and b else "") + (fmt_bytes(b) if b else "—"))
+        if not b:   # nothing to free there: not ticked, dimmed
+            r.on = False
+            self._paint(r)
+            r.add_css_class("empty")
+        if detail:
+            r.det.set_text(f"{r.det.get_text()} · {detail}" if not r.det.get_text().endswith(detail) else r.det.get_text())
+        self._sum()
+        return False
+
+    def _flip(self, b):
+        if self.busy:
+            return
+        b.on = not b.on
+        self._paint(b)
+        self._sum()
+
+    def _paint(self, b):
+        b.tick.set_text("󰄵" if b.on else "󰄱")
+        (b.add_css_class if b.on else b.remove_css_class)("sel")
+
+    def _sum(self):
+        if self.busy:
+            return
+        picked = [i for i, r in self.rows.items() if r.on]
+        known = sum(self.sizes.get(i, 0) for i in picked)
+        waiting = len(set(self.rows) - set(self.sizes))
+        self.total.set_text(f"selected: up to {fmt_bytes(known)}" + (f"   (measuring {waiting}…)" if waiting else ""))
+        self.go.set_sensitive(bool(picked))
+
+    def _clean(self):
+        picked = [i for i, r in self.rows.items() if r.on]
+        if self.busy or not picked:
+            return
+        self.busy = True
+        self.go.set_sensitive(False)
+        self.go.set_label("CLEANING…")
+        root = {it["id"] for it in self.items if it["root"]}
+        self.total.set_text("cleaning… (a polkit prompt appears for the 󰒃 items)" if root & set(picked) else "cleaning…")
+        for i in picked:
+            self.rows[i].size.set_text("…")
+        threading.Thread(target=self._run, args=(picked,), daemon=True).start()
+
+    def _run(self, picked):
+        freed = 0
+        try:
+            p = subprocess.Popen(["gits-clean", "clean", *picked], stdout=subprocess.PIPE, text=True)
+            for line in p.stdout:
+                parts = line.split()
+                if len(parts) >= 3 and parts[0] == "done" and parts[2].isdigit():
+                    freed += int(parts[2])
+                    GLib.idle_add(self._done, parts[1], f"−{fmt_bytes(int(parts[2]))}", True)
+                elif len(parts) >= 2 and parts[0] == "fail":
+                    GLib.idle_add(self._done, parts[1], "skipped", False)
+                elif len(parts) == 2 and parts[0] == "free" and parts[1].isdigit():
+                    GLib.idle_add(self.free.set_text, fmt_bytes(int(parts[1])) + " free")
+            p.wait()
+        except OSError:
+            pass
+        GLib.idle_add(self._finished, freed)
+
+    def _done(self, i, text, ok):
+        r = self.rows.get(i)
+        if r:
+            r.size.set_text(text)
+            r.on = False
+            self._paint(r)
+            r.add_css_class("done" if ok else "skip")
+        return False
+
+    def _finished(self, freed):
+        self.busy = False
+        self.total.set_text(f"freed {fmt_bytes(freed)}")
+        self.go.set_label("DONE")
+        fire(["notify-send", "-a", "GitS Notify", "-i", "edit-clear-all", "󰃢  Disk cleaned", f"freed {fmt_bytes(freed)} · "
+              + self.free.get_text()])
+        return False
+
+
 class OverviewPopup(Popup):
     """Workspace overview (gits-panel overview, Super+grave): every workspace as a thumbnail (gits-overview keeps them, in RAM)
     with its windows as icons. Click / Enter / 1-9 = go there, click an icon = focus that window, drag an icon onto another
@@ -3906,6 +4066,8 @@ def main():
         win = BriefPopup(mon)
     elif mode == "overview":
         win = OverviewPopup(mon)
+    elif mode == "clean":
+        win = CleanPopup(mon)
     elif mode in ("appearance", "themes"):
         win = AppearancePopup(mon)
     elif mode == "desktop":
