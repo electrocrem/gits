@@ -5,6 +5,8 @@
 #   layout   the new keyboard layout on the GitS OSD on every switch (no sound)
 #   game      while a Steam game runs: the gaming workflow, gamemode for the game, notifications paused; all back when it ends
 #             (the game is the "reaper SteamLaunch AppId=N" process Steam starts it under). Off: GITS_AUTO_GAMEMODE=0
+#   reboot    once per boot, a notification when an update waits for a reboot (new kernel, NVIDIA driver; gits-reboot-check),
+#             checked every minute, with Reboot now / Later
 #   battery   a warning at 25 % and a critical one at 12 % while discharging (the charge limit of an ASUS keeps it near 98 %, that is not a warning);
 #             early because the worn battery holds ~9.5 Wh, and upowerd powers off at 8 % (~/.local/share/gits-power/setup.sh)
 # Mute everything: `gits-sound off`. Single instance (flock). Polls every 2 s: two file reads and two pgreps.
@@ -79,7 +81,21 @@ if [[ -z ${GITS_EVENTS_NO_LAYOUT:-} && -S $sock ]] && command -v socat >/dev/nul
     trap 'pkill -P "$listener" 2>/dev/null; kill "$listener" 2>/dev/null; exit 0' TERM INT   # take the socket reader along
 fi
 
+tick=0
+reboot_flag=${XDG_RUNTIME_DIR:-/tmp}/gits-reboot-notified   # tmpfs: gone after the reboot
+reboot_check() {
+    [[ -e $reboot_flag ]] && return
+    local why; why=$(gits-reboot-check 2>/dev/null) || return
+    touch "$reboot_flag"
+    (
+        a=$(notify-send -a "GitS Notify" -u critical -c gits.battery -i system-reboot -A reboot="Reboot now" -A later="Later" --wait \
+            "󰜉  Reboot to finish the update" "$why")
+        [[ $a == reboot ]] && systemctl reboot
+    ) &
+}
+
 while sleep "${GITS_EVENTS_POLL:-2}"; do
+    (( tick++ % 30 == 15 )) && reboot_check   # every minute, the first one 30 s after the start
     if [[ -n $ac ]]; then
         now=$(cat "$ac" 2>/dev/null)
         if [[ -n $now && $now != "$last_ac" ]]; then

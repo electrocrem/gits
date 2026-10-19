@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# gits-reboot-check: does an update wait for a reboot? (gits-events.sh asks every minute and notifies once per boot.)
+#   gits-reboot-check            the reasons, one per line; exit 0 = a reboot is needed, 1 = not
+#   gits-reboot-check --short    one line for the settings hub ("not needed" / "needed: kernel 7.2.11")
+#   gits-reboot-check menu       the reasons, Reboot now / Later
+# Reasons: the running kernel's modules are gone (it was updated: USB drives, VPN or loop modules no longer load), the NVIDIA
+# driver in memory is older than the installed one (nvidia-smi / CUDA fail), a package asked for it (/run/reboot-required).
+reasons=()
+running=$(uname -r)
+if [[ ! -d /usr/lib/modules/$running ]]; then
+    new=$(ls -t /usr/lib/modules 2>/dev/null | grep -v "^$running$" | grep -- "${running##*-}" | head -1)
+    reasons+=("kernel: $running runs, ${new:-a newer one} is installed (new drivers, USB drives, VPN modules load only after a reboot)")
+fi
+if [[ -r /sys/module/nvidia/version ]]; then
+    loaded=$(cat /sys/module/nvidia/version)
+    inst=$(pacman -Q nvidia-utils 2>/dev/null | awk '{ sub(/-[0-9]+$/, "", $2); print $2 }')
+    [[ -n $inst && $inst != "$loaded" ]] && reasons+=("NVIDIA driver: $loaded loaded, $inst installed (nvidia-smi, CUDA and new games may fail)")
+fi
+[[ -e /run/reboot-required ]] && reasons+=("a package asked for a reboot")
+
+case ${1:-} in
+    --short)
+        if ((${#reasons[@]})); then
+            what=(); for r in "${reasons[@]}"; do what+=("${r%%:*}"); done
+            echo "needed: $(IFS=,; echo "${what[*]}" | sed 's/,/, /g')"
+        else echo "not needed"; fi
+        exit 0 ;;
+    menu)
+        ((${#reasons[@]})) || { notify-send -a "GitS Notify" -i system-reboot "󰜉  No reboot needed" "kernel and drivers in memory are the installed ones"; exit 0; }
+        rows=$(printf '󰜉  Reboot now\n󰔟  Later\n'; for r in "${reasons[@]}"; do printf '   · %s\n' "$r"; done)
+        i=$(gits-menu "󰜉  REBOOT TO FINISH THE UPDATE" "// 再起動" -format i <<<"$rows") || exit 0
+        [[ $i == 0 ]] && exec systemctl reboot
+        exit 0 ;;
+esac
+((${#reasons[@]})) || exit 1
+printf '%s\n' "${reasons[@]}"

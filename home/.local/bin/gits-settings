@@ -51,6 +51,7 @@ TOOLS	󰑋  Screen recording: area (again = stop)	gits-rec toggle area	gits-rec 
 TOOLS	󰑋  Screen recording: whole screen	gits-rec toggle screen
 SYSTEM	󰌆  YubiKey at login and lock (switch off for a while)	gits-yubikey menu	gits-yubikey status
 SYSTEM	󰚰  Update the system (snapshot, then repairs)	gits-update	gits-update --check | awk '{ n = $2 + $4; print n ? n " updates (" $2 " + AUR " $4 ")" : "up to date" }'
+SYSTEM	󰜉  Reboot to finish updates (new kernel / driver)	gits-reboot-check menu	gits-reboot-check --short
 SYSTEM	󰃢  Free disk space (caches, trash, old packages and logs)	gits-panel clean	gits-clean free
 SYSTEM	󰋼  Health check (gits-doctor)	kitty --hold sh -c gits-doctor	gits-doctor -q | tail -1 | sed 's/\x1b\[[0-9;]*m//g' | awk -F', ' '{ split($1, o, " "); split($2, w, " "); split($3, f, " "); print f[1] ? f[1] " fail · " w[1] " warn" : w[1] ? w[1] " warn" : "all " o[1] " ok" }'
 ROWS
