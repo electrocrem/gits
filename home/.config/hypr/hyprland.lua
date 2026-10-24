@@ -3,6 +3,20 @@
 local root = assert(debug.getinfo(1, "S").source:match("^@(.*)/"), "not loaded from a file")
 package.path = root .. "/?.lua;" .. root .. "/?/init.lua;" .. package.path
 gits = { root = root, home = os.getenv("HOME") }
+-- every bind with a description stays callable by it: the key list (Super+/) runs the picked one with
+-- `hyprctl eval 'gits.run_bind("[Group] what")'`. hl.gits_raw_bind keeps the original across `hyprctl reload`.
+gits.binds = {}
+hl.gits_raw_bind = hl.gits_raw_bind or hl.bind
+hl.bind = function(keys, dispatch, flags)
+    local d = type(flags) == "table" and flags.description
+    if d and gits.binds[d] == nil then gits.binds[d] = dispatch end
+    return hl.gits_raw_bind(keys, dispatch, flags)
+end
+function gits.run_bind(desc)
+    local d = gits.binds[desc]
+    if type(d) == "function" then return d() end
+    if d ~= nil then return hl.dispatch(d) end
+end
 -- load order matters: env, then options (defaults + theme), then the chosen layout / workflow / animation, then rules, binds, hooks, services.
 -- A module that fails does not stop the ones after it: the error goes to the log below and to a notification once the session is up.
 local log = (os.getenv("XDG_STATE_HOME") or (gits.home .. "/.local/state")) .. "/gits/config-errors.log"

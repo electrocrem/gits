@@ -3218,7 +3218,7 @@ class LauncherPopup(Popup):
         sp.set_hexpand(True)
         head.append(sp)
         self.l_hint = label("Enter: copy · Del: remove · Ctrl+S: pin · Esc: close" if mode == "clip" else
-                            "Enter: copy · Esc: close" if mode == "emoji" else "Esc: close" if mode == "keys" else "Enter: run · Esc: close", "m-tag")
+                            "Enter: copy · Esc: close" if mode == "emoji" else "Enter: do it · Esc: close" if mode == "keys" else "Enter: run · Esc: close", "m-tag")
         head.append(self.l_hint)
         root.append(head)
         self.entry = Gtk.Entry()
@@ -3385,9 +3385,17 @@ class LauncherPopup(Popup):
                 mods = [n for bit, n in names.items() if b.get("modmask", 0) & bit]
                 combo = " + ".join(mods + [b.get("key", "")])
                 grp, _, what = b["description"].partition("] ")
-                items.append(Item("key", what or grp, f"{combo}   {grp.lstrip('[')}" if what else combo, glyph="󰌌",
-                                  match=f"{what} {grp} {combo}", act=("none", ""), ident=combo))
-            items.sort(key=lambda it: it.sub.rpartition("   ")[2] + it.title)
+                grp = grp.lstrip("[")
+                top, _, rest = grp.partition("|")
+                it = Item("key", what or grp, f"{combo}   {rest.replace('|', ' · ')}" if what and rest else combo, glyph="󰌌",
+                          match=f"{what} {grp} {combo}", act=("bind", b["description"]), ident=combo)
+                it.group = top if what else ""
+                items.append(it)
+            # everyday groups first, the rest (layout-specific ones like Master) after them; in a group by sub-group, then name
+            first = {g: i for i, g in enumerate(("Launcher", "Window Management", "Workspaces", "GitS", "Utilities", "Hardware Controls"))}
+            for it in items:
+                first.setdefault(it.group, len(first))
+            items.sort(key=lambda it: (first[it.group], it.sub.partition("   ")[2], it.title))
             return items
         for a in Gio.AppInfo.get_all():
             if not a.should_show():
@@ -3433,10 +3441,11 @@ class LauncherPopup(Popup):
 
     def _search(self, q):
         if self.mode in self.TITLES:
+            n = 40 if self.mode == "keys" else 12
             if not q.strip():
-                return self.items[:12]
+                return self.items if self.mode == "keys" else self.items[:n]   # the whole key list, under group headers
             scored = [(fuzzy(q.strip(), it.match), it) for it in self.items]
-            return [it for sc, it in sorted(scored, key=lambda x: -x[0]) if sc > 0][:12]
+            return [it for sc, it in sorted(scored, key=lambda x: -x[0]) if sc > 0][:n]
         q = q.strip()
         if not q:
             apps = [it for it in self.items if it.kind == "app"]
@@ -3464,8 +3473,15 @@ class LauncherPopup(Popup):
         while (c := self.box.get_first_child()) is not None:
             self.box.remove(c)
         rows = self._search(self.entry.get_text())
+        headers = self.mode == "keys" and not self.entry.get_text().strip()
+        group = None
         tags = {"app": "APP", "set": "SETTINGS", "prj": "PROJECT", "win": "WINDOW", "note": "NOTE", "calc": "CALC", "remind": "REMIND", "web": "WEB", "clip": "", "emoji": "", "key": ""}
         for it in rows:
+            if headers and getattr(it, "group", "") != group:
+                group = it.group
+                hr = Gtk.ListBoxRow(selectable=False, activatable=False, can_focus=False)
+                hr.set_child(label((group or "Other").upper() + " //", "l-group"))
+                self.box.append(hr)
             row = Gtk.ListBoxRow()
             row.add_css_class("lrow")
             row.item = it
@@ -3506,9 +3522,15 @@ class LauncherPopup(Popup):
                 h.append(label(tags[it.kind], "l-tag", 1.0))
             row.set_child(h)
             self.box.append(row)
-        first = self.box.get_row_at_index(0)
+        first = next((r for r in self._rows() if r.get_selectable()), None)
         if first is not None:
             self.box.select_row(first)
+
+    def _rows(self):
+        n = 0
+        while (r := self.box.get_row_at_index(n)) is not None:
+            yield r
+            n += 1
 
     def _key(self, _c, kv, state, *_):
         if self.mode == "clip" and (kv == Gdk.KEY_Delete or (state & Gdk.ModifierType.CONTROL_MASK and kv == Gdk.KEY_s)):
@@ -3518,13 +3540,11 @@ class LauncherPopup(Popup):
             return True
         if kv in (Gdk.KEY_Down, Gdk.KEY_Up) or (state & Gdk.ModifierType.CONTROL_MASK and kv in (Gdk.KEY_n, Gdk.KEY_p)):
             down = kv in (Gdk.KEY_Down, Gdk.KEY_n)
+            sel = [r for r in self._rows() if r.get_selectable()]   # group headers are skipped
             cur = self.box.get_selected_row()
-            i = (cur.get_index() if cur else -1) + (1 if down else -1)
-            n = 0
-            while self.box.get_row_at_index(n) is not None:
-                n += 1
-            if n:
-                row = self.box.get_row_at_index(i % n)
+            i = (sel.index(cur) if cur in sel else -1) + (1 if down else -1)
+            if sel:
+                row = sel[i % len(sel)]
                 self.box.select_row(row)
                 row.grab_focus()
                 self.entry.grab_focus()
@@ -3565,6 +3585,8 @@ class LauncherPopup(Popup):
             cmd = ["xdg-open", "https://duckduckgo.com/?q=" + urllib.parse.quote_plus(arg)]
         elif kind == "clip":
             cmd = ["bash", "-c", f"cliphist decode {shlex.quote(arg)} | wl-copy"]
+        elif kind == "bind":   # hyprland.lua keeps every described bind callable by its description
+            cmd = ["hyprctl", "eval", f"gits.run_bind({json.dumps(arg, ensure_ascii=False)})"]
         if cmd:
             if self.dry:
                 open(self.dry, "a").write(f"{kind}\t{it.title}\t{shlex.join(cmd)}\n")
