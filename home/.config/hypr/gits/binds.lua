@@ -103,7 +103,7 @@ bind(MOD .. " + SHIFT + G", run("gits-panel games"), "[Launcher] game library: i
 
 -- ---------------------------------------------------------------- launchers and menus (all GTK popups, see gits-panel)
 bind(MOD .. " + A", run("gits-panel launch"), "[Launcher] launcher / command palette")
-bind(MOD .. " + TAB", run("gits-panel windows"), "[Launcher] window switcher")
+bind(MOD .. " + TAB", run("gits-panel windows"), "[Launcher] window switcher: previews, Super+Tab again goes to the selected window")
 bind(MOD .. " + grave", run("gits-panel overview"), "[Launcher] workspace overview: thumbnails, drag a window to another workspace")
 bind(MOD .. " + CTRL + W", run("gits-preset menu"), "[Launcher] workspace presets: open a set of apps on their workspaces, save the current one")
 bind(MOD .. " + V", run("gits-panel clip"), "[Launcher] clipboard history")

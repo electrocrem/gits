@@ -3202,8 +3202,8 @@ class LauncherPopup(Popup):
     CARD_W = 580
     USAGE = os.path.join(STATE, "gits-launcher", "usage.json")
     # the plain list modes: one source of rows, fuzzy filter, Enter runs the row (everything but "launch")
-    TITLES = {"clip": "CLIPBOARD // 貼付", "windows": "WINDOWS // 窓", "emoji": "EMOJI // 絵文字", "keys": "KEY BINDINGS // 鍵"}
-    PLACEHOLDERS = {"clip": "search the clipboard history_", "windows": "jump to a window_", "emoji": "search by name: smile, fire, arrow..._",
+    TITLES = {"clip": "CLIPBOARD // 貼付", "emoji": "EMOJI // 絵文字", "keys": "KEY BINDINGS // 鍵"}
+    PLACEHOLDERS = {"clip": "search the clipboard history_", "emoji": "search by name: smile, fire, arrow..._",
                     "keys": "search a key or an action_"}
 
     def __init__(self, monitor, mode="launch"):
@@ -3344,23 +3344,6 @@ class LauncherPopup(Popup):
                           match=text, act=("clip", cid), ident=cid)
                 it.line, it.image = ln, binary and re.search(r"\b(png|jpe?g|webp|gif|bmp)\b", text) is not None
                 items.append(it)
-            return items
-        if self.mode == "windows" and DEMO:
-            for i, (t, c, ws) in enumerate(DEMO_WINDOWS):
-                items.append(Item("win", t, f"{c} · workspace {ws}", glyph="󰖯", match=f"{t} {c}", act=("win", str(i)), ident=str(i)))
-            return items
-        if self.mode == "windows":
-            try:
-                cl = [c for c in json.loads(sh(["hyprctl", "clients", "-j"]) or "[]") if c.get("mapped") and c.get("workspace", {}).get("id") is not None]
-            except ValueError:
-                cl = []
-            for c in sorted(cl, key=lambda c: c.get("focusHistoryID", 99)):   # most recently used first; the current window is skipped
-                if c.get("focusHistoryID") == 0 and len(cl) > 1:
-                    continue
-                ws = c["workspace"].get("name", "")
-                ws = "scratchpad" if ws.startswith("special:") else f"workspace {ws}"
-                items.append(Item("win", (c.get("title") or c.get("class") or "?")[:80], f"{c.get('class', '')} · {ws}", glyph="󰖯",
-                                  match=f"{c.get('title', '')} {c.get('class', '')}", act=("win", c["address"]), ident=c["address"]))
             return items
         if self.mode == "emoji":
             import unicodedata
@@ -3889,6 +3872,198 @@ class GamesPopup(Popup):
             self.dismiss()
 
 
+class SwitcherPopup(Popup):
+    """Window switcher (gits-panel windows, Super+Tab): every window as a live preview, most recently used first, the previous
+    one selected. Super+Tab again / Enter / click = go to the selected window (gits-panel sends SIGUSR1: again()); Tab, Shift+Tab
+    and the arrows move, 1-9 pick, Delete closes that window, Esc / click outside close. Previews are taken when it opens with
+    `grim -T` (ext-image-copy-capture: works for windows on other workspaces and scratchpads too) into
+    $XDG_RUNTIME_DIR/gits-switch, so the last ones show at once and are replaced as the new ones arrive."""
+    TOP = 9
+    TW, TH = 236, 148
+    SNAPS = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "gits-switch")
+
+    def __init__(self, monitor):
+        super().__init__(monitor, center=True)
+        self.names = ActivityPopup._app_names()
+        if DEMO:
+            self.wins = [{"title": t, "class": c, "address": str(i), "workspace": {"name": ws}, "stableId": ""}
+                         for i, (t, c, ws) in enumerate(DEMO_WINDOWS)]
+        else:
+            try:
+                cl = json.loads(sh(["hyprctl", "clients", "-j"]) or "[]")
+            except ValueError:
+                cl = []
+            self.wins = sorted((c for c in cl if c.get("mapped") and (c.get("workspace") or {}).get("id") is not None),
+                               key=lambda c: c.get("focusHistoryID", 99))   # the current window first, then the one before it
+        geo = self._screen()
+        self.COLS = max(1, min(len(self.wins), 4, (geo.width - 80) // (self.TW + 12)))
+        self.CARD_W = self.COLS * (self.TW + 12) + 24
+        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        root.add_css_class("panel")
+        head = Gtk.Box(spacing=6)
+        head.append(label("󰖯  WINDOWS // 窓", "m-head"))
+        sp = Gtk.Box()
+        sp.set_hexpand(True)
+        head.append(sp)
+        head.append(label("Super+Tab / Enter: go · Tab: next · Del: close", "m-tag"))
+        root.append(head)
+        self.grid = Gtk.Grid(row_spacing=12, column_spacing=12)
+        sc = Gtk.ScrolledWindow()
+        sc.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        sc.set_propagate_natural_height(True)
+        sc.set_max_content_height(max(260, geo.height - 200))
+        sc.set_child(self.grid)
+        root.append(sc)
+        self.info = label("", "g-info")
+        self.info.set_ellipsize(Pango.EllipsizeMode.END)
+        root.append(self.info)
+        self.tiles, self.pics = [], {}
+        for i, c in enumerate(self.wins):
+            self.grid.attach(self._tile(i, c), i % self.COLS, i // self.COLS, 1, 1)
+        if not self.wins:
+            self.info.set_text("no windows open")
+        self.set_child(root)
+        keys = Gtk.EventControllerKey()
+        keys.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)   # Tab must not move GTK's focus
+        keys.connect("key-pressed", self._key)
+        self.add_controller(keys)
+        self._select(1 if len(self.wins) > 1 else 0)
+        if not DEMO:
+            os.makedirs(self.SNAPS, exist_ok=True)
+            threading.Thread(target=self._snap_all, daemon=True).start()
+
+    def _tile(self, i, c):
+        b = Gtk.Button()
+        b.add_css_class("g-tile")
+        b.set_focusable(False)
+        col_ = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        ov = Gtk.Overlay()
+        frame = label("󰖯", "g-nocover", 0.5)
+        frame.set_size_request(self.TW, self.TH)
+        ov.set_child(frame)
+        pic = Gtk.Picture()
+        pic.set_content_fit(Gtk.ContentFit.CONTAIN)
+        pic.set_can_shrink(True)
+        pic.set_size_request(self.TW, self.TH)
+        old = self._snap_path(c)
+        if old and os.path.exists(old):
+            pic.set_filename(old)
+        ov.add_overlay(pic)
+        self.pics[c["address"]] = pic
+        if i < 9:
+            num = label(str(i + 1), "sw-num")
+            num.set_halign(Gtk.Align.START)
+            num.set_valign(Gtk.Align.START)
+            ov.add_overlay(num)
+        col_.append(ov)
+        row = Gtk.Box(spacing=6)
+        name, icon = OverviewPopup._name(self, c.get("class", ""))
+        if icon is not None:
+            img = Gtk.Image.new_from_gicon(icon)
+            img.set_pixel_size(16)
+            row.append(img)
+        t = label(c.get("title") or name, "g-name")
+        t.set_ellipsize(Pango.EllipsizeMode.END)
+        t.set_hexpand(True)
+        t.set_max_width_chars(24)
+        row.append(t)
+        col_.append(row)
+        ws = (c.get("workspace") or {}).get("name", "")
+        col_.append(label(f"{name} · " + ("scratchpad " + ws.removeprefix("special:") if ws.startswith("special:") else f"workspace {ws}"), "g-meta"))
+        b.set_child(col_)
+        b.connect("clicked", lambda _b, i=i: (self._select(i), self.again()))
+        ent = Gtk.EventControllerMotion()
+        ent.connect("enter", lambda *_a, i=i: self._select(i))
+        b.add_controller(ent)
+        self.tiles.append(b)
+        return b
+
+    def _snap_path(self, c):
+        sid = c.get("stableId") or ""
+        return os.path.join(self.SNAPS, f"{sid}.jpg") if re.fullmatch(r"[0-9a-fA-F]+", sid) else None
+
+    def _snap_all(self):
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(3) as pool:   # the selected and the first few first: they are in sight
+            order = sorted(range(len(self.wins)), key=lambda i: (i != self.sel, i))
+            for i in order:
+                pool.submit(self._snap, self.wins[i])
+
+    def _snap(self, c):
+        path = self._snap_path(c)
+        if not path:
+            return
+        w = max(1, (c.get("size") or [1280])[0])
+        s = max(0.1, min(1.0, self.TW * 1.5 / w))   # just enough pixels for the tile on a 1.5x screen
+        tmp = path + ".part"
+        try:
+            r = subprocess.run(["grim", "-s", f"{s:.3f}", "-t", "jpeg", "-q", "75", "-T", c["stableId"], tmp],
+                               capture_output=True, timeout=4)
+        except (OSError, subprocess.TimeoutExpired):
+            return
+        if r.returncode == 0 and os.path.getsize(tmp) > 0:
+            os.replace(tmp, path)   # never let the picture read a half-written file
+            pic = self.pics.get(c["address"])
+            GLib.idle_add(lambda: (pic.set_filename(path), False)[1])
+
+    def _select(self, i):
+        if not self.wins:
+            return
+        self.sel = i % len(self.wins)
+        for k, t in enumerate(self.tiles):
+            (t.add_css_class if k == self.sel else t.remove_css_class)("sel")
+        c = self.wins[self.sel]
+        self.info.set_text((c.get("title") or c.get("class") or "").upper())
+
+    def _key(self, _c, kv, _code, state):
+        if not self.wins:
+            return False
+        step = {Gdk.KEY_Tab: 1, Gdk.KEY_ISO_Left_Tab: -1, Gdk.KEY_Right: 1, Gdk.KEY_Left: -1,
+                Gdk.KEY_Down: self.COLS, Gdk.KEY_Up: -self.COLS}.get(kv)
+        if kv == Gdk.KEY_Tab and state & Gdk.ModifierType.SHIFT_MASK:
+            step = -1
+        if step is not None:
+            n = len(self.wins)
+            self._select(self.sel + step if kv in (Gdk.KEY_Tab, Gdk.KEY_ISO_Left_Tab) else max(0, min(n - 1, self.sel + step)))
+            self.tiles[self.sel].grab_focus()   # scrolls it into view
+            return True
+        if Gdk.KEY_1 <= kv <= Gdk.KEY_9 and kv - Gdk.KEY_1 < len(self.wins):
+            self._select(kv - Gdk.KEY_1)
+            self.again()
+            return True
+        if kv in (Gdk.KEY_Return, Gdk.KEY_KP_Enter, Gdk.KEY_space):
+            self.again()
+            return True
+        if kv == Gdk.KEY_Delete:
+            self._close_window()
+            return True
+        return False
+
+    def again(self):
+        """Super+Tab pressed again (SIGUSR1 from gits-panel), Enter or a click: go to the selected window."""
+        if self.wins:
+            cmd = ["hyprctl", "dispatch", f'hl.dsp.focus({{ window = "address:{self.wins[self.sel]["address"]}" }})']
+            dry = os.environ.get("GITS_LAUNCH_DRYRUN")   # tests: write it down instead
+            if dry:
+                open(dry, "a").write(f"focus\t{self.wins[self.sel].get('class', '')}\t{shlex.join(cmd)}\n")
+            elif not DEMO:
+                fire(cmd)
+        self.dismiss()
+
+    def _close_window(self):
+        c = self.wins.pop(self.sel)
+        if not DEMO:
+            fire(["hyprctl", "dispatch", f'hl.dsp.window.close({{ window = "address:{c["address"]}" }})'])
+        if not self.wins:
+            return self.dismiss()
+        while (ch := self.grid.get_first_child()) is not None:
+            self.grid.remove(ch)
+        self.tiles, self.pics = [], {}
+        for i, w in enumerate(self.wins):
+            self.grid.attach(self._tile(i, w), i % self.COLS, i // self.COLS, 1, 1)
+        self._select(min(self.sel, len(self.wins) - 1))
+
+
 class OverviewPopup(Popup):
     """Workspace overview (gits-panel overview, Super+grave): every workspace as a thumbnail (gits-overview keeps them, in RAM)
     with its windows as icons. Click / Enter / 1-9 = go there, click an icon = focus that window, drag an icon onto another
@@ -4180,6 +4355,7 @@ def spare(fd):
     except OSError:
         os.chdir(HOME)
     sys.argv = [os.path.abspath(__file__), *req.get("argv", [])]
+    early_again()   # gits-panel may send SIGUSR1 as soon as it has this pid
     try:
         conn.sendall(b"pid %d\n" % os.getpid())
     except OSError:   # the caller gave up waiting and started a cold popup already: do not show a second one
@@ -4204,7 +4380,18 @@ def spare(fd):
     os._exit(rc)
 
 
+_AGAIN = []
+
+
+def early_again():
+    """SIGUSR1 = "the same popup again" (Super+Tab twice). It can come before the popup is built, and its default action kills
+    the process: until main() puts GLib's handler in, only note it down."""
+    import signal
+    signal.signal(signal.SIGUSR1, lambda *_: _AGAIN.append(1))
+
+
 def main():
+    early_again()
     if not LS.is_supported():
         print("gits-panel: no layer-shell support", file=sys.stderr)
         return 1
@@ -4236,7 +4423,9 @@ def main():
         return 0
     if mode == "notify":
         win = NotifyPopup(mon)
-    elif mode in ("launch", "clip", "windows", "emoji", "keys"):
+    elif mode == "windows":
+        win = SwitcherPopup(mon)
+    elif mode in ("launch", "clip", "emoji", "keys"):
         win = LauncherPopup(mon, mode)
     elif mode == "note":
         win = NotePopup(mon)
@@ -4270,6 +4459,10 @@ def main():
     win.present()
     for sig in (2, 15):
         GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, sig, lambda: (loop.quit(), False)[1])
+    if hasattr(win, "again"):   # the same popup asked for again (gits-panel: Super+Tab twice)
+        GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, 10, lambda: (win.again(), True)[1])
+        if _AGAIN:
+            GLib.idle_add(lambda: (win.again(), False)[1])
     loop.run()
     getattr(win, "shutdown", lambda: None)()   # e.g. the radio popup's parec
     return 0

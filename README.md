@@ -68,7 +68,7 @@ snapshot, updates the system, and then runs the repair.
 | | |
 |---|---|
 | ![Launcher](docs/img/launcher.jpg) **Launcher** (`Super+A`): apps, settings, projects, windows, notes and web search in one field | ![Calculator](docs/img/calculator.jpg) **Calculator** in the same field: `sqrt(1764) * 2`, `2^10`; Enter copies the result |
-| ![Clipboard](docs/img/clipboard.jpg) **Clipboard history** (`Super+V`): text and images | ![Window switcher](docs/img/windows.jpg) **Window switcher** (`Super+Tab`) |
+| ![Clipboard](docs/img/clipboard.jpg) **Clipboard history** (`Super+V`): text and images | ![Window switcher](docs/img/windows.jpg) **Window switcher** (`Super+Tab`): live previews, Super+Tab twice = the previous window |
 | ![Emoji](docs/img/emoji.jpg) **Emoji and symbols** (`Super+,`): search by name | ![Key bindings](docs/img/keys.jpg) **Every shortcut** (`Super+/`), searchable |
 | ![Quick note](docs/img/note.jpg) **Quick note** (`Super+N`) into `~/notes/inbox.md` | ![Focus timer](docs/img/focus.jpg) **Focus timer** (`Super+F`): a pomodoro with a counter on the bar |
 

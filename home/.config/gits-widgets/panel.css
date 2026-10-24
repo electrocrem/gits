@@ -239,3 +239,4 @@ button.g-tile.sel .g-meta { color: #9FC5D6; }
 .g-nocover { font-size: 40px; color: #254F5D; background: #0C1A33; }
 .g-badge { font-size: 8px; font-weight: 800; letter-spacing: 1px; color: #060A14; background: #E8C547; padding: 1px 5px; margin: 4px; }
 .g-info { font-size: 10px; font-weight: 700; letter-spacing: 1px; color: #9FC5D6; }
+.sw-num { font-size: 9px; font-weight: 800; color: #060A14; background: alpha(#2ED3D7, 0.85); padding: 0 5px; margin: 4px; }

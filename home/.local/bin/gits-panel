@@ -7,7 +7,7 @@
 #   note     quick note into ~/notes/inbox.md (Super+N; see also gits-note)
 #   launch   command palette: apps, settings, projects, windows, notes, calculator, web search (Super+A)
 #   clip     clipboard history (Super+V)
-#   windows  window switcher, most recent first (Super+Tab)
+#   windows  window switcher: live previews, most recent first; Super+Tab again goes to the selected one (Super+Tab)
 #   overview every workspace as a thumbnail with its windows; click goes there, drag an icon moves the window (Super+grave)
 #   clean    free disk space: package / AUR / uv caches, trash, old logs... with sizes, tick and clean (Super+I -> Free disk space)
 #   games    game library: installed Steam games as covers, hours played, Enter plays (Super+Shift+G)
@@ -21,6 +21,8 @@ pidfile=${XDG_RUNTIME_DIR:-/tmp}/gits-panel.pid
 mode=${1:-control}
 [[ -r $pidfile ]] && read -r pid cur <"$pidfile"
 alive=0; [[ $pid =~ ^[0-9]+$ ]] && grep -qa 'panel.py' "/proc/$pid/cmdline" 2>/dev/null && alive=1
+# Super+Tab again while the switcher is up: go to the selected window (it acts on SIGUSR1) instead of closing it
+((alive)) && [[ $mode == windows && $cur == windows ]] && kill -USR1 "$pid" 2>/dev/null && exit 0
 ((alive)) && kill "$pid" 2>/dev/null
 # wait for the old popup to be gone: a re-open right after a close must not see it as "still running" and toggle itself off
 if ((alive)); then for _ in {1..30}; do kill -0 "$pid" 2>/dev/null || break; sleep 0.05; done; rm -f "$pidfile"; fi
