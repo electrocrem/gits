@@ -83,8 +83,8 @@ def notify(title, body="", icon="drive-removable-media", wait_actions=None, cat=
         cmd += ["-c", f"gits.{cat}"]
     for k, v in (wait_actions or {}).items():
         cmd += ["-A", f"{k}={v}"]
-    if wait_actions:
-        cmd.append("--wait")
+    if wait_actions:   # the stack tag keeps it a dunst popup with its buttons (not a dynamic-island message, see dunstrc.d/70-gits-island.conf)
+        cmd += ["-h", f"string:x-dunst-stack-tag:gits-ask-drive-{abs(hash(title)) % 10**6}", "--wait"]
     cmd += [title, body]
     return subprocess.run(cmd, capture_output=True, text=True).stdout.strip()
 

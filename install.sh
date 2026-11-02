@@ -284,6 +284,7 @@ else
     # (the OSD starts again by itself at its next use; the event loop through Hyprland, with the session's environment, no login chime)
     if [[ -z ${GITS_SKIP_PREFLIGHT:-} && -n ${HYPRLAND_INSTANCE_SIGNATURE:-} ]]; then
         "$HOME/.local/bin/gits-osd" stop 2>/dev/null || true
+        systemctl --user restart gits-island.service 2>/dev/null || true   # the dynamic island (exits at once when switched off)
         # every copy and its subshells (they inherit the lock, so a new copy would quit while one is left) and their socket readers
         ps=$(pgrep -f '^(/usr/bin/)?bash [^ ]*/hypr/scripts/gits-events[.]sh$' || true)   # the script itself, not an editor that has it open
         if [[ -n $ps ]]; then

@@ -1,0 +1,149 @@
+#!/usr/bin/env python3
+"""gits-island: the dynamic island in the middle of the bar (island.py, gits-island.service).
+
+  gits-island status | on | off | toggle   the island on / off (also Super+I -> Dynamic island); off = OSD and popups as before
+  gits-island expand                       open / close the media card (date without media) on the focused monitor
+  gits-island restart                      restart the daemon (after editing island.py)
+  gits-island osd KIND PCT [MUTED] [LABEL] what gits-osd shows (osd.py forwards to the island by itself while it runs)
+  gits-island activity ID TEXT [--icon G] [--ttl SEC] [--alert] [--action "CMD ARGS"]
+                                           a chip at rest until `gits-island activity ID --clear` (or TTL seconds)
+  gits-island notify                       a dunst rule script (dunstrc.d/70-gits-island.conf): the DUNST_* variables -> the island
+  gits-island demo                         a volume OSD, two notifications and a chip, for trying it out
+
+Exit 3 = the island is not running (nothing was shown)."""
+import json
+import os
+import subprocess
+import sys
+
+HOME = os.path.expanduser("~")
+RUN = os.environ.get("XDG_RUNTIME_DIR", "/tmp")
+FIFO = os.path.join(RUN, "gits-island.fifo")
+CONF = os.path.join(os.environ.get("XDG_STATE_HOME", os.path.join(HOME, ".local", "state")), "gits", "island.json")
+RULES = ("gits-island-low", "gits-island-normal")
+
+
+def send(msg):
+    """One JSON line into the island's FIFO; False when no island reads it (no FIFO, or no reader: ENXIO)."""
+    line = (json.dumps(msg, ensure_ascii=False) + "\n").encode()
+    if len(line) > 4000:   # one write <= PIPE_BUF stays atomic
+        return False
+    try:
+        fd = os.open(FIFO, os.O_WRONLY | os.O_NONBLOCK)
+    except OSError:
+        return False
+    try:
+        os.write(fd, line)
+        return True
+    except OSError:
+        return False
+    finally:
+        os.close(fd)
+
+
+def is_on():
+    try:
+        return json.load(open(CONF)).get("on", True) is not False
+    except (OSError, ValueError, AttributeError):
+        return True
+
+
+def sh(*cmd):
+    return subprocess.run(cmd, capture_output=True, text=True)
+
+
+def notify():
+    env = os.environ
+    if env.get("DUNST_APP_NAME") == "KDE Connect" or env.get("DUNST_STACK_TAG", "").startswith("gits-ask"):
+        return 0   # the hidden original of a phone message (its "Phone" copy comes on its own) / one with buttons (stays a popup)
+    if sh("dunstctl", "is-paused").stdout.strip() == "true":
+        return 0   # do not disturb: it waits in the history, like dunst's own popups
+    import html
+    import re
+
+    def clean(s, n):
+        s = html.unescape(re.sub(r"<[^>]*>", "", s or "")).strip()
+        return s if len(s) <= n else s[: n - 1] + "…"
+    try:
+        nid = int(env.get("DUNST_ID", "0"))
+    except ValueError:
+        nid = 0
+    try:
+        progress = int(env.get("DUNST_PROGRESS") or -1)
+    except ValueError:
+        progress = -1
+    msg = {"t": "note", "id": nid, "app": clean(env.get("DUNST_APP_NAME"), 40), "summary": clean(env.get("DUNST_SUMMARY"), 160),
+           "body": clean(env.get("DUNST_BODY"), 400), "icon": env.get("DUNST_ICON_PATH", ""), "urgency": env.get("DUNST_URGENCY", "NORMAL"),
+           "progress": progress}
+    if not send(msg):
+        # the island is gone but its rules were left on (it crashed): put the message back on screen and switch the rules off
+        for r in RULES:
+            sh("dunstctl", "rule", r, "disable")
+        if nid:
+            sh("dunstctl", "history-pop", str(nid))
+    return 0
+
+
+def set_on(on):
+    os.makedirs(os.path.dirname(CONF), exist_ok=True)
+    with open(CONF, "w") as f:
+        json.dump({"on": on}, f)
+    if on:
+        sh("systemctl", "--user", "restart", "gits-island.service")
+    else:
+        sh("systemctl", "--user", "stop", "gits-island.service")
+
+
+def main(argv):
+    cmd = argv[0] if argv else "status"
+    if cmd == "status":
+        print("on" if is_on() else "off")
+        return 0
+    if cmd in ("on", "off", "toggle"):
+        set_on(cmd == "on" or (cmd == "toggle" and not is_on()))
+        print("on" if is_on() else "off")
+        return 0
+    if cmd == "restart":
+        sh("systemctl", "--user", "restart", "gits-island.service")
+        return 0
+    if cmd == "expand":
+        return 0 if send({"t": "expand"}) else 3
+    if cmd == "notify":
+        return notify()
+    if cmd == "osd" and len(argv) >= 3:
+        ok = send({"t": "osd", "kind": argv[1], "pct": argv[2], "muted": len(argv) > 3 and argv[3] in ("1", "muted"),
+                   "label": argv[4] if len(argv) > 4 else None})
+        return 0 if ok else 3
+    if cmd == "activity" and len(argv) >= 2:
+        msg, rest = {"t": "activity", "id": argv[1]}, argv[2:]
+        words = []
+        while rest:
+            a = rest.pop(0)
+            if a == "--clear":
+                msg["clear"] = True
+            elif a == "--alert":
+                msg["alert"] = True
+            elif a in ("--icon", "--ttl", "--action") and rest:
+                msg[a[2:]] = rest.pop(0)
+            else:
+                words.append(a)
+        msg["text"] = " ".join(words)
+        return 0 if send(msg) else 3
+    if cmd == "demo":
+        import time
+        if not send({"t": "osd", "kind": "volume", "pct": 64}):
+            print("the island is not running (systemctl --user start gits-island)", file=sys.stderr)
+            return 3
+        time.sleep(1.8)
+        send({"t": "note", "id": 900001, "app": "GitS", "summary": "Section 9", "body": "The net is vast and infinite.", "icon": "",
+              "urgency": "NORMAL", "progress": -1})
+        send({"t": "note", "id": 900002, "app": "GitS", "summary": "Download", "body": "ghost.tar.zst", "icon": "", "urgency": "LOW",
+              "progress": 72})
+        send({"t": "activity", "id": "demo", "icon": "󰚩", "text": "DEMO", "ttl": 15})
+        return 0
+    print(__doc__.strip(), file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
