@@ -33,7 +33,7 @@ timers, night light, wallpaper, clipboard and tray applets run as systemd user u
 * Puts the wallpapers in `~/.local/share/gits/wallpapers/`, the session units in `~/.config/systemd/user/`, and builds the cursor, icon and sound
   themes and the frames of the dancing Lain on the lock screen. Login sets the GTK theme (adw-gtk3-dark + our colours), icons and cursor through gsettings.
 * Recolours the accents in `~/.config/kdeglobals`, registers the VS Code theme, installs the Zen styles into the default profile, swaps the
-  stylesheet of the Logseq *Nord* theme plugin (originals are kept).
+  stylesheet of the Logseq *Nord* theme plugin (originals are kept), or without that plugin puts it on top of every graph's `logseq/custom.css`.
 * `--system` copies the SDDM theme to `/usr/share/sddm/themes`, writes `/etc/sddm.conf.d/zz-gits.conf`, and builds and installs the Plymouth and GRUB
   themes (`home/.local/share/gits-boot`, it can `--revert`).
 
@@ -65,7 +65,7 @@ and confirms afterwards that your session was never locked.
 * Tested end to end on the author's machine (CachyOS, Hyprland 0.56 Lua config, AMD + NVIDIA laptop). The installer's file handling (backups,
   idempotency, uninstall round trip) is tested against a throw-away `$HOME` by `tools/roundtrip.sh` and in CI.
 * Boot-time pieces (Plymouth, GRUB) cannot be exercised without a reboot.
-* Logseq: only the route through an installed theme plugin is tested. On a fresh Logseq copy `logseq/gits.css` to `<graph>/logseq/custom.css`.
+* Logseq: graphs are found from `~/.logseq/graphs/logseq_local_*.transit`; a graph created after install gets the theme on the next `install.sh`.
 
 ## Settings you can change without editing files
 

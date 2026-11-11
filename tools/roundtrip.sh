@@ -94,3 +94,22 @@ if command -v zsh >/dev/null; then
     if diff "$FH2.before" "$FH2.after"; then echo "zsh already wired: no second hook, original state restored"; rm -f "$FH2.before" "$FH2.after"
     else rm -f "$FH2.before" "$FH2.after"; exit 1; fi
 fi
+
+# Logseq without the Nord plugin: the GitS block goes on top of every graph's custom.css (once, also after a reinstall), uninstall
+# takes it out again and keeps what was written below it; a custom.css gits made from nothing goes
+FH3=$(mktemp -d)
+trap 'rm -rf "$FH" "$FH2" "$FH3"' EXIT
+mkdir -p "$FH3/notes/logseq" "$FH3/work/logseq" "$FH3/.logseq/graphs"
+printf '.my-rule { color: red; }\n' >"$FH3/notes/logseq/custom.css"
+for g in notes work; do echo '{}' >"$FH3/.logseq/graphs/logseq_local_$(printf '%s' "$FH3/$g" | sed 's|/|++|g').transit"; done
+snap "$FH3" >"$FH3.before"
+HOME=$FH3 python3 "$REPO/tools/post.py" logseq "$REPO/logseq/gits.css" >/dev/null
+HOME=$FH3 python3 "$REPO/tools/post.py" logseq "$REPO/logseq/gits.css" >/dev/null
+for g in notes work; do
+    [[ $(grep -c '>>> gits:logseq >>>' "$FH3/$g/logseq/custom.css" 2>/dev/null) == 1 ]] || { echo "Logseq: GitS block missing or doubled in $g"; exit 1; }
+done
+grep -q 'my-rule' "$FH3/notes/logseq/custom.css" || { echo "Logseq: the graph's own custom.css was lost"; exit 1; }
+HOME=$FH3 python3 "$REPO/tools/post.py" logseq-revert >/dev/null
+snap "$FH3" >"$FH3.after"
+if diff "$FH3.before" "$FH3.after"; then echo "Logseq graphs OK: GitS block in, once, and out again"; rm -f "$FH3.before" "$FH3.after"
+else rm -f "$FH3.before" "$FH3.after"; exit 1; fi

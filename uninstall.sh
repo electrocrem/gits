@@ -86,6 +86,8 @@ for d in "$HOME"/.var/app/app.zen_browser.zen/.zen/*/; do
 done
 # Obsidian: the theme folder in every vault and its appearance.json (post.py obsidian)
 ((DRY)) && echo "   (dry) post.py obsidian-revert" || python3 "$(dirname "$(readlink -f "$0")")/tools/post.py" obsidian-revert
+# Logseq: the GitS block out of every graph's custom.css (post.py logseq without the Nord plugin)
+((DRY)) && echo "   (dry) post.py logseq-revert" || python3 "$(dirname "$(readlink -f "$0")")/tools/post.py" logseq-revert
 if [[ -d $HOME/.logseq/plugins-backup/nord-theme ]]; then
     echo "restore  Logseq Nord plugin"
     for f in custom.css package.json; do

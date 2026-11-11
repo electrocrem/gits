@@ -3,7 +3,8 @@
 
     post.py kded                  stop kded6 from recreating the GTK settings that hang GTK4 apps
     post.py kdeglobals            recolour KDE/Qt accents (Breeze blue -> cyan) and greys -> navy, pin the GitS icon theme
-    post.py logseq  <gits.css>    make Logseq load the GitS stylesheet (theme plugin route)
+    post.py logseq  <gits.css>    make Logseq load the GitS stylesheet (Nord theme plugin, else every graph's custom.css)
+    post.py logseq-revert         take it out of the graphs again (uninstall.sh)
     post.py obsidian <theme-dir>  link the GitS theme into every Obsidian vault and pick it (obsidian-revert undoes it)
     post.py vscode  <ext-dir>     register the theme extension for Code - OSS
     post.py zen     <zen-dir>     install userChrome/userContent/user.js into the default Zen profile
@@ -189,11 +190,51 @@ def kded():
         print("kded: removed the gtk-4.0/settings.ini that hangs GTK4 apps")
 
 
+LOGSEQ_BEGIN = "/* >>> gits:logseq >>> the Ghost in the Shell theme (tools/post.py); uninstall.sh takes it out */\n"
+LOGSEQ_END = "/* <<< gits:logseq <<< */\n"
+
+
+def logseq_graphs():
+    """Graph folders Logseq knows: ~/.logseq/graphs/logseq_local_<path, / as ++ and : as +3A+>.transit (native and Flatpak)."""
+    seen = []
+    try:
+        names = sorted(os.listdir(os.path.join(HOME, ".logseq", "graphs")))
+    except OSError:
+        return seen
+    for n in names:
+        if n.startswith("logseq_local_") and n.endswith(".transit"):
+            p = n[len("logseq_local_"):-len(".transit")].replace("+3A+", ":").replace("++", "/")
+            if os.path.isdir(p) and p not in seen:
+                seen.append(p)
+    return seen
+
+
+def logseq_strip(text):
+    """custom.css without the GitS block."""
+    return re.sub(re.escape(LOGSEQ_BEGIN) + r".*?" + re.escape(LOGSEQ_END), "", text, flags=re.S)
+
+
 def logseq(css):
+    """The theme plugin route when the Nord plugin is installed (the theme is then picked in Settings); otherwise the GitS block goes
+    on top of <graph>/logseq/custom.css of every graph Logseq knows (your own rules below it still win)."""
     base = os.path.join(HOME, ".logseq")
     plug = os.path.join(base, "plugins", "nord-theme")
     if not os.path.isdir(plug):
-        print("logseq: the 'Nord theme' plugin is not installed; copy logseq/gits.css to <graph>/logseq/custom.css instead (see README)")
+        graphs = logseq_graphs()
+        if not graphs:
+            print("logseq: no graphs yet (open Logseq, create or open one, then run install.sh again), skipped")
+            return
+        block = LOGSEQ_BEGIN + open(css).read().rstrip("\n") + "\n" + LOGSEQ_END
+        for g in graphs:
+            f = os.path.join(g, "logseq", "custom.css")
+            if os.path.exists(f):
+                backup(f)
+            else:
+                create(f)
+            own = logseq_strip(open(f).read())
+            with open(f, "w") as out:
+                out.write(block + own)
+            print(f"logseq: GitS stylesheet in {f} (restart Logseq; it is a dark theme: t t switches)")
         return
     bak = os.path.join(base, "plugins-backup", "nord-theme")
     os.makedirs(bak, exist_ok=True)
@@ -208,6 +249,26 @@ def logseq(css):
     d["logseq"]["themes"][0].update(name="Ghost in the Shell", description="Navy + cyan phosphor, square corners")
     json.dump(d, open(pj, "w"))
     print("logseq: GitS stylesheet installed over the Nord plugin (originals in ~/.logseq/plugins-backup)")
+
+
+def logseq_revert():
+    """uninstall.sh: the GitS block out of every graph's custom.css, keeping what you wrote there since (the file goes if gits
+    created it and nothing else is in it)."""
+    for g in logseq_graphs():
+        f = os.path.join(g, "logseq", "custom.css")
+        if not os.path.exists(f):
+            continue
+        text = logseq_strip(open(f).read())
+        if os.path.exists(f + ".gits-created") and not text.strip():
+            print(f"delete   {f}")
+            os.remove(f)
+        elif LOGSEQ_BEGIN in open(f).read():
+            print(f"restore  {f}")
+            with open(f, "w") as out:
+                out.write(text)
+        for m in (f + ".gits-created", f + ".bak-pre-gits"):
+            if os.path.exists(m):
+                os.remove(m)
 
 
 OBSIDIAN_THEME = "Ghost in the Shell"
@@ -406,4 +467,4 @@ def flatpak():
 cmd = sys.argv[1] if len(sys.argv) > 1 else ""
 {"kded": kded, "kdeglobals": kdeglobals, "logseq": lambda: logseq(sys.argv[2]), "vscode": lambda: vscode(sys.argv[2]),
  "zen": lambda: zen(sys.argv[2]), "spotify": spotify, "vesktop": vesktop, "flatpak": flatpak, "kde-apps": kde_apps, "steam": steam,
- "obsidian": lambda: obsidian(sys.argv[2]), "obsidian-revert": obsidian_revert}.get(cmd, lambda: sys.exit(__doc__))()
+ "obsidian": lambda: obsidian(sys.argv[2]), "obsidian-revert": obsidian_revert, "logseq-revert": logseq_revert}.get(cmd, lambda: sys.exit(__doc__))()
