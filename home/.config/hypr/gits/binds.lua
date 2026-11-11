@@ -13,6 +13,19 @@ local function cycle_fullscreen()
     local nxt = ((tonumber(w.fullscreen) or 0) + 1) % 3
     hl.dispatch(hl.dsp.window.fullscreen_state({ internal = nxt, client = nxt, window = w }))
 end
+-- a game that dropped out of fullscreen (alt-tab, lost focus): find it, even on another workspace, focus it and make it fullscreen again
+local function game_fullscreen()
+    local is_game = gits.is_game or function() return false end
+    local w = hl.get_active_window()
+    if not (w and is_game(w)) then
+        for _, c in ipairs(hl.get_windows() or {}) do
+            if is_game(c) then w = c; break end
+        end
+    end
+    if not w then return hl.exec_cmd("notify-send -a GitS 'Fullscreen' 'no game window'") end
+    hl.dispatch(hl.dsp.focus({ window = w }))
+    hl.dispatch(hl.dsp.window.fullscreen_state({ internal = 2, client = 2, window = w }))
+end
 local function move_window(dir, pix)
     local lut = { l = { -1, 0 }, r = { 1, 0 }, u = { 0, -1 }, d = { 0, 1 } }
     lut.left, lut.right, lut.up, lut.down = lut.l, lut.r, lut.u, lut.d
@@ -74,6 +87,7 @@ bind(MOD .. " + W", hl.dsp.window.float({ action = "toggle" }), "[Window Managem
 bind(MOD .. " + G", hl.dsp.group.toggle(), "[Window Management] toggle group")
 bind("ALT + P", hl.dsp.window.pseudo(), "[Window Management] pseudotiling")
 bind("SHIFT + F11", cycle_fullscreen, "[Window Management] cycle fullscreen")
+bind(MOD .. " + F11", game_fullscreen, "[Window Management] game back to fullscreen (focuses it, even from another workspace)")
 bind(MOD .. " + SHIFT + F", hl.dsp.window.pin(), "[Window Management] toggle pin")
 bind("CTRL + ALT + DELETE", run("gits-logout"), "[Window Management] logout menu")
 bind(MOD .. " + CTRL + B", run("pkill -SIGUSR1 -x waybar"), "[Window Management] hide / show the bar")

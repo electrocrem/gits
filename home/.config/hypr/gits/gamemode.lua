@@ -2,8 +2,6 @@
 -- they come back as they were when the game leaves fullscreen or closes. The manual preset (Super+Alt+G, workflow "gaming") stays as is.
 -- A game = a fullscreen window that says so (content type "game") or whose class looks like one: Steam / Proton (steam_app_*), gamescope,
 -- Wine (*.exe), Minecraft, Roblox (Sober). More classes: GITS_GAME_CLASSES="lua-pattern;lua-pattern". GITS_GAMEMODE=0 turns it off.
-if os.getenv("GITS_GAMEMODE") == "0" then return end
-
 local patterns = { "^steam_app_%d+$", "^gamescope$", "%.exe$", "^Minecraft", "^org%.vinegarhq%.Sober$", "^cs2$", "^dota2$" }
 for p in (os.getenv("GITS_GAME_CLASSES") or ""):gmatch("[^;]+") do patterns[#patterns + 1] = p end
 
@@ -19,6 +17,9 @@ local function is_game(w)
     end
     return false
 end
+gits.is_game = is_game   -- binds.lua uses it for "game back to fullscreen", so it is exported even with game mode off
+
+if os.getenv("GITS_GAMEMODE") == "0" then return end
 
 -- a game is on screen: fullscreen, on the workspace its monitor is showing
 local function game_on_screen()

@@ -2601,10 +2601,7 @@ class ActivityPopup(Popup):
             name, icon = self._name(cls)
             row = Gtk.Box(spacing=8)
             if icon is not None:
-                img = Gtk.Image.new_from_gicon(icon)
-                img.set_pixel_size(20)
-                img.add_css_class("l-icon")
-                row.append(img)
+                row.append(app_icon(icon, 20))
             else:
                 g = label("󰣆", "l-glyph", 0.5)
                 g.set_size_request(20, -1)
@@ -3180,6 +3177,105 @@ class SettingsPopup(Popup):
         self.dismiss()
 
 
+# ---------------------------------------------------------------------------------------------- app icons in the theme colour
+# App logos drawn as line art in the accent of the colour theme: the big flat fill of a logo (its disc, square, body) is dropped,
+# what stands out from it (the symbol inside, the outline of the shape) is inked in the accent. Exact theme colours, not a CSS
+# hue filter. Written as #hex on purpose: gits-theme recolours them (and so the cache key changes with the theme / your accent).
+ICON_INK, ICON_INK_HI = "#2ED3D7", "#5EF1F5"
+ICON_CACHE = os.path.join(os.environ.get("XDG_CACHE_HOME", os.path.join(HOME, ".cache")), "gits-widgets", "icons")
+ICON_TINT = os.environ.get("GITS_ICON_TINT") != "0"   # GITS_ICON_TINT=0 keeps the logos' own colours
+_icon_jobs, _icon_lock, _icon_worker = [], threading.Lock(), [None]
+
+
+def _ink_png(src, out, px):
+    """Render the icon file src at px, ink it, save the PNG to out. False if it cannot be read."""
+    import numpy as np
+    try:
+        pb = GdkPixbuf.Pixbuf.new_from_file_at_size(src, px, px)
+    except GLib.Error:
+        return False
+    if not pb.get_has_alpha():
+        pb = pb.add_alpha(False, 0, 0, 0)
+    w, h, rs = pb.get_width(), pb.get_height(), pb.get_rowstride()
+    a = np.frombuffer(pb.get_pixels(), dtype=np.uint8)[:rs * h].reshape(h, rs)[:, :w * 4].reshape(h, w, 4).astype(np.float32) / 255
+    al = a[..., 3]
+    lum = a[..., 0] * 0.299 + a[..., 1] * 0.587 + a[..., 2] * 0.114
+    solid = al > 0.5
+    if solid.sum() < 8:
+        return False
+    # the dominant tone (the fill): the tone most of the opaque area has
+    hist, edges = np.histogram(lum[solid], bins=24, range=(0, 1))
+    dom = (edges[hist.argmax()] + edges[hist.argmax() + 1]) / 2
+    detail = np.clip((np.abs(lum - dom) - 0.06) * 3.2, 0, 1) * al
+    # the outline of the shape: where the alpha changes (2 px wide at this size)
+    p = np.pad(al, 2)
+    edge = np.zeros_like(al)
+    for dy in (-2, -1, 0, 1, 2):
+        for dx in (-2, -1, 0, 1, 2):
+            if dx or dy:
+                edge = np.maximum(edge, np.abs(al - p[2 + dy:2 + dy + h, 2 + dx:2 + dx + w]))
+    edge = np.clip(edge * 1.6, 0, 1)
+    # a logo with its own symbol inside gets a faint outline (the symbol is the logo), a plain silhouette a full one
+    cover = (detail > 0.5).sum() / solid.sum()
+    ink = np.clip(np.maximum(detail, edge * float(np.clip(1.0 - cover * 4, 0.3, 0.9))), 0, 1)
+    c0, c1 = (np.array([int(c[i:i + 2], 16) for i in (1, 3, 5)], np.float32) for c in (ICON_INK, ICON_INK_HI))
+    t = detail[..., None]
+    rgb = c0 * (1 - t) + c1 * t
+    img = np.dstack([rgb, ink[..., None] * 255]).clip(0, 255).astype(np.uint8)
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    GdkPixbuf.Pixbuf.new_from_bytes(GLib.Bytes.new(img.tobytes()), GdkPixbuf.Colorspace.RGB, True, 8, w, h, w * 4) \
+        .savev(out + ".tmp", "png", [], [])
+    os.replace(out + ".tmp", out)
+    return True
+
+
+def _icon_work():
+    while True:
+        with _icon_lock:
+            if not _icon_jobs:
+                _icon_worker[0] = None
+                return
+            img, src, out, px = _icon_jobs.pop(0)
+        try:
+            ok = os.path.exists(out) or _ink_png(src, out, px)
+        except Exception:   # an odd file: the logo keeps its own colours
+            ok = False
+        if ok:
+            GLib.idle_add(lambda i=img, o=out: (i.set_from_file(o), i.set_opacity(1), False)[2])
+        else:
+            GLib.idle_add(lambda i=img: (i.set_opacity(1), False)[1])
+
+
+def app_icon(gicon, size):
+    """A Gtk.Image of an app's icon, inked in the theme accent (done once per icon and theme, in the background, then cached)."""
+    img = Gtk.Image.new_from_gicon(gicon)
+    img.set_pixel_size(size)
+    if not ICON_TINT:
+        return img
+    try:
+        theme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default())
+        px = size * 2   # sharp on a scaled screen too
+        f = theme.lookup_by_gicon(gicon, px, 1, Gtk.TextDirection.NONE, 0).get_file()
+        src = f.get_path() if f else None
+    except (GLib.Error, TypeError, AttributeError):
+        src = None
+    if not src or not os.path.isfile(src):
+        return img
+    key = hashlib.sha1(f"{src}|{os.path.getmtime(src)}|{px}|{ICON_INK}|{ICON_INK_HI}|1".encode()).hexdigest()[:20]
+    out = os.path.join(ICON_CACHE, key + ".png")
+    if os.path.exists(out):
+        img.set_from_file(out)
+        img.set_pixel_size(size)
+        return img
+    img.set_opacity(0)   # no flash of the coloured logo: it appears once inked
+    with _icon_lock:
+        _icon_jobs.append((img, src, out, px))
+        if _icon_worker[0] is None:
+            _icon_worker[0] = threading.Thread(target=_icon_work, daemon=True)
+            _icon_worker[0].start()
+    return img
+
+
 class Item:
     def __init__(self, kind, title, sub="", icon=None, glyph="󰀻", match="", act=None, weight=1.0, ident=None):
         self.kind, self.title, self.sub, self.icon, self.glyph = kind, title, sub, icon, glyph
@@ -3218,8 +3314,10 @@ class LauncherPopup(Popup):
         sp.set_hexpand(True)
         head.append(sp)
         self.l_hint = label("Enter: copy · Del: remove · Ctrl+S: pin · Esc: close" if mode == "clip" else
-                            "Enter: copy · Esc: close" if mode == "emoji" else "Enter: do it · Esc: close" if mode == "keys" else "Enter: run · Esc: close", "m-tag")
+                            "Enter: copy · Esc: close" if mode == "emoji" else "Enter: do it · Esc: close" if mode == "keys" else
+                            "Enter: run · Esc: close" if mode != "launch" else "", "m-tag")
         head.append(self.l_hint)
+        self.l_count = label("", "m-tag")
         root.append(head)
         self.entry = Gtk.Entry()
         self.entry.add_css_class("m-entry")
@@ -3240,6 +3338,18 @@ class LauncherPopup(Popup):
         sc.set_max_content_height(470)
         sc.set_child(self.box)
         root.append(sc)
+        if mode == "launch":   # what can be typed and which keys do what, always in sight
+            foot = Gtk.Box(spacing=6)
+            foot.add_css_class("lfoot")
+            for k, what in (("↑↓", "select"), ("Enter", "open"), ("Esc", "close")):
+                foot.append(label(k, "lkey"))
+                foot.append(label(what, "m-tag"))
+            sp2 = Gtk.Box()
+            sp2.set_hexpand(True)
+            foot.append(sp2)
+            foot.append(self.l_count)
+            foot.append(label("2+2 = calc  ·  \"через 20м чай\" = reminder", "m-tag"))
+            root.append(foot)
         self.set_child(root)
         import time as _t
         _t0 = _t.time()
@@ -3422,18 +3532,28 @@ class LauncherPopup(Popup):
         recent = 0.3 if time.time() - u.get("t", 0) < 3 * 86400 else 0.0
         return 1.0 + min(math.log1p(u.get("n", 0)), 3.0) * 0.35 + recent
 
+    SECTIONS = {"calc": "RESULT", "remind": "RESULT", "app": "APPS", "set": "SETTINGS", "prj": "PROJECTS", "win": "OPEN WINDOWS",
+                "note": "NOTES", "web": "WEB"}
+
     def _search(self, q):
+        """[(section title or None, [items])]: the launcher shows its results under headings, the list modes as one plain list."""
         if self.mode in self.TITLES:
             n = 40 if self.mode == "keys" else 12
             if not q.strip():
-                return self.items if self.mode == "keys" else self.items[:n]   # the whole key list, under group headers
+                if self.mode == "keys":   # the whole key list, under group headers
+                    groups = {}
+                    for it in self.items:
+                        groups.setdefault((getattr(it, "group", "") or "Other").upper() + " //", []).append(it)
+                    return list(groups.items())
+                return [(None, self.items[:n])]
             scored = [(fuzzy(q.strip(), it.match), it) for it in self.items]
-            return [it for sc, it in sorted(scored, key=lambda x: -x[0]) if sc > 0][:n]
+            return [(None, [it for sc, it in sorted(scored, key=lambda x: -x[0]) if sc > 0][:n])]
         q = q.strip()
-        if not q:
+        if not q:   # recently used, then every app A-Z (scroll, or type to narrow it down)
             apps = [it for it in self.items if it.kind == "app"]
-            used = sorted((it for it in apps if it.ident in self.usage), key=lambda it: -self._frecency(it.ident))[:8]
-            return used or sorted(apps, key=lambda it: it.title.lower())[:8]
+            used = sorted((it for it in apps if it.ident in self.usage), key=lambda it: -self._frecency(it.ident))[:6]
+            rest = sorted((it for it in apps if it not in used), key=lambda it: it.title.lower())
+            return [(t, its) for t, its in (("RECENT", used), (f"ALL APPS  ·  {len(apps)}", rest)) if its]
         res = []
         r = calc(q)
         if r is not None:
@@ -3449,71 +3569,78 @@ class LauncherPopup(Popup):
                 res.append((sc * it.weight * (self._frecency(it.ident) if it.kind == "app" else 1.0), it))
         res = [it for _, it in sorted(res, key=lambda x: -x[0])][:9]
         res.append(Item("web", f"Search the web for \"{q}\"", "opens the browser", glyph="󰖟", act=("web", q)))
-        return res
+        groups = {}   # the section of the best match comes first, the web search last
+        for it in res:
+            groups.setdefault(self.SECTIONS.get(it.kind, ""), []).append(it)
+        return list(groups.items())
 
     # -- list
     def _refresh(self):
         while (c := self.box.get_first_child()) is not None:
             self.box.remove(c)
-        rows = self._search(self.entry.get_text())
-        headers = self.mode == "keys" and not self.entry.get_text().strip()
-        group = None
-        tags = {"app": "APP", "set": "SETTINGS", "prj": "PROJECT", "win": "WINDOW", "note": "NOTE", "calc": "CALC", "remind": "REMIND", "web": "WEB", "clip": "", "emoji": "", "key": ""}
-        for it in rows:
-            if headers and getattr(it, "group", "") != group:
-                group = it.group
-                hr = Gtk.ListBoxRow(selectable=False, activatable=False, can_focus=False)
-                hr.set_child(label((group or "Other").upper() + " //", "l-group"))
-                self.box.append(hr)
-            row = Gtk.ListBoxRow()
-            row.add_css_class("lrow")
-            row.item = it
-            h = Gtk.Box(spacing=10)
-            if it.icon is not None:
-                img = Gtk.Image.new_from_gicon(it.icon)
-                img.set_pixel_size(28)
-                if os.environ.get("GITS_ICON_TINT") != "0":   # app logos in the cyan phosphor tone; GITS_ICON_TINT=0 keeps their colours
-                    img.add_css_class("l-icon")
-                h.append(img)
-            else:
-                g = label(it.glyph, "l-glyph", 0.5)
-                g.set_size_request(28, -1)
-                h.append(g)
-            if it.kind == "clip" and getattr(it, "image", False) and not DEMO:
-                slot = Gtk.Box()   # a fixed 96x56 frame: a tall picture must not stretch the row
-                slot.set_size_request(96, 56)
-                pic = Gtk.Picture(halign=Gtk.Align.CENTER, valign=Gtk.Align.CENTER)
-                pic.set_can_shrink(False)   # the cached thumbnail is already at most 96x56
-                pic.add_css_class("l-thumb")
-                pic.set_visible(False)
-                slot.append(pic)
-                h.append(slot)
-                self._clip_thumb(it, pic)
-            col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-            col.set_hexpand(True)
-            t = label(it.title, "l-title")
-            t.set_ellipsize(Pango.EllipsizeMode.END)
-            t.set_max_width_chars(48)
-            col.append(t)
-            if it.sub:
-                sub = label(it.sub, "l-sub")
-                sub.set_ellipsize(Pango.EllipsizeMode.END)
-                sub.set_max_width_chars(58)
-                col.append(sub)
-            h.append(col)
-            if tags.get(it.kind):
-                h.append(label(tags[it.kind], "l-tag", 1.0))
-            row.set_child(h)
-            self.box.append(row)
+        sections = self._search(self.entry.get_text())
+        shown = 0
+        for title, rows in sections:
+            if title:
+                hd = Gtk.ListBoxRow(selectable=False, activatable=False, can_focus=False)
+                hd.add_css_class("lsec")
+                hd.set_child(label(title, "lsec-name"))
+                self.box.append(hd)
+            for it in rows:
+                self.box.append(self._row(it))
+                shown += 1
+        if self.mode == "launch":
+            self.l_count.set_text("nothing found" if not shown else "")
         first = next((r for r in self._rows() if r.get_selectable()), None)
         if first is not None:
             self.box.select_row(first)
+        sc = self.box.get_parent()
+        while sc is not None and not isinstance(sc, Gtk.ScrolledWindow):
+            sc = sc.get_parent()
+        if sc is not None:
+            sc.get_vadjustment().set_value(0)
 
     def _rows(self):
-        n = 0
-        while (r := self.box.get_row_at_index(n)) is not None:
+        r = self.box.get_first_child()
+        while r is not None:
             yield r
-            n += 1
+            r = r.get_next_sibling()
+
+    def _row(self, it):
+        row = Gtk.ListBoxRow()
+        row.add_css_class("lrow")
+        row.item = it
+        h = Gtk.Box(spacing=10)
+        if it.icon is not None:
+            h.append(app_icon(it.icon, 28))
+        else:
+            g = label(it.glyph, "l-glyph", 0.5)
+            g.set_size_request(28, -1)
+            h.append(g)
+        if it.kind == "clip" and getattr(it, "image", False) and not DEMO:
+            slot = Gtk.Box()   # a fixed 96x56 frame: a tall picture must not stretch the row
+            slot.set_size_request(96, 56)
+            pic = Gtk.Picture(halign=Gtk.Align.CENTER, valign=Gtk.Align.CENTER)
+            pic.set_can_shrink(False)   # the cached thumbnail is already at most 96x56
+            pic.add_css_class("l-thumb")
+            pic.set_visible(False)
+            slot.append(pic)
+            h.append(slot)
+            self._clip_thumb(it, pic)
+        col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        col.set_hexpand(True)
+        t = label(it.title, "l-title")
+        t.set_ellipsize(Pango.EllipsizeMode.END)
+        t.set_max_width_chars(48)
+        col.append(t)
+        if it.sub:
+            sub = label(it.sub, "l-sub")
+            sub.set_ellipsize(Pango.EllipsizeMode.END)
+            sub.set_max_width_chars(58)
+            col.append(sub)
+        h.append(col)
+        row.set_child(h)
+        return row
 
     def _key(self, _c, kv, state, *_):
         if self.mode == "clip" and (kv == Gdk.KEY_Delete or (state & Gdk.ModifierType.CONTROL_MASK and kv == Gdk.KEY_s)):
@@ -3523,11 +3650,11 @@ class LauncherPopup(Popup):
             return True
         if kv in (Gdk.KEY_Down, Gdk.KEY_Up) or (state & Gdk.ModifierType.CONTROL_MASK and kv in (Gdk.KEY_n, Gdk.KEY_p)):
             down = kv in (Gdk.KEY_Down, Gdk.KEY_n)
-            sel = [r for r in self._rows() if r.get_selectable()]   # group headers are skipped
+            rows = [r for r in self._rows() if r.get_selectable()]   # the section headings are skipped
             cur = self.box.get_selected_row()
-            i = (sel.index(cur) if cur in sel else -1) + (1 if down else -1)
-            if sel:
-                row = sel[i % len(sel)]
+            i = (rows.index(cur) if cur in rows else -1) + (1 if down else -1)
+            if rows:
+                row = rows[i % len(rows)]
                 self.box.select_row(row)
                 row.grab_focus()
                 self.entry.grab_focus()
@@ -3591,7 +3718,7 @@ def fmt_bytes(n):
 class CleanPopup(Popup):
     """Free disk space (gits-panel clean, Super+I -> Free disk space): what gits-clean can delete, item by item with its size
     (measured in the background), ticked = cleaned. The system items (package cache, logs, crash dumps, orphans) go through ONE
-    polkit prompt. Click a row to tick it, Enter or the button cleans, Esc / click outside close."""
+    polkit prompt. Click a row to tick it, Enter or the button cleans (in the background: gits-clean bg), Esc / click outside close."""
     CARD_W = 520
     TOP = 9
 
@@ -3642,6 +3769,7 @@ class CleanPopup(Popup):
         self.go.connect("clicked", lambda *_: self._clean())
         foot.append(self.go)
         root.append(foot)
+        root.append(label("cleaning runs in the background: this closes, a notification tells you when it is done", "m-tag"))
         root.append(label("󰒃 = system item: one polkit prompt for all of them · nothing from your files, settings or games", "m-tag"))
         keys = Gtk.EventControllerKey()
         keys.connect("key-pressed", lambda _c, kv, *_: (self._clean(), True)[1] if kv in (Gdk.KEY_Return, Gdk.KEY_KP_Enter) else False)
@@ -3693,52 +3821,14 @@ class CleanPopup(Popup):
         self.go.set_sensitive(bool(picked))
 
     def _clean(self):
+        """Cleaning goes on in the background (gits-clean bg): the popup closes at once, the island / a notification shows it
+        running, a notification tells what was freed when it is done."""
         picked = [i for i, r in self.rows.items() if r.on]
         if self.busy or not picked:
             return
         self.busy = True
-        self.go.set_sensitive(False)
-        self.go.set_label("CLEANING…")
-        root = {it["id"] for it in self.items if it["root"]}
-        self.total.set_text("cleaning… (a polkit prompt appears for the 󰒃 items)" if root & set(picked) else "cleaning…")
-        for i in picked:
-            self.rows[i].size.set_text("…")
-        threading.Thread(target=self._run, args=(picked,), daemon=True).start()
-
-    def _run(self, picked):
-        freed = 0
-        try:
-            p = subprocess.Popen(["gits-clean", "clean", *picked], stdout=subprocess.PIPE, text=True)
-            for line in p.stdout:
-                parts = line.split()
-                if len(parts) >= 3 and parts[0] == "done" and parts[2].isdigit():
-                    freed += int(parts[2])
-                    GLib.idle_add(self._done, parts[1], f"−{fmt_bytes(int(parts[2]))}", True)
-                elif len(parts) >= 2 and parts[0] == "fail":
-                    GLib.idle_add(self._done, parts[1], "skipped", False)
-                elif len(parts) == 2 and parts[0] == "free" and parts[1].isdigit():
-                    GLib.idle_add(self.free.set_text, fmt_bytes(int(parts[1])) + " free")
-            p.wait()
-        except OSError:
-            pass
-        GLib.idle_add(self._finished, freed)
-
-    def _done(self, i, text, ok):
-        r = self.rows.get(i)
-        if r:
-            r.size.set_text(text)
-            r.on = False
-            self._paint(r)
-            r.add_css_class("done" if ok else "skip")
-        return False
-
-    def _finished(self, freed):
-        self.busy = False
-        self.total.set_text(f"freed {fmt_bytes(freed)}")
-        self.go.set_label("DONE")
-        fire(["notify-send", "-a", "GitS Notify", "-i", "edit-clear-all", "󰃢  Disk cleaned", f"freed {fmt_bytes(freed)} · "
-              + self.free.get_text()])
-        return False
+        fire(["gits-clean", "bg", *picked])
+        self.dismiss()
 
 
 class GamesPopup(Popup):

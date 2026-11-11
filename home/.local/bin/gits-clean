@@ -6,6 +6,8 @@
   gits-clean scan              every item with its size, as a table, and the total
   gits-clean clean ID...       clean these; prints "done ID FREED_BYTES" per item. Items marked root run in ONE pkexec call
                                (one polkit prompt / YubiKey touch for all of them)
+  gits-clean bg ID...          the same in the background (the CLEAN button of the popup): a chip in the dynamic island (or a
+                               notification) while it works, a notification with what was freed when it is done
 Items: package cache (keeps the installed version), AUR build cache, uv's unused packages, the trash, Steam shader caches of
 games that are no longer installed, the Spotify cache (not while Spotify runs), caches untouched for 60+ days, system logs
 older than 2 weeks, crash dumps, orphaned packages (off by default in the popup). Nothing in your files, settings or games.
@@ -261,23 +263,76 @@ def free_bytes():
     return st.f_bavail * st.f_frsize
 
 
-def clean(items):
+def clean(items, emit=lambda line: print(line, flush=True)):
     """Frees per item = size before minus size after (what the item itself measures), so other disk activity does not count."""
     items = [i for i in items if i in {x[0] for x in ITEMS}]
     before = {i: size(i)[0] for i in items}
     for i in [i for i in items if i not in ROOT]:
         clean_user(i)
-        print(f"done {i} {max(0, before[i] - size(i)[0])}", flush=True)
+        emit(f"done {i} {max(0, before[i] - size(i)[0])}")
     root = [i for i in items if i in ROOT]
     if root:
         r = subprocess.run(["pkexec", "/usr/bin/python3", "-I", os.path.realpath(__file__), "root-clean", *root], capture_output=True, text=True)
         ok = set(re.findall(r"^root-done (\w+)$", r.stdout, re.M))
         for i in root:
             if i in ok:
-                print(f"done {i} {max(0, before[i] - size(i)[0])}", flush=True)
+                emit(f"done {i} {max(0, before[i] - size(i)[0])}")
             else:
-                print(f"fail {i} not authorized", flush=True)
-    print(f"free {free_bytes()}", flush=True)
+                emit(f"fail {i} not authorized")
+    emit(f"free {free_bytes()}")
+
+
+def quiet(cmd):
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def background(items):
+    """gits-clean bg: clean, telling the user it started and how it went, with nothing to wait for on screen."""
+    import fcntl
+    items = [i for i in dict.fromkeys(items) if i in {x[0] for x in ITEMS}]
+    if not items:
+        return 2
+    title = {x[0]: x[3] for x in ITEMS}
+    lock = open(os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "gits-clean.lock"), "w")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        quiet(["notify-send", "-a", "GitS Notify", "-i", "edit-clear-all", "󰃢  Already cleaning", "the last cleaning is still running"])
+        return 1
+    root = bool(set(items) & ROOT)
+    note = "a polkit prompt comes for the system items" if root else f"{len(items)} item{'s' * (len(items) > 1)}"
+    nid = None
+    r = quiet(["gits-island", "activity", "gits-clean", "cleaning…", "--icon", "󰃢", "--ttl", "3600"])
+    if r is None or r.returncode != 0:   # no island: a quiet notification says it is running, the result replaces it
+        r = quiet(["notify-send", "-p", "-a", "GitS Notify", "-u", "low", "-i", "edit-clear-all", "󰃢  Cleaning in the background", note])
+        nid = r.stdout.strip() if r and r.returncode == 0 and r.stdout.strip().isdigit() else None
+    freed, done, failed, free = 0, [], [], None
+
+    def emit(line):
+        nonlocal freed, free
+        parts = line.split()
+        if parts[0] == "done" and parts[2].isdigit():
+            freed += int(parts[2])
+            done.append((parts[1], int(parts[2])))
+        elif parts[0] == "fail":
+            failed.append(parts[1])
+        elif parts[0] == "free":
+            free = int(parts[1])
+    try:
+        clean(items, emit)
+    except Exception as e:   # tell, don't leave the chip spinning
+        failed.append(f"error: {e}")
+    quiet(["gits-island", "activity", "gits-clean", "--clear"])
+    lines = [f"{title[i]}  −{human(b)}" for i, b in sorted(done, key=lambda d: -d[1]) if b]
+    lines += [f"{title.get(i, i)}: skipped (not authorized)" for i in failed]
+    body = f"freed {human(freed)}" + (f" · {human(free)} free" if free is not None else "") + ("\n" + "\n".join(lines) if lines else "")
+    head = "󰃢  Cleaning done" if not failed else "󰃢  Cleaning done, some skipped"
+    quiet(["notify-send", "-a", "GitS Notify", "-i", "edit-clear-all"] + (["-r", nid] if nid else []) + [head, body])
+    print(body)
+    return 0
 
 
 def main(argv):
@@ -299,6 +354,8 @@ def main(argv):
         print(f"{'total':10} {human(total):>9}  (free now: {human(free_bytes())})")
     elif cmd == "clean" and len(argv) > 1:
         clean(argv[1:])
+    elif cmd == "bg" and len(argv) > 1:
+        return background(argv[1:])
     elif cmd == "root-clean" and os.geteuid() == 0:
         clean_root([i for i in argv[1:] if i in ROOT])
     elif cmd == "free":

@@ -129,21 +129,22 @@ list { background: transparent; }
 .reveal.slow { animation-duration: 3000ms; }
 .reveal.slow.closing { animation-duration: 1400ms; }
 
-/* launcher / command palette */
-.lrow { padding: 6px 8px; background: transparent; }
-.lrow:hover { background: alpha(#2ED3D7, 0.12); }
-.lrow:selected { background: #2ED3D7; }
+/* launcher / command palette: results under section headings; the selected row is marked by a bar and a tint, not a fill */
+.lrow { padding: 6px 8px; background: transparent; border-left: 2px solid transparent; }
+.lrow:hover { background: alpha(#2ED3D7, 0.07); }
+.lrow:selected { background: alpha(#2ED3D7, 0.13); border-left-color: #2ED3D7; }
+.lsec { padding: 9px 8px 3px 8px; background: transparent; }
+.lsec:first-child { padding-top: 3px; }
+.lsec-name { font-size: 9px; font-weight: 800; letter-spacing: 2px; color: alpha(#2ED3D7, 0.85); }
 .l-title { font-size: 12px; font-weight: 700; color: #C8F4FF; }
 .l-sub { font-size: 9px; color: #596977; }
 .l-glyph { font-size: 17px; color: #2ED3D7; }
 .l-thumb { border: 1px solid alpha(#2ED3D7, 0.35); }
-.l-tag { font-size: 8px; font-weight: 700; letter-spacing: 1px; color: #596977; }
-.l-group { font-size: 9px; font-weight: 800; letter-spacing: 2px; color: #2ED3D7; margin: 8px 0 2px 6px; }
-.lrow:selected .l-title, .lrow:selected .l-glyph { color: #060A14; }
-/* app icons as one-colour cyan: grey, then sepia turned to the GitS hue; dark on the selected (cyan) row */
-.l-icon { filter: grayscale(1) contrast(1.35) sepia(1) saturate(2.6) hue-rotate(140deg) brightness(0.85); }
-.lrow:selected .l-icon { filter: grayscale(1) brightness(0.12); }
-.lrow:selected .l-sub, .lrow:selected .l-tag { color: #0C1A33; }
+.lrow:selected .l-title { color: #5EF1F5; }
+.lrow:selected .l-glyph { color: #5EF1F5; }
+.lrow:selected .l-sub { color: #9FC5D6; }
+.lfoot { margin-top: 6px; padding-top: 6px; border-top: 1px solid alpha(#2ED3D7, 0.18); }
+.lkey { font-size: 9px; font-weight: 700; color: #9FC5D6; border: 1px solid alpha(#2ED3D7, 0.3); padding: 0 4px; }
 
 /* appearance (gits-panel appearance): themes, accent, mascot, wallpaper */
 button.theme-card { padding: 6px; border: 1px solid alpha(#2ED3D7, 0.22); background: alpha(#0C1A33, 0.55); }
@@ -222,8 +223,6 @@ button.cl-row.sel .cl-tick { color: #5EF1F5; }
 .cl-what { font-size: 9px; color: #596977; }
 .cl-size { font-size: 12px; font-weight: 800; color: #9FC5D6; min-width: 70px; }
 button.cl-row.sel .cl-size { color: #5EF1F5; }
-button.cl-row.done .cl-size { color: #2ED3D7; }
-button.cl-row.skip .cl-size { color: #E8C547; }
 .cl-total { font-size: 12px; font-weight: 800; letter-spacing: 1px; color: #C8F4FF; }
 button.cl-go { padding: 6px 18px; background: #2ED3D7; color: #060A14; font-size: 11px; font-weight: 800; letter-spacing: 2px; }
 button.cl-go:hover { background: #5EF1F5; }
