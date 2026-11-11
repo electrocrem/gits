@@ -107,9 +107,10 @@ if compgen -G "$HOME/.local/share/gits-lock/*-[0-9]*.txt" >/dev/null; then
     run rm -f "$HOME"/.local/share/gits-lock/lain-*.txt "$HOME"/.local/share/gits-lock/tachikoma-*.txt
     run rmdir "$HOME/.local/share/gits-lock" 2>/dev/null || true
 fi
-if compgen -G "$HOME/.local/share/gits-sounds/*.wav" >/dev/null; then
+if compgen -G "$HOME/.local/share/gits-sounds/*.wav" >/dev/null || compgen -G "$HOME/.local/share/gits-sounds/*/*.wav" >/dev/null; then
     echo "delete   generated UI sounds"
-    run rm -f "$HOME"/.local/share/gits-sounds/*.wav
+    run rm -f "$HOME"/.local/share/gits-sounds/*.wav "$HOME"/.local/share/gits-sounds/*/*.wav   # the default pack and soft/, glass/
+    for d in "$HOME"/.local/share/gits-sounds/*/; do run rmdir "$d" 2>/dev/null || true; done
     run rmdir "$HOME/.local/share/gits-sounds" 2>/dev/null || true
 fi
 

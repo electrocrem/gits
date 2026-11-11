@@ -47,7 +47,7 @@ remind() {
     local n; n=$(grep -c . <<<"$l")
     local body; body=$(awk -F'\t' '{ printf "%s  %s\n", $1, $2 }' <<<"$l" | head -8)
     (
-        a=$(notify-send -a "GitS Notify" -i git -A open="Open projects" -A later="Later" --wait \
+        a=$(notify-send -a "GitS Notify" -h string:x-dunst-stack-tag:gits-ask-gitcheck -i git -A open="Open projects" -A later="Later" --wait \
             "  $n project(s) with work not on GitHub" "$body"$'\n'"● uncommitted files · ↑ commits to push · ↓ to pull")
         [[ $a == open ]] && gits-project
     ) &

@@ -294,6 +294,7 @@ if [[ $FIX == 1 ]]; then
     if [[ -n $kc && $kc != GitS-Cursors ]]; then sed -i 's/^cursorTheme=.*/cursorTheme=GitS-Cursors/' "$H/.config/kcminputrc" && fixed "kcminputrc cursorTheme $kc -> GitS-Cursors"; fi
     pgrep -f '[g]its-widgets/widgets.py' >/dev/null || { "$H/.config/gits-widgets/run.sh" start </dev/null >/dev/null 2>&1 && fixed "desktop widgets started"; }
     pgrep -f '[g]its-widgets/osd.py' >/dev/null || { command -v gits-osd >/dev/null && gits-osd start </dev/null >/dev/null 2>&1 && fixed "OSD daemon started"; }
+    [[ $(gits-island status 2>/dev/null) == on ]] && ! systemctl --user is-active --quiet gits-island.service && { systemctl --user restart gits-island.service && fixed "dynamic island started"; }
     pgrep -f '[g]its-events.sh' >/dev/null || { [[ -x $H/.config/hypr/scripts/gits-events.sh ]] && GITS_EVENTS_NO_LOGIN=1 setsid -f "$H/.config/hypr/scripts/gits-events.sh" </dev/null >/dev/null 2>&1 && fixed "events daemon started (sounds)"; }
     nw=$(ls "$H/.local/share/gits-sounds"/*.wav "$H/.local/share/gits-sounds"/{soft,glass}/*.wav 2>/dev/null | wc -l)
     [[ $nw -ge 42 ]] || { python3 "$H/.local/share/gits-sounds/build.py" >/dev/null 2>&1 && fixed "UI sounds rebuilt"; }

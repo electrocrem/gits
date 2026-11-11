@@ -1,0 +1,13 @@
+[Unit]
+Description=GitS dynamic island (island.py: clock, now playing, OSD, notifications and live statuses in the middle of the bar)
+PartOf=gits-session.target
+After=gits-bar.service gits-notifications.service
+
+[Service]
+# exits at once (status 0) when switched off with `gits-island off`
+ExecStart=/usr/bin/python3 %h/.config/gits-widgets/island.py
+Restart=on-failure
+RestartSec=1
+
+[Install]
+WantedBy=gits-session.target

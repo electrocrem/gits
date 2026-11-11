@@ -17,6 +17,7 @@
 .config/dunst/dunst.conf
 .config/dunst/dunstrc
 .config/gits-widgets/osd.py
+.config/gits-widgets/island.py
 .config/gits-widgets/panel.css
 .config/gits-widgets/panel.py
 .config/gits-widgets/ambient.py

@@ -51,6 +51,22 @@ def focused_connector():
 
 
 FIFO = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "gits-osd.fifo")
+ISLAND_FIFO = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "gits-island.fifo")
+
+
+def to_island(kind, pct, muted, label):
+    """Forward the event to the dynamic island; False when it does not run (no reader on its FIFO): then this window shows it."""
+    try:
+        fd = os.open(ISLAND_FIFO, os.O_WRONLY | os.O_NONBLOCK)
+    except OSError:
+        return False
+    try:
+        os.write(fd, (json.dumps({"t": "osd", "kind": kind, "pct": pct, "muted": muted, "label": label}) + "\n").encode())
+        return True
+    except OSError:
+        return False
+    finally:
+        os.close(fd)
 FONT = "JetBrainsMono Nerd Font"
 BG, CY, CYB, FG, DIM, RED = "#060A14", "#2ED3D7", "#5EF1F5", "#C8F4FF", "#596977", "#E5432B"
 W, H, SEGS = 330, 58, 26
@@ -122,6 +138,8 @@ class Osd(Gtk.Window):
         self.connect("map", lambda *_: self.get_surface().set_input_region(cairo.Region()))  # never steals clicks
 
     def show_state(self, kind, pct, muted, sticky=False, label=None):
+        if not sticky and to_island(kind, pct, muted, label):
+            return   # the dynamic island (island.py) shows it in the middle of the bar
         self.kind, self.pct, self.muted, self.label = kind, max(0, min(100, pct)), muted, label
         if kind == "layout":
             self.muted = False
